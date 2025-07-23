@@ -80,11 +80,26 @@ namespace PlayerScope.GUI
                 ImGui.Text(string.Empty);
                 return;
             }
+
+            // Log original avatar link for debugging
+            if (!string.IsNullOrWhiteSpace(avatarLink) && avatarLink != Utils.BlankAvatar)
+            {
+                Plugin.Log.Debug($"DrawCharacterAvatar called for {characterName} with avatar link: {avatarLink}");
+            }
                 
             if (!IsValidAvatarFormat(avatarLink))
+            {
+                if (!string.IsNullOrWhiteSpace(avatarLink))
+                {
+                    Plugin.Log.Warning($"Invalid avatar format for {characterName}: '{avatarLink}' (length: {avatarLink?.Length})");
+                }
                 avatarLink = Utils.BlankAvatar;
+            }
 
-            var avatarHandle = Plugin.AvatarCacheManager.GetAvatarHandle(Utils.GetAvatarUrl(avatarLink, false));
+            var avatarUrl = Utils.GetAvatarUrl(avatarLink, false);
+            Plugin.Log.Debug($"Constructed avatar URL for {characterName}: {avatarUrl}");
+            
+            var avatarHandle = Plugin.AvatarCacheManager.GetAvatarHandle(avatarUrl);
             if (avatarHandle != 0)
             {
                 ImGui.Image(avatarHandle, new Vector2(22 * ImGuiHelpers.GlobalScale, 22 * ImGuiHelpers.GlobalScale));
@@ -120,7 +135,12 @@ namespace PlayerScope.GUI
             }
             else
             {
-                ImGui.Text(string.Empty);
+                // Show a placeholder or loading indicator instead of empty space
+                ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1.0f), "...");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Avatar loading or failed to load");
+                }
             }
         }
 

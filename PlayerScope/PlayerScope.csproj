@@ -4,6 +4,8 @@
         <RuntimeIdentifier>win-x64</RuntimeIdentifier>
         <SatelliteResourceLanguages>none</SatelliteResourceLanguages>
         <OutputPath Condition="'$(Configuration)' != 'EF'">dist</OutputPath>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <TargetFramework>net9.0-windows</TargetFramework>
     </PropertyGroup>
     <ItemGroup>
       <Content Include="icon.png" />
@@ -17,12 +19,20 @@
           <PrivateAssets>all</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
-        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.5" Condition="'$(Configuration)' == 'EF'">
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0" Condition="'$(Configuration)' == 'EF'">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
         <PackageReference Include="RestSharp" Version="112.1.0" />
+        <PackageReference Include="RestSharp.Serializers.NewtonsoftJson" Version="112.1.0" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <Reference Include="InteropGenerator.Runtime">
+            <HintPath>C:\Users\neoga\AppData\Roaming\XIVLauncher\addon\Hooks\dev\InteropGenerator.Runtime.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
     </ItemGroup>
     
     <ItemGroup>
@@ -37,22 +47,16 @@
       <EmbeddedResource Update="Properties\Loc.resx">
         <Generator>ResXFileCodeGenerator</Generator>
         <LastGenOutput>Loc.Designer.cs</LastGenOutput>
+        <StronglyTypedFileName>Properties\Loc.Designer.cs</StronglyTypedFileName>
+        <StronglyTypedLanguage>CSharp</StronglyTypedLanguage>
+        <StronglyTypedNamespace>PlayerScope.Properties</StronglyTypedNamespace>
+        <StronglyTypedClassName>Loc</StronglyTypedClassName>
       </EmbeddedResource>
     </ItemGroup>
 	
-	<ItemGroup>
-		<EmbeddedResource Update="Properties\Loc.resx">
-			<Generator>ResXFileCodeGenerator</Generator>
-			<LastGenOutput>Loc.Designer.cs</LastGenOutput>
-			<StronglyTypedFileName>Properties\Loc.Designer.cs</StronglyTypedFileName>
-			<StronglyTypedLanguage>CSharp</StronglyTypedLanguage>
-			<StronglyTypedNamespace>PlayerScope.Properties</StronglyTypedNamespace>
-			<StronglyTypedClassName>PlayerScope</StronglyTypedClassName>
-		</EmbeddedResource>
-	</ItemGroup>
     
     <ItemGroup>
-      <PackageReference Update="DalamudPackager" Version="11.0.0" />
+      <PackageReference Update="DalamudPackager" Version="12.0.0" />
       <PackageReference Update="DotNet.ReproducibleBuilds" Version="1.2.25" />
     </ItemGroup>
 </Project>

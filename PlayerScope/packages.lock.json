@@ -1,7 +1,7 @@
 {
   "version": 1,
   "dependencies": {
-    "net8.0-windows7.0": {
+    "net9.0-windows7.0": {
       "Dalamud.Extensions.MicrosoftLogging": {
         "type": "Direct",
         "requested": "[4.0.1, )",
@@ -13,9 +13,9 @@
       },
       "DalamudPackager": {
         "type": "Direct",
-        "requested": "[11.0.0, )",
-        "resolved": "11.0.0",
-        "contentHash": "bjT7XUlhIJSmsE/O76b7weUX+evvGQctbQB8aKXt94o+oPWxHpCepxAGMs7Thow3AzCyqWs7cOpp9/2wcgRRQA=="
+        "requested": "[12.0.0, )",
+        "resolved": "12.0.0",
+        "contentHash": "J5TJLV3f16T/E2H2P17ClWjtfEBPpq3yxvqW46eN36JCm6wR+EaoaYkqG9Rm5sHqs3/nK/vKjWWyvEs/jhKoXw=="
       },
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
@@ -83,6 +83,16 @@
         "requested": "[112.1.0, )",
         "resolved": "112.1.0",
         "contentHash": "bOUGNZqhhv/QeCXHTKEUil846yBjwWXpzPKjO67kFvaAOoF361z7jLY5BMnuZ6WD2WQRA750sNMcK7MSPCQ5Mg=="
+      },
+      "RestSharp.Serializers.NewtonsoftJson": {
+        "type": "Direct",
+        "requested": "[112.1.0, )",
+        "resolved": "112.1.0",
+        "contentHash": "d/Ro5KeCKw2p0XVQrAKG0CUiG6VO4YeXLxIm5sHj8fwaIk2IlrtMOKoJJprsEUyJfq1Z9Qv8E1yN2rPFPuRVzw==",
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.3",
+          "RestSharp": "112.1.0"
+        }
       },
       "Humanizer.Core": {
         "type": "Transitive",
@@ -251,11 +261,7 @@
       "Microsoft.Extensions.DependencyModel": {
         "type": "Transitive",
         "resolved": "9.0.0",
-        "contentHash": "saxr2XzwgDU77LaQfYFXmddEDRUKHF4DaGMZkNB3qjdVSZlax3//dGJagJkKrGMIPNZs2jVFXITyCCR6UHJNdA==",
-        "dependencies": {
-          "System.Text.Encodings.Web": "9.0.0",
-          "System.Text.Json": "9.0.0"
-        }
+        "contentHash": "saxr2XzwgDU77LaQfYFXmddEDRUKHF4DaGMZkNB3qjdVSZlax3//dGJagJkKrGMIPNZs2jVFXITyCCR6UHJNdA=="
       },
       "Microsoft.Extensions.Logging": {
         "type": "Transitive",
@@ -272,8 +278,7 @@
         "resolved": "9.0.0",
         "contentHash": "g0UfujELzlLbHoVG8kPKVBaW470Ewi+jnptGS9KUi6jcb+k2StujtK3m26DFSGGwQ/+bVgZfsWqNzlP6YOejvw==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.0",
-          "System.Diagnostics.DiagnosticSource": "9.0.0"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.0"
         }
       },
       "Microsoft.Extensions.Options": {
@@ -386,15 +391,10 @@
           "System.Composition.Runtime": "7.0.0"
         }
       },
-      "System.Diagnostics.DiagnosticSource": {
-        "type": "Transitive",
-        "resolved": "9.0.0",
-        "contentHash": "ddppcFpnbohLWdYKr/ZeLZHmmI+DXFgZ3Snq+/E7SwcdW4UnvxmaugkwGywvGVWkHPGCSZjCP+MLzu23AL5SDw=="
-      },
       "System.IO.Pipelines": {
         "type": "Transitive",
-        "resolved": "9.0.0",
-        "contentHash": "eA3cinogwaNB4jdjQHOP3Z3EuyiDII7MT35jgtnsA4vkn0LUrrSHsU0nzHTzFzmaFYeKV7MYyMxOocFzsBHpTw=="
+        "resolved": "7.0.0",
+        "contentHash": "jRn6JYnNPW6xgQazROBLSfpdoczRw694vO5kKvMcNnpXuolEixUyw6IBuBs2Y2mlSX/LdLvyyWmfXhaI3ND1Yg=="
       },
       "System.Memory": {
         "type": "Transitive",
@@ -414,19 +414,10 @@
         "resolved": "6.0.0",
         "contentHash": "/iUeP3tq1S0XdNNoMz5C9twLSrM/TH+qElHkXWaPvuNOt+99G75NrV0OS2EqHx5wMN7popYjpc8oTjC1y16DLg=="
       },
-      "System.Text.Encodings.Web": {
-        "type": "Transitive",
-        "resolved": "9.0.0",
-        "contentHash": "e2hMgAErLbKyUUwt18qSBf9T5Y+SFAL3ZedM8fLupkVj8Rj2PZ9oxQ37XX2LF8fTO1wNIxvKpihD7Of7D/NxZw=="
-      },
       "System.Text.Json": {
         "type": "Transitive",
         "resolved": "9.0.0",
-        "contentHash": "js7+qAu/9mQvnhA4EfGMZNEzXtJCDxgkgj8ohuxq/Qxv+R56G+ljefhiJHOxTNiw54q8vmABCWUwkMulNdlZ4A==",
-        "dependencies": {
-          "System.IO.Pipelines": "9.0.0",
-          "System.Text.Encodings.Web": "9.0.0"
-        }
+        "contentHash": "js7+qAu/9mQvnhA4EfGMZNEzXtJCDxgkgj8ohuxq/Qxv+R56G+ljefhiJHOxTNiw54q8vmABCWUwkMulNdlZ4A=="
       },
       "System.Threading.Channels": {
         "type": "Transitive",
@@ -434,16 +425,11 @@
         "contentHash": "qmeeYNROMsONF6ndEZcIQ+VxR4Q/TX/7uIVLJqtwIWL7dDWeh0l1UIqgo4wYyjG//5lUNhwkLDSFl+pAWO6oiA=="
       }
     },
-    "net8.0-windows7.0/win-x64": {
+    "net9.0-windows7.0/win-x64": {
       "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "Transitive",
         "resolved": "2.1.10",
         "contentHash": "mAr69tDbnf3QJpRy2nJz8Qdpebdil00fvycyByR58Cn9eARvR+UiG2Vzsp+4q1tV3ikwiYIjlXCQFc12GfebbA=="
-      },
-      "System.Text.Encodings.Web": {
-        "type": "Transitive",
-        "resolved": "9.0.0",
-        "contentHash": "e2hMgAErLbKyUUwt18qSBf9T5Y+SFAL3ZedM8fLupkVj8Rj2PZ9oxQ37XX2LF8fTO1wNIxvKpihD7Of7D/NxZw=="
       }
     }
   }

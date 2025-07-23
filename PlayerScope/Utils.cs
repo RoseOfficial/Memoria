@@ -559,14 +559,20 @@ namespace PlayerScope
         public static string lodestoneCharacterUrl = "https://na.finalfantasyxiv.com/lodestone/character/";
         public static string lodestoneCharacterPrivacyUrl = "https://na.finalfantasyxiv.com/lodestone/my/setting/profile/";
         private const string AvatarBaseUrl = "https://img2.finalfantasyxiv.com/f/";
-        public static string BlankAvatar = "0000_";
+        public static string BlankAvatar = "00000000000000000000000000000000_00000000000000000000000000000000";
         public static string GetAvatarUrl(string avatarLink, bool isLarge)
         {
             if (string.IsNullOrWhiteSpace(avatarLink))
+            {
+                Plugin.Log.Debug($"Avatar link is null/empty, using blank avatar");
                 avatarLink = BlankAvatar; // Blank image
+            }
 
             var sizeSuffix = isLarge ? "fl0.jpg" : "fc0.jpg";
-            return $"{AvatarBaseUrl}{avatarLink}{sizeSuffix}";
+            var url = $"{AvatarBaseUrl}{avatarLink}{sizeSuffix}";
+            
+            Plugin.Log.Debug($"GetAvatarUrl: '{avatarLink}' -> '{url}' (isLarge: {isLarge})");
+            return url;
         }
 
     }

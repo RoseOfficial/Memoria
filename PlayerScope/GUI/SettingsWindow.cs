@@ -268,6 +268,16 @@ namespace PlayerScope.GUI
                             }
                         }
 
+                        Plugin.Log.Debug($"Settings Window - LoggedIn status: {Config.LoggedIn}, Key exists: {!string.IsNullOrWhiteSpace(Config.Key)}");
+                        
+                        // Auto-fix: If we have a key but are not logged in, set logged in to true
+                        if (!Config.LoggedIn && !string.IsNullOrWhiteSpace(Config.Key))
+                        {
+                            Plugin.Log.Info($"Auto-fixing login status: Key exists but LoggedIn=false, setting LoggedIn=true");
+                            Config.LoggedIn = true;
+                            Config.Save();
+                        }
+                        
                         using (ImRaii.Disabled(!Config.LoggedIn))
                         {
                             string tabTitle = _localUserCharacters.Count > 0
@@ -1211,7 +1221,7 @@ namespace PlayerScope.GUI
                                 SaveUserResultToConfig(response.User);
                             }
 
-                            LastNetworkMessageTime = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
+                            LastNetworkMessageTime = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                         });
 
                         editedCharactersPrivacy.Clear();
@@ -1281,7 +1291,7 @@ namespace PlayerScope.GUI
                     SaveUserResultToConfig(request.User);
                 }
 
-                LastNetworkMessageTime = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
+                LastNetworkMessageTime = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             });
         }
 

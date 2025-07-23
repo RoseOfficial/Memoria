@@ -35,6 +35,7 @@ public sealed class Plugin : IDalamudPlugin
     internal static IGameGui _gameGui { get; set; } = null!;
     [PluginService] internal static INotificationManager Notification { get; private set; } = null!;
     internal static Plugin Instance { get; private set; } = null!;
+    internal static IPluginLog Log { get; private set; } = null!;
     public Configuration Configuration { get; }
     public ApiClient ApiClient { get; set; }
     public GUI.SettingsWindow ConfigWindow;
@@ -65,6 +66,7 @@ public sealed class Plugin : IDalamudPlugin
         ITextureProvider textureProvider)
     {
         Instance = this;
+        Log = pluginLog;
         ServiceCollection serviceCollection = new();
         serviceCollection.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace)
             .ClearProviders()

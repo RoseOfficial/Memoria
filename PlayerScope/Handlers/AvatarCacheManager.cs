@@ -15,12 +15,15 @@ namespace PlayerScope.Handlers
         private readonly HttpClient _httpClient;
         public readonly ConcurrentDictionary<string, AvatarCacheEntry> _avatarCache;
         private readonly ConcurrentDictionary<string, Task> _ongoingDownloads;
+        private readonly ConcurrentDictionary<string, int> _failedDownloads;
 
         public AvatarCacheManager()
         {
             _httpClient = new HttpClient();
+            _httpClient.Timeout = TimeSpan.FromSeconds(30);
             _avatarCache = new ConcurrentDictionary<string, AvatarCacheEntry>();
             _ongoingDownloads = new ConcurrentDictionary<string, Task>();
+            _failedDownloads = new ConcurrentDictionary<string, int>();
         }
 
         public void ClearAvatarCache()
@@ -41,6 +44,13 @@ namespace PlayerScope.Handlers
 
                 cachedEntry.Texture?.Dispose();
                 _avatarCache.TryRemove(avatarUrl, out _);
+            }
+
+            // Check if this URL has failed too many times recently
+            if (_failedDownloads.TryGetValue(avatarUrl, out var failCount) && failCount >= 3)
+            {
+                Plugin.Log.Debug($"Skipping avatar download - too many failures: {avatarUrl}");
+                return 0;
             }
 
             if (!_ongoingDownloads.ContainsKey(avatarUrl))
@@ -65,10 +75,22 @@ namespace PlayerScope.Handlers
                             if (_avatarCache != null)
                             {
                                 _avatarCache[avatarUrl] = newEntry;
+                                Plugin.Log.Debug($"Avatar cached successfully: {avatarUrl}");
                             }
                         }
+                        else
+                        {
+                            Plugin.Log.Warning($"Failed to download/create texture for avatar: {avatarUrl}");
+                            // Track failed downloads
+                            _failedDownloads.AddOrUpdate(avatarUrl, 1, (key, oldValue) => oldValue + 1);
+                        }
                     }
-                    catch (Exception) { }
+                    catch (Exception ex) 
+                    {
+                        Plugin.Log.Error($"Unexpected error in avatar download task for {avatarUrl}: {ex.Message}");
+                        // Track failed downloads
+                        _failedDownloads.AddOrUpdate(avatarUrl, 1, (key, oldValue) => oldValue + 1);
+                    }
                     finally
                     {
                         _ongoingDownloads.TryRemove(avatarUrl, out _);
@@ -84,16 +106,44 @@ namespace PlayerScope.Handlers
         {
             try
             {
+                Plugin.Log.Debug($"Attempting to download avatar from: {avatarUrl}");
                 var imageData = await _httpClient.GetByteArrayAsync(avatarUrl);
+
+                if (imageData == null || imageData.Length == 0)
+                {
+                    Plugin.Log.Warning($"Avatar download returned empty data for URL: {avatarUrl}");
+                    return null;
+                }
+
+                Plugin.Log.Debug($"Downloaded {imageData.Length} bytes for avatar: {avatarUrl}");
 
                 var imageMemory = new ReadOnlyMemory<byte>(imageData);
 
                 var texture = await Plugin.TextureProvider.CreateFromImageAsync(imageMemory);
 
+                if (texture == null)
+                {
+                    Plugin.Log.Warning($"Failed to create texture from image data for URL: {avatarUrl}");
+                }
+                else
+                {
+                    Plugin.Log.Debug($"Successfully created texture for avatar: {avatarUrl}");
+                }
+
                 return texture;
             }
-            catch (HttpRequestException httpEx) { }
-            catch (Exception ex) { }
+            catch (HttpRequestException httpEx) 
+            {
+                Plugin.Log.Error($"HTTP error downloading avatar from {avatarUrl}: {httpEx.Message}");
+                // Track failed downloads
+                _failedDownloads.AddOrUpdate(avatarUrl, 1, (key, oldValue) => oldValue + 1);
+            }
+            catch (Exception ex) 
+            {
+                Plugin.Log.Error($"Error downloading avatar from {avatarUrl}: {ex.Message}");
+                // Track failed downloads
+                _failedDownloads.AddOrUpdate(avatarUrl, 1, (key, oldValue) => oldValue + 1);
+            }
             return null;
         }
 

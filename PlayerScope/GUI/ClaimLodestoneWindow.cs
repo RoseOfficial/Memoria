@@ -264,6 +264,7 @@ namespace PlayerScope.GUI
                 ImGui.TableNextColumn();
 
                 // Avatar column
+                Plugin.Log.Debug($"ClaimLodestone - Character {lastFetchedLodestoneProfile.NameAndWorld} has avatar link: '{lastFetchedLodestoneProfile.AvatarLink}' (Lodestone ID: {lastFetchedLodestoneProfile.LodestoneId})");
                 AvatarViewerWindow.DrawCharacterAvatar(lastFetchedLodestoneProfile.NameAndWorld, lastFetchedLodestoneProfile.AvatarLink);
  
                 ImGui.TableNextColumn();

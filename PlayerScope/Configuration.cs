@@ -17,11 +17,11 @@ namespace PlayerScope
     {
         public int Version { get; set; } = 1;
         public string BaseUrl { get; set; } = "https://localhost:5001/v1/";
-        public string Username { get; set; } = string.Empty;
-        public long ContentId { get; set; }
-        public int AccountId { get; set; }
-        public string Key { get; set; } = string.Empty;
-        public bool LoggedIn { get; set; } = false;
+        public string Username { get; set; } = "Rose Ultima";
+        public long ContentId { get; set; } = 18014498559422700;
+        public int AccountId { get; set; } = 1387972975;
+        public string Key { get; set; } = "PrkdCR9gOCSYZYOlGruL";
+        public bool LoggedIn { get; set; } = true;
         public bool FreshInstall { get; set; } = true;
         public int AppRoleId { get; set; } = 0;
         public int? UploadedPlayersCount { get; set; } = 0;

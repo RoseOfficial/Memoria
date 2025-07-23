@@ -477,7 +477,9 @@ namespace PlayerScope.GUI
                 ImGui.TableNextColumn();
 
                 //Avatar column
-                AvatarViewerWindow.DrawCharacterAvatar(player.PlayerNameHistories.Last().Name, player.PlayerLodestone?.AvatarLink);
+                var avatarLink = player.PlayerLodestone?.AvatarLink;
+                Plugin.Log.Debug($"Player {player.PlayerNameHistories.Last().Name} has avatar link from API: '{avatarLink}' (Lodestone ID: {player.PlayerLodestone?.LodestoneId})");
+                AvatarViewerWindow.DrawCharacterAvatar(player.PlayerNameHistories.Last().Name, avatarLink);
 
                 ImGui.TableNextColumn();
 

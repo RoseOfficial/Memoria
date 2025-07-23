@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using RestSharp;
+using RestSharp.Serializers.NewtonsoftJson;
 using PlayerScope.API.Models;
 using PlayerScope.API.Query;
 using PlayerScope.GUI;
@@ -33,7 +34,14 @@ namespace PlayerScope.API
         public ApiClient()
         {
             if (Uri.IsWellFormedUriString(Config.BaseUrl, UriKind.Absolute))
-                _restClient = new RestClient(Config.BaseUrl);
+            {
+                var options = new RestClientOptions(Config.BaseUrl);
+                _restClient = new RestClient(options, configureSerialization: s => s.UseNewtonsoftJson());
+            }
+            else
+            {
+                _restClient = new RestClient(configureSerialization: s => s.UseNewtonsoftJson());
+            }
             Instance = this;
         }
 

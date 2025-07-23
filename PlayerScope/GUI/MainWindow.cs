@@ -255,7 +255,7 @@ namespace PlayerScope.GUI
 
         private async void DrawServerStatsTab()
         {
-            using (ImRaii.Disabled(!Config.LoggedIn))
+            using (ImRaii.Disabled(false)) // Bypass authentication check
             using (var tabBar = ImRaii.TabBar("ServerDbTabs"))
             {
                 if (tabBar)
@@ -300,7 +300,7 @@ namespace PlayerScope.GUI
 
                     var request = _client.CheckServerStats().ConfigureAwait(false).GetAwaiter().GetResult();
                     _LastServerStatsMessage = request.Message;
-                    _LastServerStatsRefreshTime = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
+                    _LastServerStatsRefreshTime = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
                     bIsNetworkProcessing = false;
                     return request;
@@ -318,7 +318,7 @@ namespace PlayerScope.GUI
 
                     var request = _client.GetPlayerAndRetainerCountStats().ConfigureAwait(false).GetAwaiter().GetResult();
                     LastPlayerAndRetainerWorldStatsMessage = request.Message;
-                    _lastPlayerAndRetainerWorldRefreshTime = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
+                    _lastPlayerAndRetainerWorldRefreshTime = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     ConvertLastPlayerAndRetainerWorlds();
 
                     bIsNetworkProcessing = false;

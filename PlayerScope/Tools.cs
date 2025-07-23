@@ -23,7 +23,7 @@ namespace PlayerScope
         {
             get
             {
-                return (int)DateTimeOffset.Now.ToUnixTimeSeconds();
+                return (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             }
         }
 

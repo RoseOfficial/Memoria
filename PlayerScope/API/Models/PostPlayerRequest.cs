@@ -5,30 +5,29 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace PlayerScope.API.Models
 {
     public class PostPlayerRequest
     {
-        [JsonPropertyName("1")]
+        [JsonProperty("1")]
         public ulong LocalContentId { get; set; }
-        [JsonPropertyName("2")]
+        [JsonProperty("2")]
         public string Name { get; set; } = string.Empty;
-        [JsonPropertyName("3")]
+        [JsonProperty("3")]
         public ushort? HomeWorldId { get; set; }
-        [JsonPropertyName("4")]
+        [JsonProperty("4")]
         public int? AccountId { get; set; }
-        [JsonPropertyName("5")]
+        [JsonProperty("5")]
         public short? TerritoryId { get; set; }
-        [JsonPropertyName("6")]
+        [JsonProperty("6")]
         public string? PlayerPos { get; set; }
-        [JsonPropertyName("7")]
+        [JsonProperty("7")]
         public ushort? CurrentWorldId { get; set; }
-        [JsonPropertyName("8")]
+        [JsonProperty("8")]
         public PlayerCustomization? Customization { get; set; }
-        [JsonPropertyName("9")]
+        [JsonProperty("9")]
         public int CreatedAt { get; set; }
     }
 }
