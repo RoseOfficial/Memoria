@@ -89,9 +89,9 @@ internal sealed class PersistenceContext
                 var world = _worldRetainerCache.GetOrAdd(retainers.Key, _ => new());
                 foreach (var retainer in retainers)
                 {
-                    if (retainer.Name != null)
+                    if (retainer.Name != null && retainer.OwnerLocalContentId.HasValue)
                     {
-                        world[retainer.Name] = retainer.OwnerLocalContentId;
+                        world[retainer.Name] = retainer.OwnerLocalContentId.Value;
                         _retainerCache[retainer.LocalContentId] = retainer;
                     }
                 }
@@ -136,9 +136,13 @@ internal sealed class PersistenceContext
 
         foreach (var retainer in _retainerCache.Values)
         {
-            if (_playerCache.TryGetValue(retainer.OwnerLocalContentId, out CachedPlayer _GetPlayer))
+            // Skip retainers without owner information
+            if (!retainer.OwnerLocalContentId.HasValue)
+                continue;
+                
+            if (_playerCache.TryGetValue(retainer.OwnerLocalContentId.Value, out CachedPlayer _GetPlayer))
             {
-                var player = _playerWithRetainersCache.GetOrAdd(retainer.OwnerLocalContentId, _ => (_GetPlayer, new List<Retainer>() { retainer }));
+                var player = _playerWithRetainersCache.GetOrAdd(retainer.OwnerLocalContentId.Value, _ => (_GetPlayer, new List<Retainer>() { retainer }));
 
                 if (!player.Item2.Contains(retainer))
                 {
@@ -147,7 +151,7 @@ internal sealed class PersistenceContext
             }
             else
             {
-                var player = _playerWithRetainersCache.GetOrAdd(retainer.OwnerLocalContentId, _ => (new CachedPlayer { Name = "-", AccountId = null}, new List<Retainer>() { retainer }));
+                var player = _playerWithRetainersCache.GetOrAdd(retainer.OwnerLocalContentId.Value, _ => (new CachedPlayer { Name = "-", AccountId = null}, new List<Retainer>() { retainer }));
 
                 if (!player.Item2.Contains(retainer))
                 {
@@ -221,10 +225,16 @@ internal sealed class PersistenceContext
 
     public static void AddRetainerUploadData(IEnumerable<PostRetainerRequest> requests)
     {
-        foreach (var request in requests)
+        var requestList = requests.ToList();
+        _logger.LogInformation($"AddRetainerUploadData called with {requestList.Count} requests");
+        
+        foreach (var request in requestList)
         {
+            _logger.LogInformation($"Adding retainer {request.Name} (ID: {request.LocalContentId}) to upload queue");
             UpdateCacheIfNeeded(request.LocalContentId, request, _UploadRetainers, _UploadedRetainersCache);
         }
+        
+        _logger.LogInformation($"Upload queue now has {_UploadRetainers.Count} retainers waiting");
     }
 
     public static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
@@ -461,23 +471,31 @@ internal sealed class PersistenceContext
     {
         try
         {
+            _logger.LogInformation($"HandleMarketBoardPage called with {retainers.Count} retainers");
+            
             var updates = retainers
                     .DistinctBy(o => o.LocalContentId)
                     .Where(l => l.LocalContentId != 0)
-                    .Where(l => l.OwnerLocalContentId != 0)
+                    // Allow retainers without owner info to be stored
                     .Where(mapping =>
                     {
                         if (mapping.Name == null)
                             return true;
 
-                        var currentWorldCache = _worldRetainerCache.GetOrAdd(mapping.WorldId, _ => new());
-                        if (currentWorldCache.TryGetValue(mapping.Name, out ulong playerContentId))
-                            return mapping.OwnerLocalContentId != playerContentId;
+                        // Only check cache if we have owner info
+                        if (mapping.OwnerLocalContentId.HasValue)
+                        {
+                            var currentWorldCache = _worldRetainerCache.GetOrAdd(mapping.WorldId, _ => new());
+                            if (currentWorldCache.TryGetValue(mapping.Name, out ulong playerContentId))
+                                return mapping.OwnerLocalContentId != playerContentId;
+                        }
 
                         return true;
                     })
                     .DistinctBy(x => x.LocalContentId)
                     .ToList();
+                    
+            _logger.LogInformation($"After filtering, {updates.Count} retainers need processing");
 
             using var scope = _serviceProvider.CreateScope();
             using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
@@ -487,7 +505,7 @@ internal sealed class PersistenceContext
                 Retainer? dbRetainer = dbContext.Retainers.Find(retainer.LocalContentId);
                 if (dbRetainer != null)
                 {
-                    _logger.LogDebug("Updating retainer {RetainerName} with {LocalContentId}", retainer.Name,
+                    _logger.LogInformation("Updating retainer {RetainerName} with {LocalContentId}", retainer.Name,
                         retainer.LocalContentId);
                     dbRetainer.Name = retainer.Name;
                     dbRetainer.WorldId = retainer.WorldId;
@@ -496,28 +514,33 @@ internal sealed class PersistenceContext
                 }
                 else
                 {
-                    //_logger.LogDebug("Adding retainer {RetainerName} with {LocalContentId}", retainer.Name, retainer.LocalContentId);
+                    _logger.LogInformation("Adding retainer {RetainerName} with {LocalContentId}", retainer.Name, retainer.LocalContentId);
                     dbContext.Retainers.Add(retainer);
                 }
 
                 string ownerName;
-                if (_playerCache.TryGetValue(retainer.OwnerLocalContentId, out CachedPlayer? cachedPlayer))
+                if (retainer.OwnerLocalContentId.HasValue && _playerCache.TryGetValue(retainer.OwnerLocalContentId.Value, out CachedPlayer? cachedPlayer))
                     ownerName = cachedPlayer.Name;
+                else if (retainer.OwnerLocalContentId.HasValue)
+                    ownerName = retainer.OwnerLocalContentId.Value.ToString(CultureInfo.InvariantCulture);
                 else
-                    ownerName = retainer.OwnerLocalContentId.ToString(CultureInfo.InvariantCulture);
-                //_logger.LogDebug("  Retainer {RetainerName} belongs to {OwnerName}", retainer.Name, ownerName);
+                    ownerName = "Unknown";
+                _logger.LogInformation("  Retainer {RetainerName} belongs to {OwnerName}", retainer.Name, ownerName);
 
                 if (retainer.Name != null)
                 {
                     var world = _worldRetainerCache.GetOrAdd(retainer.WorldId, _ => new());
-                    world[retainer.Name] = retainer.OwnerLocalContentId;
+                    if (retainer.OwnerLocalContentId.HasValue)
+                        world[retainer.Name] = retainer.OwnerLocalContentId.Value;
                     _retainerCache[retainer.LocalContentId] = retainer;
                 }
             }
 
             int changeCount = dbContext.SaveChanges();
             if (changeCount > 0)
-                _logger.LogDebug("Saved {Count} retainer mappings", changeCount);
+                _logger.LogInformation("Saved {Count} retainer mappings", changeCount);
+            else
+                _logger.LogInformation("No database changes were made");
 
             return;
         }

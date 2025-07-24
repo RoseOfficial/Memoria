@@ -13,6 +13,5 @@ public class Retainer
     [Required]
     public ushort WorldId { get; set; }
 
-    [Required]
-    public ulong OwnerLocalContentId { get; set; }
+    public ulong? OwnerLocalContentId { get; set; }
 }

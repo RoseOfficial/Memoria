@@ -175,7 +175,102 @@ public sealed class Plugin : IDalamudPlugin
     {
         using var scope = serviceProvider.CreateScope();
         using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-        dbContext.Database.Migrate();
+        
+        try
+        {
+            var connection = dbContext.Database.GetDbConnection();
+            connection.Open();
+            
+            using var command = connection.CreateCommand();
+            
+            // Check if database exists and create with correct schema if needed
+            command.CommandText = @"
+                SELECT name FROM sqlite_master WHERE type='table' AND name='Retainers';
+            ";
+            
+            var result = command.ExecuteScalar();
+            bool retainersTableExists = result != null;
+            
+            if (!retainersTableExists)
+            {
+                // Create the database with the correct nullable schema from scratch
+                command.CommandText = @"
+                    CREATE TABLE Players (
+                        LocalContentId INTEGER PRIMARY KEY,
+                        Name TEXT NOT NULL,
+                        AccountId INTEGER NULL
+                    );
+                    
+                    CREATE TABLE Retainers (
+                        LocalContentId INTEGER PRIMARY KEY,
+                        Name TEXT NOT NULL,
+                        WorldId INTEGER NOT NULL,
+                        OwnerLocalContentId INTEGER NULL
+                    );
+                ";
+                command.ExecuteNonQuery();
+            }
+            else
+            {
+                // Check if we need to update existing schema
+                command.CommandText = @"
+                    PRAGMA table_info(Retainers);
+                ";
+                
+                using var reader = command.ExecuteReader();
+                bool needsUpdate = false;
+                while (reader.Read())
+                {
+                    var columnName = reader.GetString(1); // name column
+                    var notNull = reader.GetInt32(3); // notnull column
+                    
+                    if (columnName == "OwnerLocalContentId" && notNull == 1)
+                    {
+                        needsUpdate = true;
+                        break;
+                    }
+                }
+                reader.Close();
+                
+                if (needsUpdate)
+                {
+                    // Update the schema to make OwnerLocalContentId nullable
+                    command.CommandText = @"
+                        BEGIN TRANSACTION;
+                        
+                        -- Create new table with nullable OwnerLocalContentId
+                        CREATE TABLE Retainers_New (
+                            LocalContentId INTEGER PRIMARY KEY,
+                            Name TEXT NOT NULL,
+                            WorldId INTEGER NOT NULL,
+                            OwnerLocalContentId INTEGER NULL
+                        );
+                        
+                        -- Copy data from old table
+                        INSERT INTO Retainers_New (LocalContentId, Name, WorldId, OwnerLocalContentId)
+                        SELECT LocalContentId, Name, WorldId, 
+                               CASE WHEN OwnerLocalContentId = 0 THEN NULL ELSE OwnerLocalContentId END
+                        FROM Retainers;
+                        
+                        -- Drop old table and rename new one
+                        DROP TABLE Retainers;
+                        ALTER TABLE Retainers_New RENAME TO Retainers;
+                        
+                        COMMIT;
+                    ";
+                    
+                    command.ExecuteNonQuery();
+                }
+            }
+            
+            connection.Close();
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't crash the plugin
+            System.Console.WriteLine($"Error setting up database: {ex.Message}");
+            throw; // Re-throw since we need the database to work
+        }
     }
 
     private static void InitializeRequiredServices(ServiceProvider serviceProvider)

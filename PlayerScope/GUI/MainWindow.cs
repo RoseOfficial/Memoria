@@ -732,7 +732,7 @@ namespace PlayerScope.GUI
             {
                 LocalContentId = (ulong)r.Key,
                 Name = r.Value.Name,
-                OwnerLocalContentId = (ulong)r.Value.OwnerLocalContentId,
+                OwnerLocalContentId = r.Value.OwnerLocalContentId == 0 ? null : (ulong)r.Value.OwnerLocalContentId,
                 WorldId = (ushort)r.Value.WorldId,
             }).ToList();
 
@@ -1183,8 +1183,9 @@ namespace PlayerScope.GUI
 
                             ImGui.TableNextColumn(); //OwnerContentId column
 
-                            Utils.CopyButton(retainer.OwnerLocalContentId.ToString(), $"##RetainerOwnerContentId_{index}");
-                            ImGui.Text(retainer.OwnerLocalContentId.ToString());
+                            var ownerText = retainer.OwnerLocalContentId == 0 ? "Unknown" : retainer.OwnerLocalContentId.ToString();
+                            Utils.CopyButton(ownerText, $"##RetainerOwnerContentId_{index}");
+                            ImGui.Text(ownerText);
 
                             ImGui.TableNextColumn(); //RetainerContentId column
 
@@ -1734,25 +1735,29 @@ namespace PlayerScope.GUI
                     List<ulong> AddedOwners = new List<ulong>();
                     foreach (var retainer in _retainerCache)
                     {
-                        if (!AddedOwners.Contains(retainer.Value.OwnerLocalContentId))
+                        // Skip retainers without owner information
+                        if (!retainer.Value.OwnerLocalContentId.HasValue)
+                            continue;
+                            
+                        if (!AddedOwners.Contains(retainer.Value.OwnerLocalContentId.Value))
                         {
                             string retainerName = retainer.Value.Name.ToLower();
                             if (retainerName.Contains(targetName))
                             {
-                                PersistenceContext._playerWithRetainersCache.TryGetValue(retainer.Value.OwnerLocalContentId, out var _GetPlayerValues);
+                                PersistenceContext._playerWithRetainersCache.TryGetValue(retainer.Value.OwnerLocalContentId.Value, out var _GetPlayerValues);
 
-                                AddedOwners.Add(retainer.Value.OwnerLocalContentId);
+                                AddedOwners.Add(retainer.Value.OwnerLocalContentId.Value);
                                 if (_GetPlayerValues.Player != null && _GetPlayerValues.Player.AccountId != null && !_AccountIdCache.IsEmpty)
                                 {
                                     _AccountIdCache.TryGetValue((ulong)_GetPlayerValues.Player.AccountId, out var GetAccountsContentIds);
                                     if (GetAccountsContentIds != null)
                                     {
-                                        _TestTempPlayerWithRetainers.GetOrAdd(retainer.Value.OwnerLocalContentId, _ => (_GetPlayerValues.Player, _GetPlayerValues.Retainers, GetAccountsContentIds.Count));
+                                        _TestTempPlayerWithRetainers.GetOrAdd(retainer.Value.OwnerLocalContentId.Value, _ => (_GetPlayerValues.Player, _GetPlayerValues.Retainers, GetAccountsContentIds.Count));
                                     }
                                 }
                                 else
                                 {
-                                    _TestTempPlayerWithRetainers.GetOrAdd(retainer.Value.OwnerLocalContentId, _ => (_GetPlayerValues.Player, _GetPlayerValues.Retainers, 0));
+                                    _TestTempPlayerWithRetainers.GetOrAdd(retainer.Value.OwnerLocalContentId.Value, _ => (_GetPlayerValues.Player, _GetPlayerValues.Retainers, 0));
                                 }
                             }
 
