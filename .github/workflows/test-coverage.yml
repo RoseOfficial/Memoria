@@ -47,11 +47,12 @@ jobs:
       run: |
         dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
     
-    - name: Note about Plugin Tests
+    - name: Note about Plugin Tests and Build
       run: |
-        echo "📝 Note: Plugin tests (AlphaScope.Tests) are not run in CI because they depend on Dalamud assemblies"
+        echo "📝 Note: Plugin tests (AlphaScope.Tests) and plugin builds are not run in CI because they depend on Dalamud assemblies"
         echo "   which are only available in the FFXIV game environment. Run them locally with:"
         echo "   dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj"
+        echo "   dotnet build AlphaScope/AlphaScope.csproj --configuration Release"
     
     - name: Generate coverage report
       run: |
@@ -89,30 +90,6 @@ jobs:
         fail_below_threshold: false
         show_missing: true
 
-  build-plugin:
-    runs-on: windows-latest
-    needs: test-coverage
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 9.0.x
-    
-    - name: Restore dependencies
-      run: dotnet restore AlphaScope/AlphaScope.csproj
-    
-    - name: Build plugin (Release)
-      run: dotnet build AlphaScope/AlphaScope.csproj --no-restore --configuration Release
-    
-    - name: Upload plugin artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: plugin-build
-        path: AlphaScope/dist/
-    
   build-server:
     runs-on: windows-latest
     needs: test-coverage
