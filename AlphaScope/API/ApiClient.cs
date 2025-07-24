@@ -29,7 +29,7 @@ namespace AlphaScope.API
     {
         public static IRestClient _restClient = new RestClient();
         //private const string BaseUrl = "https://localhost:5001/v1/";
-        public Configuration Config = Plugin.Instance.Configuration;
+        public Configuration Config = Plugin.Instance?.Configuration ?? new Configuration();
         private readonly ILogger<ApiClient> _logger;
         internal static ApiClient Instance { get; private set; } = null!;
         public ApiClient(ILogger<ApiClient> logger)

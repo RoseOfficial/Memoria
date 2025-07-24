@@ -21,13 +21,13 @@ jobs:
           9.0.x
     
     - name: Restore dependencies
-      run: dotnet restore PlayerScope.sln
+      run: dotnet restore AlphaScope.sln
     
     - name: Build solution
-      run: dotnet build PlayerScope.sln --no-restore --configuration Release
+      run: dotnet build AlphaScope.sln --no-restore --configuration Release
     
     - name: Build server tests specifically
-      run: dotnet build PlayerScopeServer.Tests/PlayerScopeServer.Tests.csproj --no-restore --configuration Release
+      run: dotnet build AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj --no-restore --configuration Release
     
     - name: Install coverage tools
       run: |
@@ -36,13 +36,13 @@ jobs:
     
     - name: Run server tests with coverage
       run: |
-        dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test PlayerScopeServer.Tests/PlayerScopeServer.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
+        dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
     
     - name: Note about Plugin Tests
       run: |
-        echo "📝 Note: Plugin tests (PlayerScope.Tests) are not run in CI because they depend on Dalamud assemblies"
+        echo "📝 Note: Plugin tests (AlphaScope.Tests) are not run in CI because they depend on Dalamud assemblies"
         echo "   which are only available in the FFXIV game environment. Run them locally with:"
-        echo "   dotnet test PlayerScope.Tests/PlayerScope.Tests.csproj"
+        echo "   dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj"
     
     - name: Generate coverage report
       run: |
@@ -93,16 +93,16 @@ jobs:
         dotnet-version: 9.0.x
     
     - name: Restore dependencies
-      run: dotnet restore PlayerScope/PlayerScope.csproj
+      run: dotnet restore AlphaScope/AlphaScope.csproj
     
     - name: Build plugin (Release)
-      run: dotnet build PlayerScope/PlayerScope.csproj --no-restore --configuration Release
+      run: dotnet build AlphaScope/AlphaScope.csproj --no-restore --configuration Release
     
     - name: Upload plugin artifacts
       uses: actions/upload-artifact@v4
       with:
         name: plugin-build
-        path: PlayerScope/dist/
+        path: AlphaScope/dist/
     
   build-server:
     runs-on: windows-latest
@@ -117,13 +117,13 @@ jobs:
         dotnet-version: 8.0.x
     
     - name: Restore dependencies
-      run: dotnet restore PlayerScopeServer/PlayerScopeServer.csproj
+      run: dotnet restore AlphaScopeServer/AlphaScopeServer.csproj
     
     - name: Build server (Release)
-      run: dotnet build PlayerScopeServer/PlayerScopeServer.csproj --no-restore --configuration Release
+      run: dotnet build AlphaScopeServer/AlphaScopeServer.csproj --no-restore --configuration Release
     
     - name: Publish server
-      run: dotnet publish PlayerScopeServer/PlayerScopeServer.csproj --no-restore --configuration Release --output ./publish
+      run: dotnet publish AlphaScopeServer/AlphaScopeServer.csproj --no-restore --configuration Release --output ./publish
     
     - name: Upload server artifacts
       uses: actions/upload-artifact@v4
