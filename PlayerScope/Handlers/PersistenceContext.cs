@@ -50,6 +50,22 @@ internal sealed class PersistenceContext
     public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadRetainers = new();  //will be uploaded
     public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadedRetainersCache = new(); //Already uploaded
 
+    public static ConcurrentDictionary<ulong, (CachedPlayer Player, long ScannedAt)> _recentlyScannedPlayers = new();
+    
+    public static void CleanupOldRecentPlayers(int maxAgeInHours = 24)
+    {
+        var cutoffTime = DateTimeOffset.UtcNow.AddHours(-maxAgeInHours).ToUnixTimeSeconds();
+        var keysToRemove = _recentlyScannedPlayers
+            .Where(kvp => kvp.Value.ScannedAt < cutoffTime)
+            .Select(kvp => kvp.Key)
+            .ToList();
+            
+        foreach (var key in keysToRemove)
+        {
+            _recentlyScannedPlayers.TryRemove(key, out _);
+        }
+    }
+
 
     private static PersistenceContext _instance = null;
     public static PersistenceContext Instance
@@ -587,11 +603,14 @@ internal sealed class PersistenceContext
                     //_logger.LogDebug("Saved fallback player mappings for {ContentId} / {Name} / {AccountId}", mapping.ContentId, mapping.PlayerName, mapping.AccountId);
                 }
 
-                _playerCache[mapping.ContentId] = new CachedPlayer
+                var newCachedPlayer = new CachedPlayer
                 {
                     AccountId = mapping.AccountId,
                     Name = mapping.PlayerName,
                 };
+                _playerCache[mapping.ContentId] = newCachedPlayer;
+                
+                _recentlyScannedPlayers[mapping.ContentId] = (newCachedPlayer, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
         }
         catch (Exception e)
@@ -671,11 +690,14 @@ internal sealed class PersistenceContext
 
             foreach (var player in updates)
             {
-                _playerCache[player.ContentId] = new CachedPlayer
+                var cachedPlayer = new CachedPlayer
                 {
                     AccountId = player.AccountId,
                     Name = player.PlayerName,
                 };
+                _playerCache[player.ContentId] = cachedPlayer;
+                
+                _recentlyScannedPlayers[player.ContentId] = (cachedPlayer, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
         }
         catch (Exception e)

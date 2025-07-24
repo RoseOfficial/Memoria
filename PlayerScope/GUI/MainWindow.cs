@@ -196,6 +196,14 @@ namespace PlayerScope.GUI
             {
                 if (tabBar)
                 {
+                    using (var tabItem = ImRaii.TabItem("Recent Players"))
+                    {
+                        if (tabItem)
+                        {
+                            DrawRecentPlayersTab();
+                        }
+                    }
+                    
                     using (var tabItem = ImRaii.TabItem(Loc.MnTabSearchCharacterAndRetainer))
                     {
                         if (tabItem)
@@ -1686,6 +1694,70 @@ namespace PlayerScope.GUI
 
         ConcurrentDictionary<ulong, (PersistenceContext.CachedPlayer, List<Database.Retainer>, int TotalAccCount)> _TestTempPlayerWithRetainers = new();
         string LastTargetName = "###";
+
+        private void DrawRecentPlayersTab()
+        {
+            PersistenceContext.CleanupOldRecentPlayers();
+            
+            var recentPlayers = PersistenceContext._recentlyScannedPlayers
+                .OrderByDescending(kvp => kvp.Value.ScannedAt)
+                .Take(100)
+                .ToList();
+
+            if (recentPlayers.Count == 0)
+            {
+                ImGui.Text("No recently scanned players found.");
+                return;
+            }
+
+            if (ImGui.BeginTable("RecentPlayersTable", 4, ImGuiTableFlags.BordersInner | ImGuiTableFlags.ScrollY))
+            {
+                ImGui.TableSetupColumn("Name");
+                ImGui.TableSetupColumn("Content ID");
+                ImGui.TableSetupColumn("Account ID");
+                ImGui.TableSetupColumn("Scanned");
+                ImGui.TableHeadersRow();
+
+                var index = 0;
+                foreach (var (contentId, (player, scannedAt)) in recentPlayers)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
+
+                    if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.LongArrowAltRight, $"{Loc.DtOpenRightArrow}##{index}"))
+                    {
+                        DetailsWindow.Instance.IsOpen = true;
+                        DetailsWindow.Instance.OpenDetailedPlayerWindow(contentId, true);
+                    }
+
+                    ImGui.SameLine();
+                    Utils.CopyButton(player.Name, $"##RecentPlayerName_{index}");
+                    ImGui.Text(player.Name);
+
+                    ImGui.TableNextColumn();
+                    Utils.CopyButton(contentId.ToString(), $"##RecentPlayerContentId_{index}");
+                    ImGui.Text(contentId.ToString());
+
+                    ImGui.TableNextColumn();
+                    if (player.AccountId.HasValue)
+                    {
+                        Utils.CopyButton(player.AccountId.Value.ToString(), $"##RecentPlayerAccountId_{index}");
+                        ImGui.Text(player.AccountId.Value.ToString());
+                    }
+                    else
+                    {
+                        ImGui.Text("");
+                    }
+
+                    ImGui.TableNextColumn();
+                    var timeAgo = Tools.ToTimeSinceString((int)scannedAt);
+                    ImGui.Text(timeAgo);
+
+                    index++;
+                }
+                ImGui.EndTable();
+            }
+        }
 
         ConcurrentDictionary<ulong, (PersistenceContext.CachedPlayer, List<Database.Retainer>, int TotalAccCount)> SearchPlayer(string targetName)
         {
