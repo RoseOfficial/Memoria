@@ -143,7 +143,7 @@ public sealed class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.OpenMainUi += delegate { MainWindow.IsOpen = true; };
         pluginInterface.UiBuilder.OpenConfigUi += ConfigWindow.Toggle;
 
-        _commandManager.AddHandler("/ps", new CommandInfo(ProcessCommand)
+        _commandManager.AddHandler("/alpha", new CommandInfo(ProcessCommand)
         {
             HelpMessage = Loc.CmOpenUI
         });
@@ -157,7 +157,7 @@ public sealed class Plugin : IDalamudPlugin
     }
     private void ProcessCommand(string command, string arguments)
     {
-        if (command == "/ps")
+        if (command == "/alpha")
         {
             MainWindow.IsOpen = true;
         }

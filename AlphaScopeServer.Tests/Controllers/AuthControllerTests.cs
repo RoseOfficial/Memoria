@@ -132,7 +132,7 @@ public class AuthControllerTests : IDisposable
         result.Should().BeOfType<ContentResult>();
         var contentResult = result as ContentResult;
         contentResult!.ContentType.Should().Be("text/html");
-        contentResult.Content.Should().Contain("Welcome to PlayerScope!");
+        contentResult.Content.Should().Contain("Welcome to AlphaScope!");
         contentResult.Content.Should().Contain("TestUser");
         contentResult.Content.Should().Contain("123456789");
         contentResult.Content.Should().Contain("Complete Login");
@@ -164,7 +164,7 @@ public class AuthControllerTests : IDisposable
         result.Should().BeOfType<ContentResult>();
         var contentResult = result as ContentResult;
         contentResult!.ContentType.Should().Be("text/html");
-        contentResult.Content.Should().Contain("Welcome to PlayerScope!");
+        contentResult.Content.Should().Contain("Welcome to AlphaScope!");
     }
 
     [Fact]

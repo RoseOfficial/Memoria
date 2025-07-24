@@ -785,7 +785,7 @@ gördügüm retainer'larin bilgilerinin sunucuya aktarilmasini kabul ediyorum.</
     <value>Anadünya</value>
   </data>
   <data name="CmOpenUI" xml:space="preserve">
-    <value>Arayüzü Göster</value>
+    <value>AlphaScope arayüzünü aç</value>
   </data>
   <data name="StDidntTheBrowserOpen" xml:space="preserve">
     <value>Tarayicin açilmadi mi?</value>

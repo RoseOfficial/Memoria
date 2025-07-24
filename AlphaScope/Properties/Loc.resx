@@ -794,7 +794,7 @@ and the retainers I see while browsing the marketboard will be uploaded to the s
     <value>Home World</value>
   </data>
   <data name="CmOpenUI" xml:space="preserve">
-    <value>Open UI</value>
+    <value>Open AlphaScope interface</value>
   </data>
   <data name="StDidntTheBrowserOpen" xml:space="preserve">
     <value>Didn't the browser open?</value>

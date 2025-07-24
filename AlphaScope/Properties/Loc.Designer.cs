@@ -266,7 +266,7 @@ namespace AlphaScope.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Open UI.
+        ///   Looks up a localized string similar to Open AlphaScope interface.
         /// </summary>
         internal static string CmOpenUI {
             get {

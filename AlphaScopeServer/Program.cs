@@ -17,7 +17,7 @@ builder.Services.AddControllers()
 builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Data Source=PlayerScope.db";
+        ?? "Data Source=AlphaScope.db";
     options.UseSqlite(connectionString, sqliteOptions =>
     {
         sqliteOptions.CommandTimeout(30);
@@ -27,7 +27,7 @@ builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
 // Configure CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("PlayerScopePolicy", policy =>
+    options.AddPolicy("AlphaScopePolicy", policy =>
     {
         policy.AllowAnyOrigin()
               .AllowAnyMethod()
@@ -39,7 +39,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new() { Title = "PlayerScope Server API", Version = "v1" });
+    c.SwaggerDoc("v1", new() { Title = "AlphaScope Server API", Version = "v1" });
     c.AddSecurityDefinition("ApiKey", new()
     {
         In = Microsoft.OpenApi.Models.ParameterLocation.Header,
@@ -86,13 +86,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "PlayerScope Server API v1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "AlphaScope Server API v1");
         c.RoutePrefix = "swagger";
     });
 }
 
 // Add CORS before authentication
-app.UseCors("PlayerScopePolicy");
+app.UseCors("AlphaScopePolicy");
 
 // Add custom authentication middleware
 app.UseApiKeyAuthentication();
@@ -107,7 +107,7 @@ app.MapGet("/health", () => new { status = "healthy", timestamp = DateTimeOffset
     .WithOpenApi();
 
 // Log server information
-app.Logger.LogInformation("PlayerScope Server starting...");
+app.Logger.LogInformation("AlphaScope Server starting...");
 app.Logger.LogInformation("Server URL: https://localhost:5001");
 app.Logger.LogInformation("Swagger UI: https://localhost:5001/swagger");
 

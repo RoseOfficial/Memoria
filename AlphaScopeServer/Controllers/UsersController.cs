@@ -285,13 +285,13 @@ namespace AlphaScopeServer.Controllers
         {
             try
             {
-                // Create user with PlayerScope's exact API key format
+                // Create user with AlphaScope's exact API key format
                 var user = new ApplicationUser
                 {
                     GameAccountId = 1387972975,
                     PrimaryCharacterLocalContentId = 18014498559422700,
                     Name = "Rose Ultima",
-                    ApiKey = "PrkdCR9gOCSYZYOlGruL-1387972975", // Exact match from PlayerScope config
+                    ApiKey = "PrkdCR9gOCSYZYOlGruL-1387972975", // Exact match from AlphaScope config
                     AppRoleId = (int)UserRole.Member,
                     BaseUrl = "https://localhost:5001/v1/",
                     CreatedAt = DateTime.UtcNow,

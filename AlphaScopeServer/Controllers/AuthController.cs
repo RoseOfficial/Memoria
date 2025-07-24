@@ -51,7 +51,7 @@ namespace AlphaScopeServer.Controllers
                     return BadRequest("The data field is required");
                 }
 
-                // Decode the user data from PlayerScope
+                // Decode the user data from AlphaScope
                 var decodedBytes = Convert.FromBase64String(data);
                 var decodedString = Encoding.UTF8.GetString(decodedBytes);
                 var userRegister = JsonSerializer.Deserialize<UserRegister>(decodedString);
@@ -70,7 +70,7 @@ namespace AlphaScopeServer.Controllers
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PlayerScope Login</title>
+    <title>AlphaScope Login</title>
     <style>
         body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }}
         .container {{ background: #f5f5f5; padding: 30px; border-radius: 10px; }}
@@ -81,7 +81,7 @@ namespace AlphaScopeServer.Controllers
 </head>
 <body>
     <div class='container'>
-        <h2>Welcome to PlayerScope!</h2>
+        <h2>Welcome to AlphaScope!</h2>
         <p>To complete your login, please:</p>
         <ol>
             <li>Join our Discord server (optional but recommended)</li>
@@ -167,7 +167,7 @@ namespace AlphaScopeServer.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                // Signal the waiting PlayerScope client
+                // Signal the waiting AlphaScope client
                 if (_loginWaiters.TryRemove(data, out var tcs))
                 {
                     tcs.SetResult(true);
@@ -211,7 +211,7 @@ namespace AlphaScopeServer.Controllers
                             
                         if (user != null)
                         {
-                            // Send back the user info that PlayerScope expects
+                            // Send back the user info that AlphaScope expects
                             await Response.WriteAsync($"data: Login successful - API Key: {user.ApiKey}\\n\\n");
                         }
                         else
