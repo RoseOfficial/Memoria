@@ -26,14 +26,23 @@ jobs:
     - name: Build solution
       run: dotnet build PlayerScope.sln --no-restore --configuration Release
     
+    - name: Build server tests specifically
+      run: dotnet build PlayerScopeServer.Tests/PlayerScopeServer.Tests.csproj --no-restore --configuration Release
+    
     - name: Install coverage tools
       run: |
         dotnet tool install --global dotnet-coverage
         dotnet tool install --global dotnet-reportgenerator-globaltool
     
-    - name: Run tests with coverage
+    - name: Run server tests with coverage
       run: |
-        dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test PlayerScope.Tests/PlayerScope.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
+        dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test PlayerScopeServer.Tests/PlayerScopeServer.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
+    
+    - name: Note about Plugin Tests
+      run: |
+        echo "📝 Note: Plugin tests (PlayerScope.Tests) are not run in CI because they depend on Dalamud assemblies"
+        echo "   which are only available in the FFXIV game environment. Run them locally with:"
+        echo "   dotnet test PlayerScope.Tests/PlayerScope.Tests.csproj"
     
     - name: Generate coverage report
       run: |
