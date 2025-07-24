@@ -20,11 +20,20 @@ jobs:
           8.0.x
           9.0.x
     
-    - name: Restore dependencies
-      run: dotnet restore AlphaScope.sln
+    - name: Restore server dependencies
+      run: dotnet restore AlphaScopeServer/AlphaScopeServer.csproj
     
-    - name: Build solution
-      run: dotnet build AlphaScope.sln --no-restore --configuration Release
+    - name: Restore server test dependencies
+      run: dotnet restore AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj
+    
+    - name: Restore test utilities dependencies
+      run: dotnet restore TestUtilities/TestUtilities.csproj
+    
+    - name: Build server
+      run: dotnet build AlphaScopeServer/AlphaScopeServer.csproj --no-restore --configuration Release
+    
+    - name: Build test utilities
+      run: dotnet build TestUtilities/TestUtilities.csproj --no-restore --configuration Release
     
     - name: Build server tests specifically
       run: dotnet build AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj --no-restore --configuration Release
