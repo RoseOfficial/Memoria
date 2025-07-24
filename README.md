@@ -1,13 +1,13 @@
-If you **don’t** want your character to be included in PlayerScope, you can use this form to opt out. - https://forms.gle/pzfmE8PYak2tH91M8
+If you **don't** want your character to be included in AlphaScope, you can use this form to opt out. - https://forms.gle/pzfmE8PYak2tH91M8
 
 
 
 
 ## Credits
 
-I want to give credit to some plugins that helped me while developing **PlayerScope**
+I want to give credit to some plugins that helped me while developing **AlphaScope**
 
-- **[RetainerTrack](https://git.carvel.li/liza/RetainerTrack)** - [(repo)](https://plugins.carvel.li/) by liza: I built PlayerScope directly on top of RetainerTrack. Its structure and features made it much easier to implement the functionality I needed. Without it, it would have been impossible for me to create this plugin.
+- **[RetainerTrack](https://git.carvel.li/liza/RetainerTrack)** - [(repo)](https://plugins.carvel.li/) by liza: I built AlphaScope directly on top of RetainerTrack. Its structure and features made it much easier to implement the functionality I needed. Without it, it would have been impossible for me to create this plugin.
 - **[PlayerTrack](https://github.com/kalilistic/PlayerTrack)** by kalilistic: I used this as a reference and integrated its features into my plugin.
 
 

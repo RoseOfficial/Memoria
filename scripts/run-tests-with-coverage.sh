@@ -22,7 +22,7 @@ fi
 # Build solution if not skipped
 if [ "$SKIP_BUILD" != "true" ]; then
     echo -e "\n\033[34mBuilding solution...\033[0m"
-    dotnet build PlayerScope.sln --configuration "$CONFIGURATION"
+    dotnet build AlphaScope.sln --configuration "$CONFIGURATION"
     if [ $? -ne 0 ]; then
         echo -e "\033[31mBuild failed. Exiting.\033[0m" >&2
         exit 1
@@ -35,7 +35,7 @@ rm -rf CoverageReport coverage.cobertura.xml TestResults
 echo -e "\n\033[34mRunning tests with coverage collection...\033[0m"
 
 # Run tests with coverage
-dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test PlayerScope.Tests/PlayerScope.Tests.csproj --no-build --configuration $CONFIGURATION --logger trx --results-directory TestResults/ --verbosity normal"
+dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj --no-build --configuration $CONFIGURATION --logger trx --results-directory TestResults/ --verbosity normal"
 
 if [ $? -ne 0 ]; then
     echo -e "\033[31mTest execution failed. Check the output above for details.\033[0m" >&2

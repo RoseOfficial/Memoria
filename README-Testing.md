@@ -14,7 +14,7 @@ The AlphaScope project includes comprehensive testing across multiple layers:
 ## Test Categories
 
 ### 1. Unit Tests
-Located in `PlayerScope.Tests/`
+Located in `AlphaScope.Tests/`
 
 #### API Client Tests (`API/ApiClientTests.cs`)
 - Tests limited by Dalamud dependencies (11 tests)
@@ -29,7 +29,7 @@ Located in `PlayerScope.Tests/`
 - **ServerController** (`Controllers/ServerControllerTests.cs`) - 5 tests
 
 ### 2. Integration Tests  
-Located in `PlayerScope.Tests/Integration/`
+Located in `AlphaScope.Tests/Integration/`
 
 #### PersistenceContext Integration Tests
 - **21 tests** covering data upload workflows
@@ -38,7 +38,7 @@ Located in `PlayerScope.Tests/Integration/`
 - Player/retainer relationship management
 
 ### 3. Performance Tests
-Located in `PlayerScope.Tests/Performance/`
+Located in `AlphaScope.Tests/Performance/`
 
 #### Database Performance (`DatabasePerformanceTests.cs`) - 8 tests
 - Bulk insert operations (1000+ records)
@@ -65,7 +65,7 @@ Located in `PlayerScope.Tests/Performance/`
 #### Quick Test Run
 ```bash
 # Run all tests
-dotnet test PlayerScope.Tests/PlayerScope.Tests.csproj
+dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj
 
 # Run specific test categories
 dotnet test --filter "FullyQualifiedName~Performance"
@@ -106,7 +106,7 @@ dotnet tool install --global dotnet-coverage
 dotnet tool install --global dotnet-reportgenerator-globaltool
 
 # Run tests with coverage
-dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test PlayerScope.Tests/PlayerScope.Tests.csproj --logger trx --results-directory TestResults/"
+dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj --logger trx --results-directory TestResults/"
 
 # Generate report
 reportgenerator -reports:coverage.cobertura.xml -targetdir:CoverageReport -reporttypes:"Html;JsonSummary"
@@ -127,7 +127,7 @@ The pipeline includes:
 ## Test Configuration
 
 ### Coverage Settings (`coverage.settings`)
-- **Included Modules**: PlayerScope.dll, PlayerScopeServer.dll
+- **Included Modules**: AlphaScope.dll, AlphaScopeServer.dll
 - **Excluded**: Test assemblies, generated code
 - **Thresholds**: 70% minimum coverage recommended
 - **Formats**: Cobertura XML, HTML reports, JSON summaries

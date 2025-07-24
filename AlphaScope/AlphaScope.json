@@ -1,0 +1,24 @@
+{
+  "Author": "AlphaScope",
+  "Name": "AlphaScope",
+  "Punchline": "Track players and retainers across servers.",
+  "Description": "A Dalamud plugin for tracking player and retainer information across FFXIV servers with local database storage and optional cloud synchronization.",
+  "InternalName": "AlphaScope",
+  "AssemblyVersion": "1.0.5.7",
+  "RepoUrl": "https://github.com/AlphaScope/AlphaScope",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "player tracking",
+    "retainer",
+    "database",
+    "social"
+  ],
+  "DalamudApiLevel": 12,
+  "LoadRequiredState": 0,
+  "LoadSync": false,
+  "CanUnloadAsync": false,
+  "LoadPriority": 0,
+  "IconUrl": "",
+  "ImageUrls": [],
+  "AcceptsFeedback": true
+}

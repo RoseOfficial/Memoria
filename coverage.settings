@@ -6,8 +6,8 @@
         <CodeCoverage>
           <ModulePaths>
             <Include>
-              <ModulePath>.*PlayerScope\.dll$</ModulePath>
-              <ModulePath>.*PlayerScopeServer\.dll$</ModulePath>
+              <ModulePath>.*AlphaScope\.dll$</ModulePath>
+              <ModulePath>.*AlphaScopeServer\.dll$</ModulePath>
             </Include>
             <Exclude>
               <ModulePath>.*Tests.*</ModulePath>
@@ -17,8 +17,8 @@
           
           <Sources>
             <Include>
-              <Source>.*PlayerScope\\.*</Source>
-              <Source>.*PlayerScopeServer\\.*</Source>
+              <Source>.*AlphaScope\\.*</Source>
+              <Source>.*AlphaScopeServer\\.*</Source>
             </Include>
             <Exclude>
               <Source>.*\\bin\\.*</Source>

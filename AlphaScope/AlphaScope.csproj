@@ -1,0 +1,71 @@
+﻿<Project Sdk="Dalamud.NET.Sdk/9.0.2">
+    <PropertyGroup>
+        <Version>1.0.5.7</Version>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <SatelliteResourceLanguages>none</SatelliteResourceLanguages>
+        <OutputPath Condition="'$(Configuration)' != 'EF'">dist</OutputPath>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <TargetFramework>net9.0-windows</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>AlphaScope.Tests</_Parameter1>
+        </AssemblyAttribute>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>DynamicProxyGenAssembly2</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+    <ItemGroup>
+      <Content Include="icon.png" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <PackageReference Include="Dalamud.Extensions.MicrosoftLogging" Version="4.0.1" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.0" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.0" Condition="'$(Configuration)' == 'EF'">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="RestSharp" Version="112.1.0" />
+        <PackageReference Include="RestSharp.Serializers.NewtonsoftJson" Version="112.1.0" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <Reference Include="InteropGenerator.Runtime">
+            <HintPath>C:\Users\neoga\AppData\Roaming\XIVLauncher\addon\Hooks\dev\InteropGenerator.Runtime.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+    
+    <ItemGroup>
+      <Compile Update="Properties\Loc.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Loc.resx</DependentUpon>
+      </Compile>
+    </ItemGroup>
+    
+    <ItemGroup>
+      <EmbeddedResource Update="Properties\Loc.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Loc.Designer.cs</LastGenOutput>
+        <StronglyTypedFileName>Properties\Loc.Designer.cs</StronglyTypedFileName>
+        <StronglyTypedLanguage>CSharp</StronglyTypedLanguage>
+        <StronglyTypedNamespace>AlphaScope.Properties</StronglyTypedNamespace>
+        <StronglyTypedClassName>Loc</StronglyTypedClassName>
+      </EmbeddedResource>
+    </ItemGroup>
+	
+    
+    <ItemGroup>
+      <PackageReference Update="DalamudPackager" Version="12.0.0" />
+      <PackageReference Update="DotNet.ReproducibleBuilds" Version="1.2.25" />
+    </ItemGroup>
+</Project>
