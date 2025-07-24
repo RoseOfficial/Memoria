@@ -1,0 +1,123 @@
+name: Test Coverage and CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-coverage:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          9.0.x
+    
+    - name: Restore dependencies
+      run: dotnet restore PlayerScope.sln
+    
+    - name: Build solution
+      run: dotnet build PlayerScope.sln --no-restore --configuration Release
+    
+    - name: Install coverage tools
+      run: |
+        dotnet tool install --global dotnet-coverage
+        dotnet tool install --global dotnet-reportgenerator-globaltool
+    
+    - name: Run tests with coverage
+      run: |
+        dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test PlayerScope.Tests/PlayerScope.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
+    
+    - name: Generate coverage report
+      run: |
+        reportgenerator -reports:coverage.cobertura.xml -targetdir:CoverageReport -reporttypes:"Html;JsonSummary"
+    
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.cobertura.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: TestResults/
+    
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: CoverageReport/
+    
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: 5monkeys/cobertura-action@master
+      with:
+        path: coverage.cobertura.xml
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        minimum_coverage: 70
+        fail_below_threshold: false
+        show_missing: true
+
+  build-plugin:
+    runs-on: windows-latest
+    needs: test-coverage
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
+    
+    - name: Restore dependencies
+      run: dotnet restore PlayerScope/PlayerScope.csproj
+    
+    - name: Build plugin (Release)
+      run: dotnet build PlayerScope/PlayerScope.csproj --no-restore --configuration Release
+    
+    - name: Upload plugin artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: plugin-build
+        path: PlayerScope/dist/
+    
+  build-server:
+    runs-on: windows-latest
+    needs: test-coverage
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+    
+    - name: Restore dependencies
+      run: dotnet restore PlayerScopeServer/PlayerScopeServer.csproj
+    
+    - name: Build server (Release)
+      run: dotnet build PlayerScopeServer/PlayerScopeServer.csproj --no-restore --configuration Release
+    
+    - name: Publish server
+      run: dotnet publish PlayerScopeServer/PlayerScopeServer.csproj --no-restore --configuration Release --output ./publish
+    
+    - name: Upload server artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: server-build
+        path: ./publish/

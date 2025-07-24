@@ -484,3 +484,16 @@ temp/
 *.psess
 *.vsp
 *.vspx
+
+# Test outputs and coverage reports (keep test source code in git)
+TestResults/
+CoverageReport/
+coverage.cobertura.xml
+coverage.xml
+*.trx
+*.coverage
+*.coveragexml
+
+# Test runner temporary files
+.testcoverage
+.coverage/
