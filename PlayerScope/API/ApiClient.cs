@@ -30,9 +30,11 @@ namespace PlayerScope.API
         public static IRestClient _restClient = new RestClient();
         //private const string BaseUrl = "https://localhost:5001/v1/";
         public Configuration Config = Plugin.Instance.Configuration;
+        private readonly ILogger<ApiClient> _logger;
         internal static ApiClient Instance { get; private set; } = null!;
-        public ApiClient()
+        public ApiClient(ILogger<ApiClient> logger)
         {
+            _logger = logger;
             if (Uri.IsWellFormedUriString(Config.BaseUrl, UriKind.Absolute))
             {
                 var options = new RestClientOptions(Config.BaseUrl);
@@ -84,11 +86,29 @@ namespace PlayerScope.API
                 IsCheckingServerStatus = false;
                 return false;
             }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogWarning(ex, "Network error while checking server status");
+                _ServerStatus = $"{Loc.ApiError} Network connection failed"; 
+                _LastPingValue = -1;
+                IsCheckingServerStatus = false; 
+                return false;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogWarning(ex, "Timeout while checking server status");
+                _ServerStatus = $"{Loc.ApiError} Request timed out"; 
+                _LastPingValue = -1;
+                IsCheckingServerStatus = false; 
+                return false;
+            }
             catch (Exception ex)
             {
-                _ServerStatus = ex.Message; 
+                _logger.LogError(ex, "Unexpected error while checking server status");
+                _ServerStatus = $"{Loc.ApiError} {ex.Message}"; 
                 _LastPingValue = -1;
-                IsCheckingServerStatus = false; return false;
+                IsCheckingServerStatus = false; 
+                return false;
             }
         }
         public (ServerStatsDto ServerStats, string Message) _LastServerStats = new();
@@ -119,8 +139,27 @@ namespace PlayerScope.API
 
                 return (null, Message);
             }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogWarning(ex, "Network error while fetching server stats");
+                Message = $"{Loc.ApiError} Network connection failed";
+                return (null, Message);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Failed to parse server stats response");
+                Message = $"{Loc.ApiError} Invalid server response";
+                return (null, Message);
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogWarning(ex, "Timeout while fetching server stats");
+                Message = $"{Loc.ApiError} Request timed out";
+                return (null, Message);
+            }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Unexpected error while fetching server stats");
                 Message = $"{Loc.ApiError} {ex.Message}";
                 return (null, Message);
             }

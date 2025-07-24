@@ -409,8 +409,19 @@ namespace PlayerScope
             {
                 Dalamud.Utility.Util.OpenLink(uri.ToString());
             }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                Plugin.Log.Warning($"Failed to open link - no default browser configured: {ex.Message}");
+                AddNotification("No default browser configured. Please set a default browser.", NotificationType.Error);
+            }
+            catch (System.IO.FileNotFoundException ex)
+            {
+                Plugin.Log.Warning($"Failed to open link - browser executable not found: {ex.Message}");
+                AddNotification("Default browser not found. Please check your browser installation.", NotificationType.Error);
+            }
             catch (Exception ex)
             {
+                Plugin.Log.Error($"Unexpected error while opening link {uri}: {ex.Message}");
                 AddNotification("Failed to open the link in the browser, please report this issue", NotificationType.Error);
             }
         }

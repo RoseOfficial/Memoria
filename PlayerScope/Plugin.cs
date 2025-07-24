@@ -93,6 +93,7 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton<CWLSHandler>();
         serviceCollection.AddSingleton<ObjectTableHandler>();
         serviceCollection.AddSingleton<GameHooks>();
+        serviceCollection.AddSingleton<ApiClient>();
         
         Configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -112,7 +113,6 @@ public sealed class Plugin : IDalamudPlugin
             pluginInterface.SavePluginConfig(Configuration);
         }
 
-        ApiClient = new ApiClient();
 
         _pluginInterface = pluginInterface;
         _commandManager = commandManager;
@@ -150,6 +150,7 @@ public sealed class Plugin : IDalamudPlugin
 
         _sqliteConnectionString = PrepareSqliteDb(serviceCollection, pluginInterface.GetPluginConfigDirectory());
         _serviceProvider = serviceCollection.BuildServiceProvider();
+        ApiClient = _serviceProvider.GetRequiredService<ApiClient>();
 
         RunMigrations(_serviceProvider);
         InitializeRequiredServices(_serviceProvider);

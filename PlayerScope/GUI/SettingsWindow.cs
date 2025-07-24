@@ -458,7 +458,7 @@ namespace PlayerScope.GUI
             return "...";
         }
         private bool _agreementAccepted;
-        private async void DrawAgreementTab()
+        private void DrawAgreementTab()
         {
             ServerStatusGui();
             using (ImRaii.Disabled(bIsNetworkProcessing || _client._ServerStatus != "ONLINE"))
@@ -492,7 +492,7 @@ namespace PlayerScope.GUI
             }
         }
 
-        private async void DrawUserInfoTab()
+        private void DrawUserInfoTab()
         {
             if (!string.IsNullOrWhiteSpace(Config.Key) && Config.LoggedIn)
             {
@@ -1003,7 +1003,7 @@ namespace PlayerScope.GUI
 
         private HashSet<long?> editedCharactersPrivacy = new();
 
-        private async void DrawMyCharactersTab()
+        private void DrawMyCharactersTab()
         {
             ImGui.TextWrapped(Loc.StConfigurePrivacyOfChars);
 
@@ -1327,7 +1327,11 @@ namespace PlayerScope.GUI
                             bIsNetworkProcessing = false;
                         });
                     }
-                    catch (Exception ex) { }
+                    catch (Exception ex) 
+                    { 
+                        Plugin.Log.Error($"Failed to check server status: {ex.Message}");
+                        bIsNetworkProcessing = false;
+                    }
                 }
             }
             else

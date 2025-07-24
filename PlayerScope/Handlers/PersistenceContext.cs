@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -272,13 +273,21 @@ internal sealed class PersistenceContext
                 await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken).ConfigureAwait(false);
             }
         }
+        catch (TaskCanceledException e) when (!e.CancellationToken.IsCancellationRequested)
+        {
+            _logger.LogWarning(e, "Timeout while posting player and retainer data");
+        }
         catch (OperationCanceledException)
         {
             _logger.LogInformation("PostPlayerAndRetainerData was canceled.");
         }
+        catch (HttpRequestException e)
+        {
+            _logger.LogWarning(e, "Network error while posting player and retainer data");
+        }
         catch (Exception e)
         {
-            _logger.LogWarning("Could not post " + e.Message);
+            _logger.LogError(e, "Unexpected error while posting player and retainer data");
         }
     }
     public static void StopUploads()
@@ -560,9 +569,17 @@ internal sealed class PersistenceContext
 
             return;
         }
+        catch (DbUpdateException e)
+        {
+            _logger.LogError(e, "Database error while persisting retainer info from market board page");
+        }
+        catch (InvalidOperationException e)
+        {
+            _logger.LogWarning(e, "Invalid operation while persisting retainer info from market board page");
+        }
         catch (Exception e)
         {
-            _logger.LogError(e, "Could not persist retainer info from market board page");
+            _logger.LogError(e, "Unexpected error while persisting retainer info from market board page");
         }
     }
 
@@ -613,9 +630,19 @@ internal sealed class PersistenceContext
                 _recentlyScannedPlayers[mapping.ContentId] = (newCachedPlayer, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
         }
+        catch (DbUpdateException e)
+        {
+            _logger.LogError(e, "Database error while persisting singular mapping for {ContentId} / {Name} / {AccountId}",
+                mapping.ContentId, mapping.PlayerName, mapping.AccountId);
+        }
+        catch (InvalidOperationException e)
+        {
+            _logger.LogWarning(e, "Invalid operation while persisting singular mapping for {ContentId} / {Name} / {AccountId}",
+                mapping.ContentId, mapping.PlayerName, mapping.AccountId);
+        }
         catch (Exception e)
         {
-            _logger.LogWarning(e, "Could not persist singular mapping for {ContentId} / {Name} / {AccountId}",
+            _logger.LogWarning(e, "Unexpected error while persisting singular mapping for {ContentId} / {Name} / {AccountId}",
                 mapping.ContentId, mapping.PlayerName, mapping.AccountId);
         }
     }
@@ -700,9 +727,25 @@ internal sealed class PersistenceContext
                 _recentlyScannedPlayers[player.ContentId] = (cachedPlayer, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
         }
+        catch (DbUpdateException e)
+        {
+            _logger.LogError(e, "Database error while persisting multiple mappings, attempting non-batch update");
+            foreach (var update in updates)
+            {
+                HandleContentIdMappingFallback(update);
+            }
+        }
+        catch (InvalidOperationException e)
+        {
+            _logger.LogWarning(e, "Invalid operation while persisting multiple mappings, attempting non-batch update");
+            foreach (var update in updates)
+            {
+                HandleContentIdMappingFallback(update);
+            }
+        }
         catch (Exception e)
         {
-            _logger.LogWarning(e, "Could not persist multiple mappings, attempting non-batch update");
+            _logger.LogWarning(e, "Unexpected error while persisting multiple mappings, attempting non-batch update");
             foreach (var update in updates)
             {
                 HandleContentIdMappingFallback(update);

@@ -184,7 +184,7 @@ namespace PlayerScope.GUI
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "Failed to open character card for ContentId: {ContentId}", ContentId);
             }
         }
 
@@ -261,7 +261,7 @@ namespace PlayerScope.GUI
             }
         }
 
-        private async void DrawServerStatsTab()
+        private void DrawServerStatsTab()
         {
             using (ImRaii.Disabled(false)) // Bypass authentication check
             using (var tabBar = ImRaii.TabBar("ServerDbTabs"))
@@ -1308,7 +1308,7 @@ namespace PlayerScope.GUI
         }
 
         bool IsDatabasePendingDeletion;
-        private async void DrawLocalStatisticsTab()
+        private void DrawLocalStatisticsTab()
         {
             if (ImGui.BeginTabBar("Tabs2"))
             {
@@ -1544,7 +1544,7 @@ namespace PlayerScope.GUI
             _AccountIdCache.Clear();
         }
 
-        private async void DrawMyFavoriesTab()
+        private void DrawMyFavoriesTab()
         {
             var players = Config.FavoritedPlayer;
             if (players == null) return;
