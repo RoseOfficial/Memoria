@@ -112,3 +112,6 @@ app.Logger.LogInformation("Server URL: https://localhost:5001");
 app.Logger.LogInformation("Swagger UI: https://localhost:5001/swagger");
 
 app.Run();
+
+// Program class for testing
+public partial class Program { }
