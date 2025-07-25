@@ -90,10 +90,6 @@ namespace AlphaScope.GUI
             "Details", "##Avatar",Loc.MnName, Loc.MnHomeWorldColumn, Loc.MnAccountId, Loc.MnContentId
             };
 
-            FromServerTableSearchRetainersColumn = new string[]
-            {
-            Loc.MnName, Loc.MnHomeWorldColumn, Loc.MnAddedAt, Loc.MnOwnerContentId, Loc.MnContentId
-            };
 
             WorldsTableColumn = new string[]
             {
@@ -124,8 +120,6 @@ namespace AlphaScope.GUI
         public static void ReloadMainWindowStats()
         {
             UpdateStatisticsValues();
-            Task.Run(GetServerRetainersCount);
-            Task.Run(UpdateRetainers);
         }
 
         private string[] TableColumn = new string[]
@@ -138,10 +132,6 @@ namespace AlphaScope.GUI
             "Details", "##Avatar",Loc.MnName, Loc.MnHomeWorldColumn, Loc.MnJobAndLevel, Loc.MnAccountId, Loc.MnContentId
         };
 
-        private string[] FromServerTableSearchRetainersColumn = new string[]
-        {
-            Loc.MnName, Loc.MnHomeWorldColumn, Loc.MnAddedAt, Loc.MnOwnerContentId, Loc.MnContentId
-        };
 
         private string[] WorldsTableColumn = new string[]
         {
@@ -156,13 +146,11 @@ namespace AlphaScope.GUI
         public enum Tabs
         {
             General,
-            SearchCharactersAndRetainers
         }
 
         public string _searchContent = "...";
 
         public static int _TotalPlayers_Value = 0;
-        public static int _TotalRetainers_Value = 0;
 
         public long LastUnix = 0;
 
@@ -173,7 +161,6 @@ namespace AlphaScope.GUI
         public static void UpdateStatisticsValues()
         {
             _TotalPlayers_Value = PersistenceContext._playerCache.Count;
-            _TotalRetainers_Value = PersistenceContext._retainerCache.Count;
         }
 
         unsafe public void OpenAdventurePlate(ulong ContentId)
@@ -204,14 +191,6 @@ namespace AlphaScope.GUI
                         }
                     }
                     
-                    using (var tabItem = ImRaii.TabItem(Loc.MnTabSearchCharacterAndRetainer))
-                    {
-                        if (tabItem)
-                        {
-                            _CurrentTab = Tabs.SearchCharactersAndRetainers;
-                            DrawSearchPlayersAndRetainers_FromServerTab();
-                        }
-                    }
                     
                     using (var tabItem = ImRaii.TabItem(MyFavoritesTabTitle))
                     {
@@ -275,13 +254,6 @@ namespace AlphaScope.GUI
                             DrawGeneralStats();
                         }
                     }
-                    using (var tabItem = ImRaii.TabItem(Loc.StCharacterAndRetainerSummary))
-                    {
-                        if (tabItem)
-                        {
-                            DrawCharacterAndRetainerStats();
-                        }
-                    }
                 }
             }
         }
@@ -323,36 +295,9 @@ namespace AlphaScope.GUI
             }
             return (null, string.Empty);
         }
-        public (ServerPlayerAndRetainerStatsDto Stats, string Message) CheckPlayerAndRetainerStats()
-        {
-            if (!bIsNetworkProcessing)
-            {
-                _ = Task.Run(() =>
-                {
-                    bIsNetworkProcessing = true;
 
-                    if (_client == null)
-                    {
-                        LastPlayerAndRetainerWorldStatsMessage = "API client not initialized";
-                        bIsNetworkProcessing = false;
-                        return (null, "API client not initialized");
-                    }
 
-                    var request = _client.GetPlayerAndRetainerCountStats().ConfigureAwait(false).GetAwaiter().GetResult();
-                    LastPlayerAndRetainerWorldStatsMessage = request.Message;
-                    _lastPlayerAndRetainerWorldRefreshTime = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    ConvertLastPlayerAndRetainerWorlds();
-
-                    bIsNetworkProcessing = false;
-                    return request;
-                });
-            }
-            return (null, string.Empty);
-        }
-
-        private ConcurrentDictionary<World, (int PlayerCount, int RetainerCount, long LastUpdated)> ConvertedPlayerAndRetainerWorldCounts = new();
-
-        public void ConvertLastPlayerAndRetainerWorlds()
+        public void ConvertLastPlayerWorlds()
         {
             if (_client == null || _client.LastPlayerAndRetainerCountStats.Stats == null)
                 return;
@@ -385,7 +330,7 @@ namespace AlphaScope.GUI
             bPlayerAndRetainerWorldsConverted = true;
         }
 
-        private void DrawCharacterAndRetainerStats()
+        private void DrawCharacterStats()
         {
             if (_client == null)
             {
@@ -638,11 +583,9 @@ namespace AlphaScope.GUI
         bool bEnableFetching = false;
 
         bool IsSyncingPlayers;
-        bool IsSyncingRetainers;
         string _SyncMessage = string.Empty;
         public int _LastCursor = 0;
         public ConcurrentDictionary<long, PlayerDto> _playersFetchedFromServer = new ConcurrentDictionary<long, PlayerDto>();
-        public ConcurrentDictionary<long, RetainerDto> _retainersFetchedFromServer = new ConcurrentDictionary<long, RetainerDto>();
         public async Task<bool> SyncPlayersWithLocalDb(CancellationTokenSource cts)
         {
             _ = Task.Run(async () =>
@@ -797,42 +740,36 @@ namespace AlphaScope.GUI
             }
         }
 
-        private int lastSelectedPlayerOrRetainerValue = 0;
+        private int lastSelectedPlayerValue = 0;
         private int selectedComboItem_ServerOrLocalDb = 0;
-        private int selectedComboItem_PlayerOrRetainer = 0;
+        private int selectedComboItem_Player = 0;
         private int selectedComboItem_NameorId = 0;
 
         private string[] selectedComboItems0 = [Loc.MnServer, Loc.MnLocalPC];
-        private string[] selectedComboItems1 = [Loc.MnCharacter, "Retainer"];
+        private string[] selectedComboItems1 = [Loc.MnCharacter];
         private string[] selectedComboItems2 = [Loc.MnByName, Loc.MnById];
 
         public Configuration Config = Plugin.Instance.Configuration;
 
         public ApiClient? _client => ApiClient.Instance;
         public (Dictionary<long, PlayerSearchDto> Players, string Message) _LastPlayerSearchResult = new();
-        public (Dictionary<long, API.Models.RetainerSearchDto> Retainers, string Message) _LastRetainerSearchResult = new();
         public bool bIsNetworkProcessing = false;
         bool bFilterMatchAnyPartOfName = false;
         bool bShowFilters = false;
         public void SetPlayerResult((Dictionary<long, PlayerSearchDto> Players, string Message) PlayerResult)
         {
-            _LastRetainerSearchResult = (_LastRetainerSearchResult.Retainers, string.Empty);
             _LastPlayerSearchResult = (PlayerResult.Players, PlayerResult.Message);
         }
 
-        public void SetRetainerResult((Dictionary<long, API.Models.RetainerSearchDto> Retainers, string Message) RetainerResult)
-        {
-            _LastPlayerSearchResult = (_LastPlayerSearchResult.Players, string.Empty);
-            _LastRetainerSearchResult = (RetainerResult.Retainers, RetainerResult.Message);
-        }
+        // Retainer functionality removed
 
-        public void DrawSearchPlayersAndRetainers_FromServerTab()
+        public void DrawSearchPlayers_FromServerTab()
         {
-            if (lastSelectedPlayerOrRetainerValue != selectedComboItem_PlayerOrRetainer)
+            if (lastSelectedPlayerValue != selectedComboItem_Player)
             {
                 LastTargetName = "###";
-                _TestTempPlayerWithRetainers.Clear();
-                lastSelectedPlayerOrRetainerValue = selectedComboItem_PlayerOrRetainer;
+                _TestTempPlayers.Clear();
+                lastSelectedPlayerValue = selectedComboItem_Player;
             }
 
             var bFiltersGuiArrow = ImGuiDir.Down;
@@ -858,11 +795,11 @@ namespace AlphaScope.GUI
             ImGui.Combo("##db1", ref selectedComboItem_ServerOrLocalDb, selectedComboItems0, 2);
             ImGui.SameLine();
             ImGui.SetNextItemWidth(90 * ImGuiHelpers.GlobalScale);
-            ImGui.Combo("##serverDB1", ref selectedComboItem_PlayerOrRetainer, selectedComboItems1, 2);
+            ImGui.Combo("##serverDB1", ref selectedComboItem_Player, selectedComboItems1, 2);
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100 * ImGuiHelpers.GlobalScale);
 
-            if (selectedComboItem_PlayerOrRetainer == 0)
+            if (selectedComboItem_Player == 0)
                 selectedComboItems2 = [Loc.MnByName, Loc.MnById];
             else
             {
@@ -873,12 +810,12 @@ namespace AlphaScope.GUI
             if (selectedComboItem_ServerOrLocalDb == 1)
                 selectedComboItem_NameorId = 0;
 
-            using (ImRaii.Disabled(selectedComboItem_PlayerOrRetainer == 1 || selectedComboItem_ServerOrLocalDb == 1))
+            using (ImRaii.Disabled(selectedComboItem_Player == 1 || selectedComboItem_ServerOrLocalDb == 1))
             {
                 ImGui.Combo("##serverDB2", ref selectedComboItem_NameorId, selectedComboItems2, 2);
             }
 
-            string SearchByPlayerOrRetainer = selectedComboItem_PlayerOrRetainer == 0 ? Loc.MnCharacter : "Retainer";
+            string SearchByPlayerOrRetainer = selectedComboItem_Player == 0 ? Loc.MnCharacter : "Retainer";
             string SearchByNameorId = selectedComboItem_NameorId == 0 ? Loc.MnNameComboBox : Loc.MnId;
             ImGui.SameLine();
             ImGui.Text("->");
@@ -896,7 +833,7 @@ namespace AlphaScope.GUI
                 {
                     if (ImGuiComponents.IconButtonWithText(FontAwesomeIcon.Search, SearchButtonText) || ImGui.IsKeyPressed(ImGuiKey.Enter))
                     {
-                        if (selectedComboItem_PlayerOrRetainer == 0) //Search Player
+                        if (selectedComboItem_Player == 0) //Search Player
                         {
                             if (selectedComboItem_NameorId == 0)
                             {
@@ -969,7 +906,7 @@ namespace AlphaScope.GUI
 
                             }
                         }
-                        else if (selectedComboItem_PlayerOrRetainer == 1) //Search Retainer
+                        else if (selectedComboItem_Player == 1) //Search Retainer
                         {
                             bool regex = Regex.IsMatch(_searchContent, @"^[a-zA-Z'-]+$");
                             if (!regex)
@@ -1070,7 +1007,7 @@ namespace AlphaScope.GUI
 
             if (selectedComboItem_ServerOrLocalDb == 0)
             {
-                if (selectedComboItem_PlayerOrRetainer == 0) //Search Player
+                if (selectedComboItem_Player == 0) //Search Player
                 {
                     if (_LastPlayerSearchResult.Players == null) return;
                     if (ImGui.BeginTable($"List##{_searchContent}", FromServerTableSearchPlayersColumn.Length, ImGuiTableFlags.BordersInner | ImGuiTableFlags.ScrollY))
@@ -1182,7 +1119,7 @@ namespace AlphaScope.GUI
                         ImGui.EndTable();
                     }
                 }
-                else if (selectedComboItem_PlayerOrRetainer == 1) //Search Retainer
+                else if (selectedComboItem_Player == 1) //Search Retainer
                 {
                     if (_LastRetainerSearchResult.Retainers == null) return;
                     if (ImGui.BeginTable($"List3", FromServerTableSearchRetainersColumn.Length, ImGuiTableFlags.BordersInner | ImGuiTableFlags.ScrollY))
@@ -1580,10 +1517,10 @@ namespace AlphaScope.GUI
 
         void ClearCaches()
         {
-            _retainerCache.Clear();
+            // retainer cache removed.Clear();
             _playerCache.Clear();
-            _playerWithRetainersCache.Clear();
-            _worldRetainerCache.Clear();
+            // player-retainer cache removed.Clear();
+            // world retainer cache removed.Clear();
             _AccountIdCache.Clear();
         }
 
@@ -1711,31 +1648,10 @@ namespace AlphaScope.GUI
         long playerIdToRemove = -1;
         int selectedIndex = -1;
 
-        public static ConcurrentDictionary<ushort, List<ulong>> _TempGetServerRetainersCount = new ConcurrentDictionary<ushort, List<ulong>>();
-        public static int LastTotalRetainerCount = 0;
-
-        public static ConcurrentDictionary<ushort, List<ulong>> GetServerRetainersCount()
-        {
-            if (LastTotalRetainerCount != PersistenceContext._retainerCache.Keys.Count)
-            {
-                foreach (var retainer in PersistenceContext._retainerCache.Values)
-                {
-                    var GetPlayerRetainers = _TempGetServerRetainersCount.GetOrAdd(retainer.WorldId, _ => new List<ulong>() { retainer.LocalContentId });
-
-                    if (!GetPlayerRetainers.Contains(retainer.LocalContentId))
-                    {
-                        _TempGetServerRetainersCount[retainer.WorldId].Add(retainer.LocalContentId);
-                    }
-                }
-
-                LastTotalRetainerCount = PersistenceContext._retainerCache.Count;
-            }
-
-            return _TempGetServerRetainersCount;
-        }
+        // Retainer counting functionality removed
 
 
-        ConcurrentDictionary<ulong, (PersistenceContext.CachedPlayer, List<Database.Retainer>, int TotalAccCount)> _TestTempPlayerWithRetainers = new();
+        ConcurrentDictionary<ulong, (PersistenceContext.CachedPlayer, int TotalAccCount)> _TestTempPlayers = new();
         string LastTargetName = "###";
 
         private void DrawRecentPlayersTab()
@@ -1802,27 +1718,27 @@ namespace AlphaScope.GUI
             }
         }
 
-        ConcurrentDictionary<ulong, (PersistenceContext.CachedPlayer, List<Database.Retainer>, int TotalAccCount)> SearchPlayer(string targetName)
+        ConcurrentDictionary<ulong, (PersistenceContext.CachedPlayer, int TotalAccCount)> SearchPlayer(string targetName)
         {
             targetName = targetName.ToLower();
 
             if (LastTargetName == targetName)
-                return _TestTempPlayerWithRetainers;
+                return _TestTempPlayers;
             else
-                _TestTempPlayerWithRetainers.Clear();
+                _TestTempPlayers.Clear();
 
             bool Compare(string fullname)
             {
                 return fullname.ToLower().Contains(targetName);
             }
 
-            if (_CurrentTab == Tabs.SearchCharactersAndRetainers && selectedComboItem_ServerOrLocalDb == 1) //localdb
+            if (_CurrentTab == Tabs.SearchCharacters && selectedComboItem_ServerOrLocalDb == 1) //localdb
             {
-                if (selectedComboItem_PlayerOrRetainer == 0) //Search Players in localdb
+                if (selectedComboItem_Player == 0) //Search Players in localdb
                 {
-                    foreach (var player in PersistenceContext._playerWithRetainersCache)
+                    foreach (var player in PersistenceContext._playerCache)
                     {
-                        var playerName = player.Value.Player.Name.ToLower(); //PlayerName
+                        var playerName = player.Value.Name.ToLower(); //PlayerName
                         var cId = player.Key; //cId
 
                         if (Compare(playerName) || Compare(cId.ToString()))
@@ -1832,57 +1748,22 @@ namespace AlphaScope.GUI
                                 _AccountIdCache.TryGetValue((ulong)player.Value.Player.AccountId, out var GetAccountsContentIds);
                                 if (GetAccountsContentIds != null)
                                 {
-                                    _TestTempPlayerWithRetainers.GetOrAdd(cId, _ => (player.Value.Player, player.Value.Retainers, GetAccountsContentIds.Count));
+                                    _TestTempPlayers.GetOrAdd(cId, _ => (player.Value.Player, player.Value.Retainers, GetAccountsContentIds.Count));
                                 }
                             }
                             else
                             {
-                                _TestTempPlayerWithRetainers.GetOrAdd(cId, _ => (player.Value.Player, player.Value.Retainers, 0));
+                                _TestTempPlayers.GetOrAdd(cId, _ => (player.Value.Player, player.Value.Retainers, 0));
                             }
                         }
                     }
                     LastTargetName = targetName;
 
-                    return _TestTempPlayerWithRetainers;
+                    return _TestTempPlayers;
                 }
-                else //Search Retainers in localdb
-                {
-                    List<ulong> AddedOwners = new List<ulong>();
-                    foreach (var retainer in _retainerCache)
-                    {
-                        // Skip retainers without owner information
-                        if (!retainer.Value.OwnerLocalContentId.HasValue)
-                            continue;
-                            
-                        if (!AddedOwners.Contains(retainer.Value.OwnerLocalContentId.Value))
-                        {
-                            string retainerName = retainer.Value.Name.ToLower();
-                            if (retainerName.Contains(targetName))
-                            {
-                                PersistenceContext._playerWithRetainersCache.TryGetValue(retainer.Value.OwnerLocalContentId.Value, out var _GetPlayerValues);
-
-                                AddedOwners.Add(retainer.Value.OwnerLocalContentId.Value);
-                                if (_GetPlayerValues.Player != null && _GetPlayerValues.Player.AccountId != null && !_AccountIdCache.IsEmpty)
-                                {
-                                    _AccountIdCache.TryGetValue((ulong)_GetPlayerValues.Player.AccountId, out var GetAccountsContentIds);
-                                    if (GetAccountsContentIds != null)
-                                    {
-                                        _TestTempPlayerWithRetainers.GetOrAdd(retainer.Value.OwnerLocalContentId.Value, _ => (_GetPlayerValues.Player, _GetPlayerValues.Retainers, GetAccountsContentIds.Count));
-                                    }
-                                }
-                                else
-                                {
-                                    _TestTempPlayerWithRetainers.GetOrAdd(retainer.Value.OwnerLocalContentId.Value, _ => (_GetPlayerValues.Player, _GetPlayerValues.Retainers, 0));
-                                }
-                            }
-
-                        }
-                    }
-
-                    LastTargetName = targetName;
-                }
+                // Retainer search functionality removed
             }
-            return _TestTempPlayerWithRetainers;
+            return _TestTempPlayers;
         }
     }
 }

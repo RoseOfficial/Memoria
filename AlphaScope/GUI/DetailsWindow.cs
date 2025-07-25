@@ -231,7 +231,7 @@ namespace AlphaScope.GUI
 
         PlayerDetailed.RetainerDto _seeExtraDetailsOfRetainer = null;
         public string _LastMessage = string.Empty;
-        static ConcurrentDictionary<ulong, (CachedPlayer, List<Database.Retainer>)> _TestTempPlayerWithRetainers = new();
+        static ConcurrentDictionary<ulong, CachedPlayer> _TestTempPlayers = new();
         static (PlayerDetailed Player, string Message) _LastPlayerDetailedInfo = new();
 
         bool bShowDetailedDate;
@@ -1221,7 +1221,7 @@ namespace AlphaScope.GUI
                 }
                 else
                 {
-                    _TestTempPlayerWithRetainers.GetOrAdd(player.Key, _ => (GetPlayer.Player, new List<Database.Retainer>()));
+                    _TestTempPlayers.GetOrAdd(player.Key, _ => GetPlayer.Player);
                 }
             }
         }

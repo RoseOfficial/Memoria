@@ -5,7 +5,7 @@ namespace AlphaScopeServer.Data
 {
     /// <summary>
     /// Entity Framework database context for the AlphaScope server application.
-    /// Manages all player, retainer, and user data with comprehensive relationship mappings,
+    /// Manages all player and user data with comprehensive relationship mappings,
     /// history tracking, and performance optimizations through strategic indexing.
     /// Supports both SQLite and SQL Server database providers.
     /// </summary>
@@ -58,13 +58,6 @@ namespace AlphaScopeServer.Data
         /// <summary>Record of when player profiles were viewed/accessed</summary>
         public DbSet<PlayerProfileVisit> PlayerProfileVisits { get; set; }
         
-        // ========== RETAINER DATA ENTITIES ==========
-        /// <summary>Primary retainer entity containing current retainer information</summary>
-        public DbSet<Retainer> Retainers { get; set; }
-        /// <summary>Historical record of retainer name changes</summary>
-        public DbSet<RetainerNameHistory> RetainerNameHistory { get; set; }
-        /// <summary>Historical record of retainer world transfers</summary>
-        public DbSet<RetainerWorldHistory> RetainerWorldHistory { get; set; }
         
         // ========== USER AND AUTHENTICATION ENTITIES ==========
         /// <summary>Application users with authentication and profile data</summary>
@@ -156,41 +149,6 @@ namespace AlphaScopeServer.Data
                     .OnDelete(DeleteBehavior.Cascade);
                 entity.HasIndex(e => e.PlayerLocalContentId);
                 entity.HasIndex(e => e.VisitedAt);
-            });
-
-            // Retainer configurations
-            modelBuilder.Entity<Retainer>(entity =>
-            {
-                entity.HasKey(e => e.LocalContentId);
-                entity.Property(e => e.Name).IsRequired().HasMaxLength(24);
-                entity.HasOne(e => e.Owner)
-                    .WithMany(p => p.Retainers)
-                    .HasForeignKey(e => e.OwnerLocalContentId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                entity.HasIndex(e => e.Name);
-                entity.HasIndex(e => e.WorldId);
-                entity.HasIndex(e => e.OwnerLocalContentId);
-                entity.HasIndex(e => e.CreatedAt);
-            });
-
-            modelBuilder.Entity<RetainerNameHistory>(entity =>
-            {
-                entity.HasOne(e => e.Retainer)
-                    .WithMany(r => r.NameHistory)
-                    .HasForeignKey(e => e.RetainerLocalContentId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                entity.HasIndex(e => e.RetainerLocalContentId);
-                entity.HasIndex(e => e.CreatedAt);
-            });
-
-            modelBuilder.Entity<RetainerWorldHistory>(entity =>
-            {
-                entity.HasOne(e => e.Retainer)
-                    .WithMany(r => r.WorldHistory)
-                    .HasForeignKey(e => e.RetainerLocalContentId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                entity.HasIndex(e => e.RetainerLocalContentId);
-                entity.HasIndex(e => e.CreatedAt);
             });
 
             // User configurations

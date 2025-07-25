@@ -39,7 +39,6 @@ namespace AlphaScopeServer.Models.Entities
         public virtual ICollection<PlayerWorldHistory> WorldHistory { get; set; } = new List<PlayerWorldHistory>();
         public virtual ICollection<PlayerCustomizationHistory> CustomizationHistory { get; set; } = new List<PlayerCustomizationHistory>();
         public virtual ICollection<PlayerTerritoryHistory> TerritoryHistory { get; set; } = new List<PlayerTerritoryHistory>();
-        public virtual ICollection<Retainer> Retainers { get; set; } = new List<Retainer>();
         public virtual PlayerLodestone? Lodestone { get; set; }
         public virtual ICollection<PlayerProfileVisit> ProfileVisits { get; set; } = new List<PlayerProfileVisit>();
     }

@@ -37,7 +37,7 @@ namespace AlphaScope.API
     /// <summary>
     /// HTTP client for communicating with the AlphaScopeServer API.
     /// Handles authentication, request/response processing, error handling, and data serialization.
-    /// Provides methods for server status, player data, retainer data, and user management.
+    /// Provides methods for server status, player data, and user management.
     /// Uses RestSharp for HTTP operations and Newtonsoft.Json for serialization.
     /// </summary>
     public class ApiClient
@@ -236,49 +236,6 @@ namespace AlphaScope.API
             }
         }
 
-        /// <summary>
-        /// Cached player and retainer count statistics with last status message
-        /// </summary>
-        public (ServerPlayerAndRetainerStatsDto Stats, string Message) LastPlayerAndRetainerCountStats = new();
-        
-        /// <summary>
-        /// Retrieves focused statistics about player and retainer counts on the server.
-        /// Used for dashboard displays and data overview.
-        /// </summary>
-        /// <returns>Tuple containing player/retainer stats DTO and status message</returns>
-        public async Task<(ServerPlayerAndRetainerStatsDto PlayerAndRetainerStats, string Message)> GetPlayerAndRetainerCountStats()
-        {
-            string Message = string.Empty;
-            try
-            {
-                var request = new RestRequest($"server/stats/players-retainers").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
-                var response = await _restClient.ExecuteGetAsync(request).ConfigureAwait(false);
-
-                if (response.IsSuccessful)
-                {
-                    var _JsonResponse = JsonConvert.DeserializeObject<ServerPlayerAndRetainerStatsDto>(response.Content!);
-                    if (_JsonResponse != null)
-                    {
-                        Message = Loc.ApiStatsRefreshed;
-                        LastPlayerAndRetainerCountStats = (_JsonResponse, Message);
-                        return (_JsonResponse, Message);
-                    }
-                }
-                else if (!string.IsNullOrWhiteSpace(response.Content))
-                    Message = $"{Loc.ApiError} {response.Content}";
-                else if (response.StatusCode == 0)
-                    Message = $"{Loc.ApiError} {Loc.ApiServiceUnavailable}";
-                else
-                    Message = $"{Loc.ApiError} {response.StatusCode.ToString()}";
-
-                return (null, Message);
-            }
-            catch (Exception ex)
-            {
-                Message = $"{Loc.ApiError} {ex.Message}";
-                return (null, Message);
-            }
-        }
         // ========== PLAYER DATA MANAGEMENT ==========
         
         /// <summary>
@@ -398,88 +355,6 @@ namespace AlphaScope.API
                 {
                     return true;
                 }
-                return false;
-            }
-            catch (Exception ex)
-            {
-                return false;
-            }
-        }
-        // ========== RETAINER DATA MANAGEMENT ==========
-        
-        /// <summary>
-        /// Searches for retainers using the provided query parameters.
-        /// Supports pagination, filtering by world, name matching, and owner lookup.
-        /// Generic method that can return RetainerDto or RetainerSearchDto based on server response.
-        /// </summary>
-        /// <typeparam name="T">Type of retainer data to return (RetainerDto or RetainerSearchDto)</typeparam>
-        /// <param name="query">Query object containing search parameters and filters</param>
-        /// <returns>Tuple containing paginated results and status message</returns>
-        public async Task<(PaginationBase<T>? Page, string Message)> GetRetainers<T>(RetainerQueryObject query)
-        {
-            string Message = string.Empty;
-            try
-            {
-                var request = new RestRequest($"retainers").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language); ;
-                if (!string.IsNullOrWhiteSpace(query.Name))
-                    request.AddQueryParameter("Name", query.Name, true);
-                if (!string.IsNullOrWhiteSpace(query.Cursor.ToString()))
-                    request.AddQueryParameter("Cursor", query.Cursor.ToString(), true);
-                if (!string.IsNullOrWhiteSpace(query.IsFetching.ToString()))
-                    request.AddQueryParameter("IsFetching", query.IsFetching.ToString(), true);
-
-                if (query.F_WorldIds != null && query.F_WorldIds.Any())
-                {
-                    var worldIds = string.Join(",", query.F_WorldIds);
-                    request.AddQueryParameter("F_WorldIds", worldIds);
-                }
-
-                if (!string.IsNullOrWhiteSpace(query.F_MatchAnyPartOfName.ToString()))
-                    request.AddQueryParameter("F_MatchAnyPartOfName", query.F_MatchAnyPartOfName.ToString(), true);
-
-                var response = await _restClient.ExecuteGetAsync(request).ConfigureAwait(false);
-                if (response.IsSuccessful)
-                {
-                    var jsonResponse = JsonConvert.DeserializeObject<PaginationBase<T>>(response.Content!);
-                    if (jsonResponse != null)
-                    {
-                        Message = $"- {Loc.ApiTotalFound} {jsonResponse.NextCount}";
-                        return (jsonResponse, Message);
-                    }
-                }
-                else if (!string.IsNullOrWhiteSpace(response.Content))
-                    Message = $"{Loc.ApiError} {response.Content}";
-                else if (response.StatusCode == 0)
-                    Message = $"{Loc.ApiError} {Loc.ApiServiceUnavailable}";
-                else
-                    Message = $"{Loc.ApiError} {response.StatusCode.ToString()}";
-
-                return (null, Message);
-            }
-            catch (Exception ex)
-            {
-                Message = $"{Loc.ApiError} {ex.Message}";
-                return (null, Message);
-            }
-        }
-        /// <summary>
-        /// Uploads a batch of retainer data to the server.
-        /// Used by the persistence system to sync locally collected retainer information.
-        /// </summary>
-        /// <param name="retainers">List of retainer data to upload</param>
-        /// <returns>True if upload was successful, false otherwise</returns>
-        public async Task<bool> PostRetainers(List<PostRetainerRequest> retainers)
-        {
-            try
-            {
-                var request = new RestRequest($"retainers").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
-                request.AddJsonBody(retainers);
-                var response = await _restClient.ExecutePostAsync(request).ConfigureAwait(false);
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    return true;
-                }
-
                 return false;
             }
             catch (Exception ex)

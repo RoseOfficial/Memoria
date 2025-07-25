@@ -48,7 +48,7 @@ namespace AlphaScope.Handlers;
 /// <summary>
 /// Core data persistence and synchronization handler for AlphaScope.
 /// Manages local data caching, background data uploads to server, and coordination between
-/// local database storage and server API synchronization. Handles player/retainer data
+/// local database storage and server API synchronization. Handles player data
 /// lifecycle from initial discovery through upload and caching.
 /// </summary>
 internal sealed class PersistenceContext
@@ -68,10 +68,6 @@ internal sealed class PersistenceContext
     /// </summary>
     public static IServiceProvider _serviceProvider;
     
-    /// <summary>
-    /// Cache mapping World ID -> Retainer Name -> Content ID for fast retainer lookups
-    /// </summary>
-    public static readonly ConcurrentDictionary<uint, ConcurrentDictionary<string, ulong>> _worldRetainerCache = new();
     
     /// <summary>
     /// Cache of player data indexed by Content ID for fast access
@@ -84,16 +80,6 @@ internal sealed class PersistenceContext
     public static readonly ConcurrentDictionary<ulong, List<ulong>> _AccountIdCache = new();
 
     /// <summary>
-    /// Combined cache of players with their associated retainers for relationship tracking
-    /// </summary>
-    public static ConcurrentDictionary<ulong, (CachedPlayer Player, List<Retainer> Retainers)> _playerWithRetainersCache = new();
-
-    /// <summary>
-    /// Cache of retainer data indexed by Content ID for fast access
-    /// </summary>
-    public static ConcurrentDictionary<ulong, Retainer> _retainerCache = new(); 
-
-    /// <summary>
     /// Queue of player data pending upload to server
     /// </summary>
     public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadPlayers = new();
@@ -102,16 +88,6 @@ internal sealed class PersistenceContext
     /// Cache of player data that has already been successfully uploaded to server
     /// </summary>
     public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadedPlayersCache = new();
-
-    /// <summary>
-    /// Queue of retainer data pending upload to server
-    /// </summary>
-    public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadRetainers = new();
-    
-    /// <summary>
-    /// Cache of retainer data that has already been successfully uploaded to server
-    /// </summary>
-    public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadedRetainersCache = new();
 
     /// <summary>
     /// Cache of recently scanned players with scan timestamps for avoiding duplicate processing
@@ -179,11 +155,11 @@ internal sealed class PersistenceContext
 
         // Start background upload processing
         _cancellationTokenSource = new CancellationTokenSource();
-        _ = PostPlayerAndRetainerData(_cancellationTokenSource.Token);
+        _ = PostPlayerData(_cancellationTokenSource.Token);
     }
     /// <summary>
     /// Reloads all in-memory caches from the local SQLite database.
-    /// This method rebuilds player, retainer, and relationship caches from persistent storage.
+    /// This method rebuilds player caches from persistent storage.
     /// Called during initialization and when cache invalidation is needed.
     /// </summary>
     public static void ReloadCache()
@@ -191,20 +167,6 @@ internal sealed class PersistenceContext
         using (IServiceScope scope = _serviceProvider.CreateScope())
         {
             using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-            var retainersByWorld = dbContext.Retainers.GroupBy(retainer => retainer.WorldId);
-
-            foreach (var retainers in retainersByWorld)
-            {
-                var world = _worldRetainerCache.GetOrAdd(retainers.Key, _ => new());
-                foreach (var retainer in retainers)
-                {
-                    if (retainer.Name != null && retainer.OwnerLocalContentId.HasValue)
-                    {
-                        world[retainer.Name] = retainer.OwnerLocalContentId.Value;
-                        _retainerCache[retainer.LocalContentId] = retainer;
-                    }
-                }
-            }
 
             foreach (var player in dbContext.Players)
             {
@@ -217,15 +179,10 @@ internal sealed class PersistenceContext
         }
     }
 
-   public static void UpdateRetainers()
+   public static void UpdateAccountIds()
     {
         foreach (var player in _playerCache)
         {
-            if (_playerCache.TryGetValue(player.Key, out CachedPlayer _GetPlayer))
-            {
-                _playerWithRetainersCache.GetOrAdd(player.Key, _ => (_GetPlayer, new List<Retainer>() { }));
-            }
-
             if (player.Value.AccountId != null)
             {
                 var _GetAccountsCache = _AccountIdCache.TryGetValue((ulong)player.Value.AccountId, out var AccountContentIds);
@@ -239,32 +196,6 @@ internal sealed class PersistenceContext
                 else
                 {
                     _AccountIdCache[(ulong)player.Value.AccountId] = new List<ulong> { player.Key };
-                }
-            }
-        }
-
-        foreach (var retainer in _retainerCache.Values)
-        {
-            // Skip retainers without owner information
-            if (!retainer.OwnerLocalContentId.HasValue)
-                continue;
-                
-            if (_playerCache.TryGetValue(retainer.OwnerLocalContentId.Value, out CachedPlayer _GetPlayer))
-            {
-                var player = _playerWithRetainersCache.GetOrAdd(retainer.OwnerLocalContentId.Value, _ => (_GetPlayer, new List<Retainer>() { retainer }));
-
-                if (!player.Item2.Contains(retainer))
-                {
-                    player.Item2.Add(retainer);
-                }
-            }
-            else
-            {
-                var player = _playerWithRetainersCache.GetOrAdd(retainer.OwnerLocalContentId.Value, _ => (new CachedPlayer { Name = "-", AccountId = null}, new List<Retainer>() { retainer }));
-
-                if (!player.Item2.Contains(retainer))
-                {
-                    player.Item2.Add(retainer);
                 }
             }
         }
@@ -283,10 +214,6 @@ internal sealed class PersistenceContext
                        playerRequest.TerritoryId != cachedPlayer.TerritoryId ||
                        playerRequest.HomeWorldId != cachedPlayer.HomeWorldId ||
                        playerRequest.CurrentWorldId != cachedPlayer.CurrentWorldId;
-
-            case PostRetainerRequest retainerRequest when cachedRequest is PostRetainerRequest cachedRetainer:
-                return retainerRequest.Name != cachedRetainer.Name ||
-                       retainerRequest.WorldId != cachedRetainer.WorldId;
 
             default:
                 throw new InvalidOperationException("Unsupported type for data change check");
@@ -319,7 +246,6 @@ internal sealed class PersistenceContext
         return request switch
         {
             PostPlayerRequest player => player.CreatedAt,
-            PostRetainerRequest retainer => retainer.CreatedAt,
             _ => throw new InvalidOperationException("Unsupported type")
         };
     }
@@ -332,22 +258,9 @@ internal sealed class PersistenceContext
         }
     }
 
-    public static void AddRetainerUploadData(IEnumerable<PostRetainerRequest> requests)
-    {
-        var requestList = requests.ToList();
-        _logger.LogInformation($"AddRetainerUploadData called with {requestList.Count} requests");
-        
-        foreach (var request in requestList)
-        {
-            _logger.LogInformation($"Adding retainer {request.Name} (ID: {request.LocalContentId}) to upload queue");
-            UpdateCacheIfNeeded(request.LocalContentId, request, _UploadRetainers, _UploadedRetainersCache);
-        }
-        
-        _logger.LogInformation($"Upload queue now has {_UploadRetainers.Count} retainers waiting");
-    }
 
     public static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
-    public static async Task PostPlayerAndRetainerData(CancellationToken cancellationToken)
+    public static async Task PostPlayerData(CancellationToken cancellationToken)
     {
         try
         {
@@ -357,29 +270,25 @@ internal sealed class PersistenceContext
                 {
                     await ProcessPlayerUploadBatch(cancellationToken).ConfigureAwait(false);
                 }
-                while (!_UploadRetainers.IsEmpty)
-                {
-                    await ProcessRetainerUploadBatch(cancellationToken).ConfigureAwait(false);
-                }
 
                 await Task.Delay(TimeSpan.FromSeconds(20), cancellationToken).ConfigureAwait(false);
             }
         }
         catch (TaskCanceledException e) when (!e.CancellationToken.IsCancellationRequested)
         {
-            _logger.LogWarning(e, "Timeout while posting player and retainer data");
+            _logger.LogWarning(e, "Timeout while posting player data");
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("PostPlayerAndRetainerData was canceled.");
+            _logger.LogInformation("PostPlayerData was canceled.");
         }
         catch (HttpRequestException e)
         {
-            _logger.LogWarning(e, "Network error while posting player and retainer data");
+            _logger.LogWarning(e, "Network error while posting player data");
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Unexpected error while posting player and retainer data");
+            _logger.LogError(e, "Unexpected error while posting player data");
         }
     }
     public static void StopUploads()
@@ -456,79 +365,12 @@ internal sealed class PersistenceContext
         }
     }
 
-    private static async Task ProcessRetainerUploadBatch(CancellationToken cancellationToken,
-    int batchSize = 200,
-    int maxRetries = 3
-)
-    {
-        if (_UploadRetainers.IsEmpty) return;
-        if (cancellationToken.IsCancellationRequested)
-            return;
-
-        var itemsToUpload = _UploadRetainers.Take(batchSize).Select(kvp => kvp.Value).ToList();
-        //_logger.LogInformation($"Uploading {itemsToUpload.Count} Retainer items. TotalCount: {_UploadRetainers.Count}");
-
-        int retryCount = 0;
-        bool uploadSuccess = false;
-
-        while (!cancellationToken.IsCancellationRequested && !_UploadRetainers.IsEmpty && !uploadSuccess && retryCount < maxRetries)
-        {
-            if (await ApiClient.Instance.PostRetainers(itemsToUpload).ConfigureAwait(false))
-            {
-                foreach (var item in itemsToUpload)
-                {
-                    var key = GetKey(item);
-                    _UploadRetainers.TryRemove(key, out _);
-                    _UploadedRetainersCache[key] = item;
-                }
-                //_logger.LogInformation("Retainer upload successful, items added to cache.");
-                uploadSuccess = true;
-            }
-            else
-            {
-                retryCount++;
-                _logger.LogWarning($"Retainer upload attempt {retryCount} failed. Retrying...");
-
-                try
-                {
-                    await Task.Delay(1500 * retryCount, cancellationToken);
-                }
-                catch (TaskCanceledException)
-                {
-                    _logger.LogInformation("Upload process canceled during delay.");
-                    return;
-                }
-            }
-        }
-
-        if (!uploadSuccess)
-        {
-            _logger.LogError("Retainer upload failed after multiple attempts, items could not be uploaded.");
-        }
-
-        //_logger.LogInformation("ProcessRetainerUploadBatch completed.");
-
-        if (!_UploadRetainers.IsEmpty)
-        {
-            //_logger.LogInformation("Waiting before next Retainer upload attempt as there are still items in the list.");
-            try
-            {
-                await Task.Delay(1000, cancellationToken);
-            }
-            catch (TaskCanceledException)
-            {
-                //_logger.LogInformation("Upload process canceled during final delay.");
-                return;
-            }
-        }
-    }
 
     private static ulong GetKey<T>(T request)
     {
         return request switch
         {
             PostPlayerRequest player => player.LocalContentId,
-            PostRetainerRequest retainer => retainer.LocalContentId,
             _ => throw new InvalidOperationException("Unsupported type")
         };
     }
@@ -541,34 +383,7 @@ internal sealed class PersistenceContext
         return currentWorld;
     }
 
-    public static string GetCharacterNameOnCurrentWorld(string retainerName)
-    {
-        uint currentWorld = _clientState.LocalPlayer?.CurrentWorld.RowId ?? 0;
-        if (currentWorld == 0)
-            return string.Empty;
-        
-        var currentWorldCache = _worldRetainerCache.GetOrAdd(currentWorld, _ => new());
-        if (!currentWorldCache.TryGetValue(retainerName, out ulong playerContentId))
-            return string.Empty;
 
-        return _playerCache.TryGetValue(playerContentId, out CachedPlayer? cachedPlayer)
-            ? cachedPlayer.Name
-            : string.Empty;
-    }
-
-    public IReadOnlyList<string> GetRetainerNamesForCharacter(string characterName, uint world)
-    {
-        using var scope = _serviceProvider.CreateScope();
-        using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-        return dbContext.Players.Where(p => characterName == p.Name)
-            .SelectMany(player =>
-                dbContext.Retainers.Where(x => x.OwnerLocalContentId == player.LocalContentId && x.WorldId == world))
-            .Select(x => x.Name)
-            .Where(x => !string.IsNullOrEmpty(x))
-            .Cast<string>()
-            .ToList()
-            .AsReadOnly();
-    }
 
     public IReadOnlyList<string> GetAllAccountNamesForCharacter(ulong playerContentId)
     {
@@ -584,96 +399,6 @@ internal sealed class PersistenceContext
             .AsReadOnly();
     }
 
-    public async Task HandleMarketBoardPage(List<Retainer> retainers)
-    {
-        try
-        {
-            _logger.LogInformation($"HandleMarketBoardPage called with {retainers.Count} retainers");
-            
-            var updates = retainers
-                    .DistinctBy(o => o.LocalContentId)
-                    .Where(l => l.LocalContentId != 0)
-                    // Allow retainers without owner info to be stored
-                    .Where(mapping =>
-                    {
-                        if (mapping.Name == null)
-                            return true;
-
-                        // Only check cache if we have owner info
-                        if (mapping.OwnerLocalContentId.HasValue)
-                        {
-                            var currentWorldCache = _worldRetainerCache.GetOrAdd(mapping.WorldId, _ => new());
-                            if (currentWorldCache.TryGetValue(mapping.Name, out ulong playerContentId))
-                                return mapping.OwnerLocalContentId != playerContentId;
-                        }
-
-                        return true;
-                    })
-                    .DistinctBy(x => x.LocalContentId)
-                    .ToList();
-                    
-            _logger.LogInformation($"After filtering, {updates.Count} retainers need processing");
-
-            using var scope = _serviceProvider.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-
-            foreach (var retainer in updates)
-            {
-                Retainer? dbRetainer = dbContext.Retainers.Find(retainer.LocalContentId);
-                if (dbRetainer != null)
-                {
-                    _logger.LogInformation("Updating retainer {RetainerName} with {LocalContentId}", retainer.Name,
-                        retainer.LocalContentId);
-                    dbRetainer.Name = retainer.Name;
-                    dbRetainer.WorldId = retainer.WorldId;
-                    dbRetainer.OwnerLocalContentId = retainer.OwnerLocalContentId;
-                    dbContext.Retainers.Update(dbRetainer);
-                }
-                else
-                {
-                    _logger.LogInformation("Adding retainer {RetainerName} with {LocalContentId}", retainer.Name, retainer.LocalContentId);
-                    dbContext.Retainers.Add(retainer);
-                }
-
-                string ownerName;
-                if (retainer.OwnerLocalContentId.HasValue && _playerCache.TryGetValue(retainer.OwnerLocalContentId.Value, out CachedPlayer? cachedPlayer))
-                    ownerName = cachedPlayer.Name;
-                else if (retainer.OwnerLocalContentId.HasValue)
-                    ownerName = retainer.OwnerLocalContentId.Value.ToString(CultureInfo.InvariantCulture);
-                else
-                    ownerName = "Unknown";
-                _logger.LogInformation("  Retainer {RetainerName} belongs to {OwnerName}", retainer.Name, ownerName);
-
-                if (retainer.Name != null)
-                {
-                    var world = _worldRetainerCache.GetOrAdd(retainer.WorldId, _ => new());
-                    if (retainer.OwnerLocalContentId.HasValue)
-                        world[retainer.Name] = retainer.OwnerLocalContentId.Value;
-                    _retainerCache[retainer.LocalContentId] = retainer;
-                }
-            }
-
-            int changeCount = dbContext.SaveChanges();
-            if (changeCount > 0)
-                _logger.LogInformation("Saved {Count} retainer mappings", changeCount);
-            else
-                _logger.LogInformation("No database changes were made");
-
-            return;
-        }
-        catch (DbUpdateException e)
-        {
-            _logger.LogError(e, "Database error while persisting retainer info from market board page");
-        }
-        catch (InvalidOperationException e)
-        {
-            _logger.LogWarning(e, "Invalid operation while persisting retainer info from market board page");
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Unexpected error while persisting retainer info from market board page");
-        }
-    }
 
     private void HandleContentIdMappingFallback(PlayerMapping mapping)
     {

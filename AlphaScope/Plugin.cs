@@ -33,7 +33,7 @@ using System.Net.Http;
 namespace AlphaScope;
 
 /// <summary>
-/// Main plugin class for AlphaScope - a FFXIV Dalamud plugin that tracks player and retainer data.
+/// Main plugin class for AlphaScope - a FFXIV Dalamud plugin that tracks player data.
 /// This class handles plugin initialization, dependency injection setup, database configuration,
 /// and coordinates all major plugin subsystems including data collection, API communication, and UI management.
 /// </summary>
@@ -110,12 +110,12 @@ public sealed class Plugin : IDalamudPlugin
     public GUI.SettingsWindow ConfigWindow;
     
     /// <summary>
-    /// Main plugin window showing player and retainer data
+    /// Main plugin window showing player data
     /// </summary>
     public GUI.MainWindow MainWindow;
     
     /// <summary>
-    /// Detailed view window for expanded player/retainer information
+    /// Detailed view window for expanded player information
     /// </summary>
     public GUI.DetailsWindow DetailsWindow;
     
@@ -216,8 +216,6 @@ public sealed class Plugin : IDalamudPlugin
 
         // Register AlphaScope-specific services
         serviceCollection.AddSingleton<PersistenceContext>();           // Handles data persistence and API uploads
-        serviceCollection.AddSingleton<MarketBoardOfferingsHandler>();  // Processes market board data for retainer tracking
-        serviceCollection.AddSingleton<MarketBoardUiHandler>();         // Monitors market board UI interactions
         serviceCollection.AddSingleton<CWLSHandler>();                  // Handles Cross-World Linkshell data
         serviceCollection.AddSingleton<ObjectTableHandler>();           // Scans nearby players and objects
         serviceCollection.AddSingleton<GameHooks>();                    // Low-level game event hooks
@@ -345,19 +343,18 @@ public sealed class Plugin : IDalamudPlugin
             
             using var command = connection.CreateCommand();
             
-            // Check if database exists by looking for the Retainers table
+            // Check if database exists by looking for the Players table
             command.CommandText = @"
-                SELECT name FROM sqlite_master WHERE type='table' AND name='Retainers';
+                SELECT name FROM sqlite_master WHERE type='table' AND name='Players';
             ";
             
             var result = command.ExecuteScalar();
-            bool retainersTableExists = result != null;
+            bool playersTableExists = result != null;
             
-            if (!retainersTableExists)
+            if (!playersTableExists)
             {
                 // Create fresh database with proper nullable schema
                 // Players table stores character information with nullable job data
-                // Retainers table stores retainer information with nullable owner reference
                 command.CommandText = @"
                     CREATE TABLE Players (
                         LocalContentId INTEGER PRIMARY KEY,
@@ -366,67 +363,21 @@ public sealed class Plugin : IDalamudPlugin
                         CurrentJobId INTEGER NULL,
                         CurrentJobLevel INTEGER NULL
                     );
-                    
-                    CREATE TABLE Retainers (
-                        LocalContentId INTEGER PRIMARY KEY,
-                        Name TEXT NOT NULL,
-                        WorldId INTEGER NOT NULL,
-                        OwnerLocalContentId INTEGER NULL
-                    );
                 ";
                 command.ExecuteNonQuery();
             }
             else
             {
-                // Database exists - check if schema needs updating for nullable foreign keys
+                // Database exists - check if legacy Retainers table exists and remove it
                 command.CommandText = @"
-                    PRAGMA table_info(Retainers);
+                    SELECT name FROM sqlite_master WHERE type='table' AND name='Retainers';
                 ";
                 
-                using var reader = command.ExecuteReader();
-                bool needsUpdate = false;
-                while (reader.Read())
+                var retainerTableResult = command.ExecuteScalar();
+                if (retainerTableResult != null)
                 {
-                    var columnName = reader.GetString(1); // name column
-                    var notNull = reader.GetInt32(3); // notnull column
-                    
-                    // Check if OwnerLocalContentId is still NOT NULL (legacy schema)
-                    if (columnName == "OwnerLocalContentId" && notNull == 1)
-                    {
-                        needsUpdate = true;
-                        break;
-                    }
-                }
-                reader.Close();
-                
-                if (needsUpdate)
-                {
-                    // Migrate legacy schema to support nullable foreign keys
-                    // This handles cases where retainers don't have known owners
-                    command.CommandText = @"
-                        BEGIN TRANSACTION;
-                        
-                        -- Create new table with nullable OwnerLocalContentId
-                        CREATE TABLE Retainers_New (
-                            LocalContentId INTEGER PRIMARY KEY,
-                            Name TEXT NOT NULL,
-                            WorldId INTEGER NOT NULL,
-                            OwnerLocalContentId INTEGER NULL
-                        );
-                        
-                        -- Copy data from old table, converting 0 to NULL for unknown owners
-                        INSERT INTO Retainers_New (LocalContentId, Name, WorldId, OwnerLocalContentId)
-                        SELECT LocalContentId, Name, WorldId, 
-                               CASE WHEN OwnerLocalContentId = 0 THEN NULL ELSE OwnerLocalContentId END
-                        FROM Retainers;
-                        
-                        -- Replace old table with new schema
-                        DROP TABLE Retainers;
-                        ALTER TABLE Retainers_New RENAME TO Retainers;
-                        
-                        COMMIT;
-                    ";
-                    
+                    // Drop legacy Retainers table since we're removing retainer tracking
+                    command.CommandText = "DROP TABLE IF EXISTS Retainers;";
                     command.ExecuteNonQuery();
                 }
                 
@@ -478,9 +429,6 @@ public sealed class Plugin : IDalamudPlugin
     /// <param name="serviceProvider">Service provider containing registered services</param>
     private static void InitializeRequiredServices(ServiceProvider serviceProvider)
     {
-        // Start market board monitoring for retainer ownership tracking
-        serviceProvider.GetRequiredService<MarketBoardOfferingsHandler>();
-        serviceProvider.GetRequiredService<MarketBoardUiHandler>();
         
         // Start social system monitoring
         serviceProvider.GetRequiredService<CWLSHandler>();

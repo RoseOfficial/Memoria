@@ -36,27 +36,6 @@ namespace AlphaScope.Database.Migrations
                 b.ToTable("Players");
             });
 
-            modelBuilder.Entity("RetainerTrack.Database.Retainer", b =>
-            {
-                b.Property<ulong>("LocalContentId")
-                    .ValueGeneratedOnAdd()
-                    .HasColumnType("INTEGER");
-
-                b.Property<string>("Name")
-                    .IsRequired()
-                    .HasMaxLength(24)
-                    .HasColumnType("TEXT");
-
-                b.Property<ulong>("OwnerLocalContentId")
-                    .HasColumnType("INTEGER");
-
-                b.Property<ushort>("WorldId")
-                    .HasColumnType("INTEGER");
-
-                b.HasKey("LocalContentId");
-
-                b.ToTable("Retainers");
-            });
 #pragma warning restore 612, 618
         }
     }
