@@ -1,14 +1,23 @@
-﻿using FFXIVClientStructs.FFXIV.Common.Lua;
+﻿// FFXIV client structure dependencies
+using FFXIVClientStructs.FFXIV.Common.Lua;
+
+// Microsoft framework dependencies
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Logging;
+
+// Third-party HTTP and JSON libraries
 using Newtonsoft.Json;
 using RestSharp;
 using RestSharp.Serializers.NewtonsoftJson;
+
+// AlphaScope internal dependencies
 using AlphaScope.API.Models;
 using AlphaScope.API.Query;
 using AlphaScope.GUI;
 using AlphaScope.Handlers;
 using AlphaScope.Properties;
+
+// System dependencies
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -25,16 +34,43 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace AlphaScope.API
 {
+    /// <summary>
+    /// HTTP client for communicating with the AlphaScopeServer API.
+    /// Handles authentication, request/response processing, error handling, and data serialization.
+    /// Provides methods for server status, player data, retainer data, and user management.
+    /// Uses RestSharp for HTTP operations and Newtonsoft.Json for serialization.
+    /// </summary>
     public class ApiClient
     {
+        /// <summary>
+        /// RestSharp client for making HTTP requests to the server
+        /// </summary>
         public static IRestClient _restClient = new RestClient();
-        //private const string BaseUrl = "https://localhost:5001/v1/";
+        
+        /// <summary>
+        /// Plugin configuration containing API settings and authentication data
+        /// </summary>
         public Configuration Config = Plugin.Instance?.Configuration ?? new Configuration();
+        
+        /// <summary>
+        /// Logger for API operations and error reporting
+        /// </summary>
         private readonly ILogger<ApiClient> _logger;
+        
+        /// <summary>
+        /// Singleton instance of the API client for global access
+        /// </summary>
         internal static ApiClient Instance { get; private set; } = null!;
+        /// <summary>
+        /// Initializes the API client with logging and configures the RestSharp client.
+        /// Sets up the base URL from configuration and configures JSON serialization.
+        /// </summary>
+        /// <param name="logger">Logger instance for API operations</param>
         public ApiClient(ILogger<ApiClient> logger)
         {
             _logger = logger;
+            
+            // Configure RestClient with base URL if valid, otherwise use default
             if (Uri.IsWellFormedUriString(Config.BaseUrl, UriKind.Absolute))
             {
                 var options = new RestClientOptions(Config.BaseUrl);
@@ -47,21 +83,44 @@ namespace AlphaScope.API
             Instance = this;
         }
 
-        //---Server---//
+        // ========== SERVER STATUS MANAGEMENT ==========
+        
+        /// <summary>
+        /// Current server status message ("ONLINE", error message, etc.)
+        /// </summary>
         public string _ServerStatus = string.Empty;
+        
+        /// <summary>
+        /// Flag indicating if a server status check is currently in progress
+        /// </summary>
         public bool IsCheckingServerStatus = false;
+        
+        /// <summary>
+        /// Last ping response time in milliseconds (-1 if unavailable)
+        /// </summary>
         public long _LastPingValue = -1;
 
+        /// <summary>
+        /// Checks if the AlphaScopeServer is online and responsive.
+        /// Performs both an HTTP request to the server endpoint and a network ping.
+        /// Updates server status and ping values for display in the UI.
+        /// </summary>
+        /// <returns>True if server is online and responding, false otherwise</returns>
         public async Task<bool> CheckServerStatus()
         {
             try
             {
                 IsCheckingServerStatus = true;
 
-                var request = new RestRequest($"server").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                // Make HTTP request to server status endpoint
+                var request = new RestRequest($"server")
+                    .AddHeader("api-key", Token)
+                    .AddHeader("V", Utils.clientVer)
+                    .AddHeader("L", Config.Language);
                 var response = await _restClient.ExecuteGetAsync(request).ConfigureAwait(false);
                 long pingValue = -1;
                 
+                // Perform network ping to measure latency
                 using (Ping pp = new Ping())
                 {
                     Uri uri = new Uri($"{Config.BaseUrl}");
@@ -70,9 +129,11 @@ namespace AlphaScope.API
                     pingValue = reply.RoundtripTime;
                 }
 
+                // Process server response
                 if (response.IsSuccessful)
                 {
-                    _ServerStatus = "ONLINE"; _LastPingValue = pingValue;
+                    _ServerStatus = "ONLINE"; 
+                    _LastPingValue = pingValue;
                     IsCheckingServerStatus = false;
                     return true;
                 }
@@ -86,6 +147,7 @@ namespace AlphaScope.API
                 IsCheckingServerStatus = false;
                 return false;
             }
+            // Handle specific HTTP and network errors
             catch (HttpRequestException ex)
             {
                 _logger.LogWarning(ex, "Network error while checking server status");
@@ -111,7 +173,16 @@ namespace AlphaScope.API
                 return false;
             }
         }
+        /// <summary>
+        /// Cached server statistics and last status message
+        /// </summary>
         public (ServerStatsDto ServerStats, string Message) _LastServerStats = new();
+        
+        /// <summary>
+        /// Retrieves comprehensive server statistics including user counts, data metrics, and system info.
+        /// Caches the results for display in the UI.
+        /// </summary>
+        /// <returns>Tuple containing server stats DTO and status message</returns>
         public async Task<(ServerStatsDto ServerStats, string Message)> CheckServerStats()
         {
             string Message = string.Empty;
@@ -165,7 +236,16 @@ namespace AlphaScope.API
             }
         }
 
+        /// <summary>
+        /// Cached player and retainer count statistics with last status message
+        /// </summary>
         public (ServerPlayerAndRetainerStatsDto Stats, string Message) LastPlayerAndRetainerCountStats = new();
+        
+        /// <summary>
+        /// Retrieves focused statistics about player and retainer counts on the server.
+        /// Used for dashboard displays and data overview.
+        /// </summary>
+        /// <returns>Tuple containing player/retainer stats DTO and status message</returns>
         public async Task<(ServerPlayerAndRetainerStatsDto PlayerAndRetainerStats, string Message)> GetPlayerAndRetainerCountStats()
         {
             string Message = string.Empty;
@@ -199,10 +279,20 @@ namespace AlphaScope.API
                 return (null, Message);
             }
         }
-        //---Players---//
-        //public ConcurrentDictionary<long, PlayerDto> _LastPlayerSearchResults = new ConcurrentDictionary<long, PlayerDto>();
-        //public ConcurrentDictionary<long, PlayerDetailed> _LastPlayerByIdSearchResults = new ConcurrentDictionary<long, PlayerDetailed>();
+        // ========== PLAYER DATA MANAGEMENT ==========
+        
+        /// <summary>
+        /// Authentication token for API requests, combining API key and account ID
+        /// </summary>
         public string Token => $"{Config.Key}-{Config.AccountId}";
+        /// <summary>
+        /// Searches for players using the provided query parameters.
+        /// Supports pagination, filtering by world, name matching, and content ID lookup.
+        /// Generic method that can return PlayerDto or PlayerSearchDto based on server response.
+        /// </summary>
+        /// <typeparam name="T">Type of player data to return (PlayerDto or PlayerSearchDto)</typeparam>
+        /// <param name="query">Query object containing search parameters and filters</param>
+        /// <returns>Tuple containing paginated results and status message</returns>
         public async Task<(PaginationBase<T>? Page, string Message)> GetPlayers<T>(PlayerQueryObject query)
         {
             var _GetPlayerSearchResult = new Dictionary<long, PlayerDto>();
@@ -255,6 +345,12 @@ namespace AlphaScope.API
             }
         }
 
+        /// <summary>
+        /// Retrieves detailed information for a specific player by their Content ID.
+        /// Returns comprehensive player data including customization, job info, and metadata.
+        /// </summary>
+        /// <param name="id">Player's Content ID (LocalContentId)</param>
+        /// <returns>Tuple containing detailed player data and status message</returns>
         public async Task<(PlayerDetailed Player, string Message)> GetPlayerById(long id)
         {
             string Message = string.Empty;
@@ -285,6 +381,12 @@ namespace AlphaScope.API
             }
         }
 
+        /// <summary>
+        /// Uploads a batch of player data to the server.
+        /// Used by the persistence system to sync locally collected player information.
+        /// </summary>
+        /// <param name="players">List of player data to upload</param>
+        /// <returns>True if upload was successful, false otherwise</returns>
         public async Task<bool> PostPlayers(List<PostPlayerRequest> players)
         {
             try
@@ -303,7 +405,16 @@ namespace AlphaScope.API
                 return false;
             }
         }
-        //---Retainers---//
+        // ========== RETAINER DATA MANAGEMENT ==========
+        
+        /// <summary>
+        /// Searches for retainers using the provided query parameters.
+        /// Supports pagination, filtering by world, name matching, and owner lookup.
+        /// Generic method that can return RetainerDto or RetainerSearchDto based on server response.
+        /// </summary>
+        /// <typeparam name="T">Type of retainer data to return (RetainerDto or RetainerSearchDto)</typeparam>
+        /// <param name="query">Query object containing search parameters and filters</param>
+        /// <returns>Tuple containing paginated results and status message</returns>
         public async Task<(PaginationBase<T>? Page, string Message)> GetRetainers<T>(RetainerQueryObject query)
         {
             string Message = string.Empty;
@@ -351,6 +462,12 @@ namespace AlphaScope.API
                 return (null, Message);
             }
         }
+        /// <summary>
+        /// Uploads a batch of retainer data to the server.
+        /// Used by the persistence system to sync locally collected retainer information.
+        /// </summary>
+        /// <param name="retainers">List of retainer data to upload</param>
+        /// <returns>True if upload was successful, false otherwise</returns>
         public async Task<bool> PostRetainers(List<PostRetainerRequest> retainers)
         {
             try
@@ -370,10 +487,29 @@ namespace AlphaScope.API
                 return false;
             }
         }
-        //---Users---//
+        // ========== USER AUTHENTICATION AND MANAGEMENT ==========
+        
+        /// <summary>
+        /// Dedicated HTTP client for Discord OAuth authentication flow
+        /// </summary>
         private static readonly HttpClient _httpClient = new HttpClient();
+        
+        /// <summary>
+        /// Flag indicating if Discord OAuth login is currently in progress
+        /// </summary>
         public bool IsLoggingIn = false;
+        
+        /// <summary>
+        /// Generated authentication URL for Discord OAuth flow
+        /// </summary>
         public string authUrl = string.Empty;
+        /// <summary>
+        /// Initiates Discord OAuth authentication flow.
+        /// Opens the user's browser to Discord OAuth page and waits for login completion.
+        /// Uses Server-Sent Events to receive authentication status updates.
+        /// </summary>
+        /// <param name="register">User registration data for the OAuth flow</param>
+        /// <returns>Tuple containing user data (if successful) and status message</returns>
         public async Task<(User? User, string Message)> DiscordAuth(UserRegister register)
         {
             IsLoggingIn = true;
@@ -416,6 +552,12 @@ namespace AlphaScope.API
                 return (null, Message);
             }
         }
+        /// <summary>
+        /// Performs direct user login using username/password or API key authentication.
+        /// Alternative to Discord OAuth for users who prefer direct login.
+        /// </summary>
+        /// <param name="loginUser">User login credentials</param>
+        /// <returns>Tuple containing user data (if successful) and status message</returns>
         public async Task<(User? User, string Message)> UserLogin(UserRegister loginUser)
         {
             string Message = string.Empty;
@@ -450,6 +592,12 @@ namespace AlphaScope.API
                 return (null, Message);
             }
         }
+        /// <summary>
+        /// Updates user profile information on the server.
+        /// Used to sync local configuration changes with the server-side user profile.
+        /// </summary>
+        /// <param name="config">Updated user configuration data</param>
+        /// <returns>Tuple containing updated user data and status message</returns>
         public async Task<(User? User, string Message)> UserUpdate(UserUpdateDto config)
         {
             string Message = string.Empty;
@@ -483,6 +631,11 @@ namespace AlphaScope.API
                 return (null, Message);
             }
         }
+        /// <summary>
+        /// Refreshes the current user's profile information from the server.
+        /// Used to sync server-side changes back to the local client.
+        /// </summary>
+        /// <returns>Tuple containing current user data and status message</returns>
         public async Task<(User? User, string Message)> UserRefreshMyInfo()
         {
             string Message = string.Empty;
@@ -516,6 +669,14 @@ namespace AlphaScope.API
             }
         }
 
+        /// <summary>
+        /// Claims ownership of a Lodestone character profile.
+        /// Links the user's AlphaScope account to their official FFXIV Lodestone character page.
+        /// Supports verification codes and multi-step claim processes.
+        /// </summary>
+        /// <param name="lodestoneProfileLink">URL to the Lodestone character profile</param>
+        /// <param name="state">Claim state (0=initiate, 1=verify, etc.)</param>
+        /// <returns>Tuple containing claim result data and status message</returns>
         public async Task<(ClaimLodestoneCharacterDto? LodestoneProfile, string Message)> ClaimLodestoneProfile(string lodestoneProfileLink, int state)
         {
             string Message = string.Empty;

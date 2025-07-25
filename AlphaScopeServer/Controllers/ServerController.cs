@@ -1,23 +1,49 @@
+// ASP.NET Core dependencies
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
+// AlphaScopeServer internal dependencies
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.DTOs;
 
 namespace AlphaScopeServer.Controllers
 {
+    /// <summary>
+    /// API controller for server health monitoring and statistics.
+    /// Provides endpoints for checking server status, database connectivity,
+    /// and retrieving comprehensive server statistics including data counts and performance metrics.
+    /// </summary>
     [ApiController]
     [Route("v1/[controller]")]
     public class ServerController : ControllerBase
     {
+        /// <summary>
+        /// Database context for accessing server data and performing health checks
+        /// </summary>
         private readonly AlphaScopeDbContext _context;
+        
+        /// <summary>
+        /// Logger for server monitoring and error tracking
+        /// </summary>
         private readonly ILogger<ServerController> _logger;
 
+        /// <summary>
+        /// Initializes the ServerController with required dependencies.
+        /// </summary>
+        /// <param name="context">Database context for health checks and statistics</param>
+        /// <param name="logger">Logger for operation tracking</param>
         public ServerController(AlphaScopeDbContext context, ILogger<ServerController> logger)
         {
             _context = context;
             _logger = logger;
         }
 
+        /// <summary>
+        /// Performs a server health check including database connectivity verification.
+        /// Returns server status, version information, and current timestamp.
+        /// Used by clients to verify server availability and connectivity.
+        /// </summary>
+        /// <returns>Server status information or error details</returns>
         [HttpGet]
         public async Task<IActionResult> GetServerStatus()
         {
@@ -34,6 +60,12 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
+        /// <summary>
+        /// Retrieves comprehensive server statistics including player counts, retainer counts,
+        /// database metrics, and other operational data.
+        /// Used for administrative monitoring and client information displays.
+        /// </summary>
+        /// <returns>Detailed server statistics or error information</returns>
         [HttpGet("stats")]
         public async Task<ActionResult<ServerStatsDto>> GetServerStats()
         {

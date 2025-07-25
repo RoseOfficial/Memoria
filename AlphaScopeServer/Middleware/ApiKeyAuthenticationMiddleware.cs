@@ -4,11 +4,29 @@ using System.Security.Claims;
 
 namespace AlphaScopeServer.Middleware
 {
+    /// <summary>
+    /// Custom authentication middleware for AlphaScope API key validation.
+    /// Handles authentication using the {UserKey}-{AccountId} format API keys,
+    /// validates users against the database, creates claims-based identity,
+    /// and provides user context for downstream request processing.
+    /// </summary>
     public class ApiKeyAuthenticationMiddleware
     {
+        /// <summary>
+        /// Next middleware in the ASP.NET Core pipeline
+        /// </summary>
         private readonly RequestDelegate _next;
+        
+        /// <summary>
+        /// Logger for authentication events and error tracking
+        /// </summary>
         private readonly ILogger<ApiKeyAuthenticationMiddleware> _logger;
 
+        /// <summary>
+        /// Initializes the API key authentication middleware.
+        /// </summary>
+        /// <param name="next">Next middleware delegate in the pipeline</param>
+        /// <param name="logger">Logger for authentication operations</param>
         public ApiKeyAuthenticationMiddleware(RequestDelegate next, ILogger<ApiKeyAuthenticationMiddleware> logger)
         {
             _next = next;
@@ -106,8 +124,17 @@ namespace AlphaScopeServer.Middleware
         }
     }
 
+    /// <summary>
+    /// Extension methods for registering the API key authentication middleware.
+    /// </summary>
     public static class ApiKeyAuthenticationMiddlewareExtensions
     {
+        /// <summary>
+        /// Adds the API key authentication middleware to the application pipeline.
+        /// Should be registered early in the pipeline, before authorization middleware.
+        /// </summary>
+        /// <param name="builder">Application builder for middleware registration</param>
+        /// <returns>Application builder for method chaining</returns>
         public static IApplicationBuilder UseApiKeyAuthentication(this IApplicationBuilder builder)
         {
             return builder.UseMiddleware<ApiKeyAuthenticationMiddleware>();

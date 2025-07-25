@@ -1,4 +1,5 @@
-﻿using System;
+﻿// System dependencies
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -9,50 +10,119 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+
+// Dalamud framework dependencies
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Network.Structures;
 using Dalamud.Plugin.Services;
+
+// FFXIV client structure dependencies
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Common.Lua;
+
+// Third-party UI and data dependencies
 using ImGuiNET;
 using Lumina.Excel.Sheets;
+
+// Microsoft framework dependencies
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+
+// AlphaScope internal dependencies
 using AlphaScope.API;
 using AlphaScope.API.Models;
 using AlphaScope.Database;
 using AlphaScope.GUI;
+
+// Static imports for specific functionality
 using static FFXIVClientStructs.Havok.Animation.Deform.Skinning.hkaMeshBinding;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 using static AlphaScope.Handlers.PersistenceContext;
 
 namespace AlphaScope.Handlers;
 
+/// <summary>
+/// Core data persistence and synchronization handler for AlphaScope.
+/// Manages local data caching, background data uploads to server, and coordination between
+/// local database storage and server API synchronization. Handles player/retainer data
+/// lifecycle from initial discovery through upload and caching.
+/// </summary>
 internal sealed class PersistenceContext
 {
+    /// <summary>
+    /// Logger for persistence operations and debugging
+    /// </summary>
     public static ILogger<PersistenceContext> _logger;
+    
+    /// <summary>
+    /// Dalamud client state service for accessing current player information
+    /// </summary>
     public static IClientState _clientState;
+    
+    /// <summary>
+    /// Service provider for dependency injection and database access
+    /// </summary>
     public static IServiceProvider _serviceProvider;
+    
+    /// <summary>
+    /// Cache mapping World ID -> Retainer Name -> Content ID for fast retainer lookups
+    /// </summary>
     public static readonly ConcurrentDictionary<uint, ConcurrentDictionary<string, ulong>> _worldRetainerCache = new();
+    
+    /// <summary>
+    /// Cache of player data indexed by Content ID for fast access
+    /// </summary>
     public static readonly ConcurrentDictionary<ulong, CachedPlayer> _playerCache = new();
+    
+    /// <summary>
+    /// Cache mapping Account ID to list of Content IDs (for alt character tracking)
+    /// </summary>
     public static readonly ConcurrentDictionary<ulong, List<ulong>> _AccountIdCache = new();
 
+    /// <summary>
+    /// Combined cache of players with their associated retainers for relationship tracking
+    /// </summary>
     public static ConcurrentDictionary<ulong, (CachedPlayer Player, List<Retainer> Retainers)> _playerWithRetainersCache = new();
 
+    /// <summary>
+    /// Cache of retainer data indexed by Content ID for fast access
+    /// </summary>
     public static ConcurrentDictionary<ulong, Retainer> _retainerCache = new(); 
 
-    public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadPlayers = new();  //will be uploaded
-    public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadedPlayersCache = new(); //Already uploaded
+    /// <summary>
+    /// Queue of player data pending upload to server
+    /// </summary>
+    public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadPlayers = new();
+    
+    /// <summary>
+    /// Cache of player data that has already been successfully uploaded to server
+    /// </summary>
+    public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadedPlayersCache = new();
 
-    public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadRetainers = new();  //will be uploaded
-    public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadedRetainersCache = new(); //Already uploaded
+    /// <summary>
+    /// Queue of retainer data pending upload to server
+    /// </summary>
+    public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadRetainers = new();
+    
+    /// <summary>
+    /// Cache of retainer data that has already been successfully uploaded to server
+    /// </summary>
+    public static ConcurrentDictionary<ulong, PostRetainerRequest> _UploadedRetainersCache = new();
 
+    /// <summary>
+    /// Cache of recently scanned players with scan timestamps for avoiding duplicate processing
+    /// </summary>
     public static ConcurrentDictionary<ulong, (CachedPlayer Player, long ScannedAt)> _recentlyScannedPlayers = new();
     
+    /// <summary>
+    /// Cleans up old entries from the recently scanned players cache to prevent memory bloat.
+    /// Removes players that were scanned more than the specified time ago.
+    /// </summary>
+    /// <param name="maxAgeInHours">Maximum age in hours before a cached entry is removed (default: 24)</param>
     public static void CleanupOldRecentPlayers(int maxAgeInHours = 24)
     {
         var cutoffTime = DateTimeOffset.UtcNow.AddHours(-maxAgeInHours).ToUnixTimeSeconds();
@@ -68,7 +138,14 @@ internal sealed class PersistenceContext
     }
 
 
+    /// <summary>
+    /// Singleton instance of the persistence context
+    /// </summary>
     private static PersistenceContext _instance = null;
+    
+    /// <summary>
+    /// Gets the singleton instance of the persistence context
+    /// </summary>
     public static PersistenceContext Instance
     {
         get
@@ -77,6 +154,14 @@ internal sealed class PersistenceContext
         }
     }
 
+    /// <summary>
+    /// Initializes the persistence context with required services and starts background upload processing.
+    /// Sets up singleton instance, initializes caches from database, and begins continuous data upload loop.
+    /// </summary>
+    /// <param name="logger">Logger for persistence operations</param>
+    /// <param name="clientState">Dalamud client state service</param>
+    /// <param name="serviceProvider">Service provider for dependency injection</param>
+    /// <param name="data">Dalamud data manager service</param>
     public PersistenceContext(ILogger<PersistenceContext> logger, IClientState clientState,
         IServiceProvider serviceProvider, IDataManager data)
     {
@@ -89,11 +174,18 @@ internal sealed class PersistenceContext
         _clientState = clientState;
         _serviceProvider = serviceProvider;
 
+        // Load existing data from database into memory caches
         ReloadCache();
 
+        // Start background upload processing
         _cancellationTokenSource = new CancellationTokenSource();
         _ = PostPlayerAndRetainerData(_cancellationTokenSource.Token);
     }
+    /// <summary>
+    /// Reloads all in-memory caches from the local SQLite database.
+    /// This method rebuilds player, retainer, and relationship caches from persistent storage.
+    /// Called during initialization and when cache invalidation is needed.
+    /// </summary>
     public static void ReloadCache()
     {
         using (IServiceScope scope = _serviceProvider.CreateScope())

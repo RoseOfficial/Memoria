@@ -1,25 +1,61 @@
+// ASP.NET Core dependencies
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
+// AlphaScopeServer internal dependencies
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.DTOs;
 using AlphaScopeServer.Models.Entities;
 
 namespace AlphaScopeServer.Controllers
 {
+    /// <summary>
+    /// API controller for managing retainer data in the AlphaScope system.
+    /// Provides endpoints for searching retainers, retrieving retainer information,
+    /// and uploading new retainer data from the game client plugins.
+    /// Handles retainer-owner relationships and world-based filtering.
+    /// </summary>
     [ApiController]
     [Route("v1/[controller]")]
     public class RetainersController : ControllerBase
     {
+        /// <summary>
+        /// Database context for accessing retainer and related data
+        /// </summary>
         private readonly AlphaScopeDbContext _context;
+        
+        /// <summary>
+        /// Logger for controller operations and error tracking
+        /// </summary>
         private readonly ILogger<RetainersController> _logger;
+        
+        /// <summary>
+        /// Number of results to return per page in paginated responses
+        /// </summary>
         private const int PageSize = 25;
 
+        /// <summary>
+        /// Initializes the RetainersController with required dependencies.
+        /// </summary>
+        /// <param name="context">Database context for data access</param>
+        /// <param name="logger">Logger for operation tracking</param>
         public RetainersController(AlphaScopeDbContext context, ILogger<RetainersController> logger)
         {
             _context = context;
             _logger = logger;
         }
 
+        /// <summary>
+        /// Searches for retainers based on various criteria with pagination support.
+        /// Supports filtering by name, world, and provides flexible name matching.
+        /// Includes owner information in the search results.
+        /// </summary>
+        /// <param name="Name">Retainer name to search for</param>
+        /// <param name="Cursor">Pagination cursor for retrieving subsequent pages</param>
+        /// <param name="IsFetching">Flag indicating if this is a data fetching operation</param>
+        /// <param name="F_WorldIds">Comma-separated list of World IDs to filter by</param>
+        /// <param name="F_MatchAnyPartOfName">Whether to match partial names (contains) or exact names</param>
+        /// <returns>Paginated list of retainer search results with owner information</returns>
         [HttpGet]
         public async Task<ActionResult<PaginationBase<RetainerSearchDto>>> SearchRetainers(
             [FromQuery] string? Name = null,

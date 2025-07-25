@@ -1,27 +1,65 @@
+// ASP.NET Core dependencies
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
+// AlphaScopeServer internal dependencies
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.DTOs;
 using AlphaScopeServer.Models.Entities;
+
+// System dependencies for text processing and HTML parsing
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 
 namespace AlphaScopeServer.Controllers
 {
+    /// <summary>
+    /// API controller for managing player data in the AlphaScope system.
+    /// Provides endpoints for searching players, retrieving detailed player information,
+    /// and uploading new player data from the game client plugins.
+    /// Supports pagination, filtering, and comprehensive player data management.
+    /// </summary>
     [ApiController]
     [Route("v1/[controller]")]
     public class PlayersController : ControllerBase
     {
+        /// <summary>
+        /// Database context for accessing player and related data
+        /// </summary>
         private readonly AlphaScopeDbContext _context;
+        
+        /// <summary>
+        /// Logger for controller operations and error tracking
+        /// </summary>
         private readonly ILogger<PlayersController> _logger;
+        
+        /// <summary>
+        /// Number of results to return per page in paginated responses
+        /// </summary>
         private const int PageSize = 25;
 
+        /// <summary>
+        /// Initializes the PlayersController with required dependencies.
+        /// </summary>
+        /// <param name="context">Database context for data access</param>
+        /// <param name="logger">Logger for operation tracking</param>
         public PlayersController(AlphaScopeDbContext context, ILogger<PlayersController> logger)
         {
             _context = context;
             _logger = logger;
         }
 
+        /// <summary>
+        /// Searches for players based on various criteria with pagination support.
+        /// Supports filtering by Content ID, name, world, and provides flexible name matching.
+        /// </summary>
+        /// <param name="LocalContentId">Specific player Content ID to search for</param>
+        /// <param name="Name">Player name to search for</param>
+        /// <param name="Cursor">Pagination cursor for retrieving subsequent pages</param>
+        /// <param name="IsFetching">Flag indicating if this is a data fetching operation</param>
+        /// <param name="F_WorldIds">Comma-separated list of World IDs to filter by</param>
+        /// <param name="F_MatchAnyPartOfName">Whether to match partial names (contains) or exact names</param>
+        /// <returns>Paginated list of player search results</returns>
         [HttpGet]
         public async Task<ActionResult<PaginationBase<PlayerSearchDto>>> SearchPlayers(
             [FromQuery] long? LocalContentId = null,
