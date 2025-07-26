@@ -412,7 +412,7 @@ namespace AlphaScope.API
                             if (message.Contains("Login successful"))
                             {
                                 IsLoggingIn = false;
-                                SettingsWindow.Instance.RefreshUserProfileInfo();
+                                // Settings refresh is now handled by modern UI
                                 break;
                             }
                         }

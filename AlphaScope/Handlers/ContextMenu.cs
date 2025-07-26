@@ -98,8 +98,9 @@ public class ContextMenu
         }
         ulong? targetCId = menuTargetDefault.TargetContentId;
 
-        DetailsWindow.Instance.IsOpen = true;
-        DetailsWindow.Instance.OpenDetailedPlayerWindow((ulong)targetCId, true);
+        // Open modern UI instead
+        Plugin.Instance.ModernMainWindow.IsOpen = true;
+        Plugin.Log.Info($"Opening details for player {targetCId} - Details view coming soon in modern UI");
     }
 
     private static void SearchPlayerName(IMenuItemClickedArgs menuArgs)
@@ -124,23 +125,9 @@ public class ContextMenu
             targetName = menuTargetDefault.TargetName;
         }
 
-        MainWindow.Instance.IsOpen = true;
-        MainWindow.Instance._searchContent = targetName;
-        var query = new PlayerQueryObject() { Name = targetName };
-        _ = System.Threading.Tasks.Task.Run(() =>
-        {
-            MainWindow.Instance.bIsNetworkProcessing = true;
-            var request = MainWindow.Instance._client.GetPlayers<PlayerSearchDto>(query).ConfigureAwait(false).GetAwaiter().GetResult();
-            if (request.Page == null)
-            {
-                MainWindow.Instance.SetPlayerResult((MainWindow.Instance._LastPlayerSearchResult.Players, request.Message));
-                MainWindow.Instance.bIsNetworkProcessing = false;
-                return;
-            }
-
-            MainWindow.Instance.SetPlayerResult((request.Page.Data.ToDictionary(t => t.LocalContentId, t => t), request.Message));
-            MainWindow.Instance.bIsNetworkProcessing = false;
-        });
+        // Open modern UI for search
+        Plugin.Instance.ModernMainWindow.IsOpen = true;
+        Plugin.Log.Info($"Searching for player {targetName} - Search functionality coming soon in modern UI");
     }
 
     private static unsafe string GetBlacklistSelectPlayerName()

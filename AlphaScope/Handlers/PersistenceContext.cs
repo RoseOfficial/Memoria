@@ -88,6 +88,16 @@ internal sealed class PersistenceContext
     /// Cache of player data that has already been successfully uploaded to server
     /// </summary>
     public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadedPlayersCache = new();
+    
+    /// <summary>
+    /// Legacy placeholder - Retainer upload queue (functionality removed)
+    /// </summary>
+    public static ConcurrentDictionary<ulong, object> _UploadRetainers = new();
+    
+    /// <summary>
+    /// Legacy placeholder - Uploaded retainer cache (functionality removed)
+    /// </summary>
+    public static ConcurrentDictionary<ulong, object> _UploadedRetainersCache = new();
 
     /// <summary>
     /// Cache of recently scanned players with scan timestamps for avoiding duplicate processing

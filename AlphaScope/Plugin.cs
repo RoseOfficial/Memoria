@@ -104,35 +104,11 @@ public sealed class Plugin : IDalamudPlugin
     /// </summary>
     public ApiClient ApiClient { get; set; }
     
+
     /// <summary>
-    /// Settings/configuration window for plugin preferences
+    /// Modern main window with advanced features and dockable layout
     /// </summary>
-    public GUI.SettingsWindow ConfigWindow;
-    
-    /// <summary>
-    /// Main plugin window showing player data
-    /// </summary>
-    public GUI.MainWindow MainWindow;
-    
-    /// <summary>
-    /// Detailed view window for expanded player information
-    /// </summary>
-    public GUI.DetailsWindow DetailsWindow;
-    
-    /// <summary>
-    /// World selection window for filtering data by server
-    /// </summary>
-    public GUI.MainWindowTab.WorldSelectorWindow WorldSelectorWindow;
-    
-    /// <summary>
-    /// Window for claiming Lodestone character profiles
-    /// </summary>
-    public GUI.ClaimLodestoneWindow ClaimLodestoneWindow;
-    
-    /// <summary>
-    /// Window for displaying character avatar images
-    /// </summary>
-    public GUI.AvatarViewerWindow AvatarViewerWindow;
+    public GUI.Modern.Views.ModernMainWindow ModernMainWindow;
 
     /// <summary>
     /// Dalamud window system for managing all plugin windows
@@ -254,30 +230,20 @@ public sealed class Plugin : IDalamudPlugin
         DataManager = dataManager;
         _gameGui = gameGui;
 
-        // Initialize UI window system and create all plugin windows
+        // Initialize UI window system and create modern plugin window
         ws = new();
-        MainWindow = new();
-        DetailsWindow = new();
-        WorldSelectorWindow = new();
-        ClaimLodestoneWindow = new();
-        AvatarViewerWindow = new();
-        ConfigWindow = new();
+        ModernMainWindow = new();
         
-        // Register all windows with the window system
-        ws.AddWindow(MainWindow);
-        ws.AddWindow(DetailsWindow);
-        ws.AddWindow(WorldSelectorWindow);
-        ws.AddWindow(ClaimLodestoneWindow);
-        ws.AddWindow(AvatarViewerWindow);
-        ws.AddWindow(ConfigWindow);
+        // Register modern window with the window system
+        ws.AddWindow(ModernMainWindow);
         
         // Initialize avatar caching system
         AvatarCacheManager = new AvatarCacheManager();
 
         // Register UI drawing and event handlers
         pluginInterface.UiBuilder.Draw += ws.Draw;
-        pluginInterface.UiBuilder.OpenMainUi += delegate { MainWindow.IsOpen = true; };
-        pluginInterface.UiBuilder.OpenConfigUi += ConfigWindow.Toggle;
+        pluginInterface.UiBuilder.OpenMainUi += delegate { ModernMainWindow.IsOpen = true; };
+        pluginInterface.UiBuilder.OpenConfigUi += delegate { ModernMainWindow.IsOpen = true; };
 
         // Register chat command for opening the plugin
         _commandManager.AddHandler("/alpha", new CommandInfo(ProcessCommand)
@@ -296,7 +262,7 @@ public sealed class Plugin : IDalamudPlugin
     }
     /// <summary>
     /// Processes chat commands for the plugin.
-    /// Currently handles the /alpha command to open the main window.
+    /// Handles /alpha command to open the modern UI.
     /// </summary>
     /// <param name="command">The command that was executed</param>
     /// <param name="arguments">Arguments passed with the command</param>
@@ -304,7 +270,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (command == "/alpha")
         {
-            MainWindow.IsOpen = true;
+            ModernMainWindow.IsOpen = true;
         }
     }
 
@@ -453,10 +419,13 @@ public sealed class Plugin : IDalamudPlugin
         PersistenceContext.StopUploads();
         AvatarCacheManager.Dispose();
 
+        // Unregister command handler
+        _commandManager.RemoveHandler("/alpha");
+
         // Unregister UI event handlers
         _pluginInterface.UiBuilder.Draw -= ws.Draw;
-        _pluginInterface.UiBuilder.OpenMainUi -= delegate { MainWindow.IsOpen = true; };
-        _pluginInterface.UiBuilder.OpenConfigUi -= ConfigWindow.Toggle;
+        _pluginInterface.UiBuilder.OpenMainUi -= delegate { ModernMainWindow.IsOpen = true; };
+        _pluginInterface.UiBuilder.OpenConfigUi -= delegate { ModernMainWindow.IsOpen = true; };
 
         // Ensure SQLite connection pool is cleared to prevent file locking issues
         using (SqliteConnection sqliteConnection = new(_sqliteConnectionString))
