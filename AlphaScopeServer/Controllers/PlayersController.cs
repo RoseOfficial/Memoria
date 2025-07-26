@@ -160,10 +160,6 @@ namespace AlphaScopeServer.Controllers
                     .Include(p => p.CustomizationHistory)
                     .Include(p => p.TerritoryHistory)
                     .Include(p => p.Lodestone)
-                    .Include(p => p.Retainers)
-                        .ThenInclude(r => r.NameHistory)
-                    .Include(p => p.Retainers)
-                        .ThenInclude(r => r.WorldHistory)
                     .Include(p => p.ProfileVisits)
                     .FirstOrDefaultAsync(p => p.LocalContentId == id);
 
@@ -236,22 +232,6 @@ namespace AlphaScopeServer.Controllers
                             WorldId = w.WorldId,
                             CreatedAt = (int)new DateTimeOffset(w.CreatedAt, TimeSpan.Zero).ToUnixTimeSeconds()
                         }).ToList(),
-                    Retainers = player.Retainers.Select(r => new RetainerDetailedDto
-                    {
-                        LocalContentId = r.LocalContentId,
-                        OwnerLocalContentId = r.OwnerLocalContentId,
-                        LastSeen = (int)new DateTimeOffset(r.LastSeen, TimeSpan.Zero).ToUnixTimeSeconds(),
-                        Names = r.NameHistory.Select(n => new RetainerNameHistoryDto
-                        {
-                            Name = n.Name,
-                            CreatedAt = (int)new DateTimeOffset(n.CreatedAt, TimeSpan.Zero).ToUnixTimeSeconds()
-                        }).ToList(),
-                        Worlds = r.WorldHistory.Select(w => new RetainerWorldHistoryDto
-                        {
-                            WorldId = w.WorldId,
-                            CreatedAt = (int)new DateTimeOffset(w.CreatedAt, TimeSpan.Zero).ToUnixTimeSeconds()
-                        }).ToList()
-                    }).ToList(),
                     PlayerAltCharacters = [], // TODO: Implement alt characters
                     ProfileVisitInfo = new PlayerProfileVisitInfoDto
                     {

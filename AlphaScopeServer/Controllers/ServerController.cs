@@ -73,17 +73,14 @@ namespace AlphaScopeServer.Controllers
             {
                 var totalPlayers = await _context.Players.CountAsync();
                 var privatePlayers = await _context.Players.CountAsync(p => p.IsPrivate);
-                var totalRetainers = await _context.Retainers.CountAsync();
-                var privateRetainers = await _context.Retainers
-                    .CountAsync(r => r.Owner.IsPrivate);
                 var totalUsers = await _context.Users.CountAsync();
 
                 var stats = new ServerStatsDto
                 {
                     TotalPlayerCount = totalPlayers,
                     TotalPrivatePlayerCount = privatePlayers,
-                    TotalRetainerCount = totalRetainers,
-                    TotalPrivateRetainerCount = privateRetainers,
+                    TotalRetainerCount = 0,
+                    TotalPrivateRetainerCount = 0,
                     TotalUserCount = totalUsers,
                     LastUpdate = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
@@ -97,44 +94,5 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
-        [HttpGet("stats/players-retainers")]
-        public async Task<ActionResult<ServerPlayerAndRetainerStatsDto>> GetPlayerRetainerStats()
-        {
-            try
-            {
-                var playerWorldStats = await _context.Players
-                    .Where(p => p.HomeWorldId.HasValue)
-                    .GroupBy(p => p.HomeWorldId!.Value)
-                    .Select(g => new WorldCountStat
-                    {
-                        WorldId = g.Key,
-                        Count = g.Count()
-                    })
-                    .ToListAsync();
-
-                var retainerWorldStats = await _context.Retainers
-                    .GroupBy(r => r.WorldId)
-                    .Select(g => new WorldCountStat
-                    {
-                        WorldId = g.Key,
-                        Count = g.Count()
-                    })
-                    .ToListAsync();
-
-                var stats = new ServerPlayerAndRetainerStatsDto
-                {
-                    PlayerWorldStats = playerWorldStats,
-                    RetainerWorldStats = retainerWorldStats,
-                    LastUpdate = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                };
-
-                return Ok(stats);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting player/retainer stats");
-                return StatusCode(500, "Error retrieving player/retainer statistics");
-            }
-        }
     }
 }
