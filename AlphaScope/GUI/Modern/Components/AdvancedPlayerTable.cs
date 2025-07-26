@@ -261,8 +261,23 @@ public class AdvancedPlayerTable : BaseComponent
 
         private static void OpenDetailsWindow(ulong contentId)
         {
-            // TODO: Implement detailed player view in modern UI
-            Plugin.Log.Info($"Opening details for player {contentId} - Feature coming soon in modern UI");
+            try
+            {
+                if (PersistenceContext._playerCache.TryGetValue(contentId, out var cachedPlayer))
+                {
+                    var detailsWindow = new GUI.Modern.Views.PlayerDetailsWindow(contentId, cachedPlayer);
+                    Plugin.Instance.ws.AddWindow(detailsWindow);
+                    detailsWindow.IsOpen = true;
+                }
+                else
+                {
+                    Plugin.Log.Warning($"Player {contentId} not found in cache for details window");
+                }
+            }
+            catch (Exception ex)
+            {
+                Plugin.Log.Error($"Failed to open details window for player {contentId}: {ex}");
+            }
         }
 
         public override int Compare(PlayerTableEntry lhs, PlayerTableEntry rhs) => 0;

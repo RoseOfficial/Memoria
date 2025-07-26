@@ -154,8 +154,16 @@ public class PlayerCard : BaseComponent
 
     private void OpenDetailsWindow()
     {
-        // TODO: Implement detailed player view in modern UI
-        Plugin.Log.Info($"Opening details for player {_contentId} - Feature coming soon in modern UI");
+        try
+        {
+            var detailsWindow = new GUI.Modern.Views.PlayerDetailsWindow(_contentId, _cachedPlayer);
+            Plugin.Instance.ws.AddWindow(detailsWindow);
+            detailsWindow.IsOpen = true;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error($"Failed to open details window for player {_contentId}: {ex}");
+        }
     }
 
     private void OpenAdventurePlate()
