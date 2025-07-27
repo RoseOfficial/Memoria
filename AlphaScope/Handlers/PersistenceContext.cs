@@ -546,6 +546,7 @@ internal sealed class PersistenceContext
                         AccountId = mapping.AccountId,
                         HomeWorldId = mapping.WorldId,
                         CurrentWorldId = mapping.CurrentWorldId,
+                        LastScannedAt = DateTime.UtcNow,
                     });
                 else
                 {
@@ -569,7 +570,7 @@ internal sealed class PersistenceContext
                     AvatarLink = null,
                     HomeWorldId = mapping.WorldId,
                     CurrentWorldId = mapping.CurrentWorldId,
-                    LastScannedAt = null,
+                    LastScannedAt = DateTime.UtcNow,
                 };
                 _playerCache[mapping.ContentId] = newCachedPlayer;
                 
@@ -684,7 +685,7 @@ internal sealed class PersistenceContext
                     AvatarLink = null,
                     HomeWorldId = player.WorldId,
                     CurrentWorldId = player.CurrentWorldId,
-                    LastScannedAt = null,
+                    LastScannedAt = DateTime.UtcNow,
                 };
                 _playerCache[player.ContentId] = cachedPlayer;
                 
