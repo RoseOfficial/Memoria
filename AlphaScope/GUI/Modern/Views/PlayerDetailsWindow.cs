@@ -213,7 +213,7 @@ public class PlayerDetailsWindow : BaseModernWindow
                 DrawInfoRow("Account ID", "Unknown");
             }
             
-            DrawInfoRow("Status", _isFavorited ? "⭐ Favorited" : "Standard");
+            DrawInfoRow("Status", _isFavorited ? "Favorited" : "Standard");
             
             // World information - always show separate fields
             var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
