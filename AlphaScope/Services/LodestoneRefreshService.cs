@@ -424,8 +424,12 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
             
             // Always update LastScannedAt to track when we attempted refresh
-            player.LastScannedAt = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
+            player.LastScannedAt = now;
             hasUpdates = true;
+            
+            // Update cached player LastScannedAt so UI reflects changes immediately
+            PersistenceContext.UpdateCachedPlayerLastScannedAt(player.LocalContentId, now);
             
             return hasUpdates;
         }
@@ -434,7 +438,12 @@ internal sealed class LodestoneRefreshService : IDisposable
             _logger.LogError(ex, $"Error refreshing Lodestone data for player {player.Name}");
             
             // Still update LastScannedAt to avoid infinite retry loops
-            player.LastScannedAt = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
+            player.LastScannedAt = now;
+            
+            // Update cached player LastScannedAt so UI reflects changes immediately
+            PersistenceContext.UpdateCachedPlayerLastScannedAt(player.LocalContentId, now);
+            
             return true; // Return true to save the timestamp update
         }
     }

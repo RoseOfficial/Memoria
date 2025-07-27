@@ -114,7 +114,6 @@ namespace AlphaScope.API
 
                 // Make HTTP request to server status endpoint
                 var request = new RestRequest($"server")
-                    .AddHeader("api-key", Token)
                     .AddHeader("V", Utils.clientVer)
                     .AddHeader("L", Config.Language);
                 var response = await _restClient.ExecuteGetAsync(request).ConfigureAwait(false);
@@ -188,7 +187,7 @@ namespace AlphaScope.API
             string Message = string.Empty;
             try
             {
-                var request = new RestRequest($"server/stats").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                var request = new RestRequest($"server/stats").AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 var response = await _restClient.ExecuteGetAsync(request).ConfigureAwait(false);
 
                 if (response.IsSuccessful)
@@ -238,10 +237,7 @@ namespace AlphaScope.API
 
         // ========== PLAYER DATA MANAGEMENT ==========
         
-        /// <summary>
-        /// Authentication token for API requests, combining API key and account ID
-        /// </summary>
-        public string Token => $"{Config.Key}-{Config.AccountId}";
+        // Authentication removed - public API
         /// <summary>
         /// Searches for players using the provided query parameters.
         /// Supports pagination, filtering by world, name matching, and content ID lookup.
@@ -256,7 +252,7 @@ namespace AlphaScope.API
             string Message = string.Empty;
             try
             {
-                var request = new RestRequest($"players").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                var request = new RestRequest($"players").AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 if (!string.IsNullOrWhiteSpace(query.Name))
                     request.AddQueryParameter("Name", query.Name, true);
                 if (!string.IsNullOrWhiteSpace(query.LocalContentId.ToString()))
@@ -313,7 +309,7 @@ namespace AlphaScope.API
             string Message = string.Empty;
             try
             {
-                var request = new RestRequest($"players/{id}").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                var request = new RestRequest($"players/{id}").AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 var response = await _restClient.ExecuteGetAsync(request).ConfigureAwait(false);
 
                 if (response.IsSuccessful)
@@ -360,7 +356,7 @@ namespace AlphaScope.API
         {
             try
             {
-                var request = new RestRequest($"players").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                var request = new RestRequest($"players").AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 request.AddJsonBody(players);
                 var response = await _restClient.ExecutePostAsync(request).ConfigureAwait(false);
                 
@@ -369,11 +365,7 @@ namespace AlphaScope.API
                     return (true, false);
                 }
                 
-                // Check for authentication failures
-                if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
-                {
-                    return (false, true);
-                }
+                // Authentication removed - all failures are non-auth related
                 
                 return (false, false);
             }
@@ -517,7 +509,7 @@ namespace AlphaScope.API
             string Message = string.Empty;
             try
             {
-                var request = new RestRequest($"users/update").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                var request = new RestRequest($"users/update").AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 request.AddJsonBody(config);
                 var response = await _restClient.ExecutePostAsync(request).ConfigureAwait(true);
 
@@ -555,7 +547,7 @@ namespace AlphaScope.API
             string Message = string.Empty;
             try
             {
-                var request = new RestRequest($"users/me").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                var request = new RestRequest($"users/me").AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 var response = await _restClient.ExecuteGetAsync(request).ConfigureAwait(true);
 
                 if (response.IsSuccessful)
@@ -596,7 +588,7 @@ namespace AlphaScope.API
             string Message = string.Empty;
             try
             {
-                var request = new RestRequest($"users/lodestone/claim").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
+                var request = new RestRequest($"users/lodestone/claim").AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 request.AddQueryParameter("url", lodestoneProfileLink);
                 request.AddQueryParameter("state", state);
                 var response = await _restClient.ExecutePostAsync(request).ConfigureAwait(true);

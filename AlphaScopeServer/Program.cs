@@ -45,23 +45,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "AlphaScope Server API", Version = "v1" });
-    c.AddSecurityDefinition("ApiKey", new()
-    {
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Please enter API key in format: {key}-{accountId}",
-        Name = "api-key",
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey
-    });
-    c.AddSecurityRequirement(new()
-    {
-        {
-            new()
-            {
-                Reference = new() { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "ApiKey" }
-            },
-            new string[] {}
-        }
-    });
+    // API Key authentication removed - now public API
 });
 
 // Configure logging with performance filters
@@ -101,8 +85,7 @@ if (app.Environment.IsDevelopment())
 // Add CORS before authentication
 app.UseCors("AlphaScopePolicy");
 
-// Add custom authentication middleware
-app.UseApiKeyAuthentication();
+// Authentication removed - public API
 
 // Add routing and controllers
 app.UseRouting();

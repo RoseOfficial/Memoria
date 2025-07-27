@@ -42,7 +42,7 @@ public class PlayerCard : BaseComponent
 
     protected override void OnRender()
     {
-        var cardSize = ImGuiHelpers.ScaledVector2(300f, 120f);
+        var cardSize = ImGuiHelpers.ScaledVector2(320f, 120f); // Slightly wider to accommodate content
         
         using var childId = ImRaii.PushId(_id);
         
@@ -51,27 +51,63 @@ public class PlayerCard : BaseComponent
         {
             if (!child) return;
             
-            // Left side: Avatar placeholder and basic info
+            // Calculate available space for content
+            var contentArea = ImGui.GetContentRegionAvail();
             var avatarSize = ImGuiHelpers.ScaledVector2(64f, 64f);
+            var buttonAreaWidth = ImGuiHelpers.ScaledVector2(30f, 0f).X; // Approximate button area width
+            var textAreaWidth = contentArea.X - avatarSize.X - buttonAreaWidth - (ImGui.GetStyle().ItemSpacing.X * 3);
             
-            // Avatar display with fallback to placeholder
+            // Left side: Avatar placeholder and basic info
             RenderAvatar(avatarSize);
             
             ImGui.SameLine();
             
-            // Player info column
+            // Player info column with clipped text
             ImGui.BeginGroup();
             
-            // Player name
+            // Player name with text clipping
             using (var nameColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
             {
-                ImGui.Text(_cachedPlayer.Name);
+                var playerName = _cachedPlayer.Name;
+                var nameSize = ImGui.CalcTextSize(playerName);
+                
+                if (nameSize.X > textAreaWidth)
+                {
+                    // Truncate name with ellipsis if too long
+                    var truncatedName = TruncateText(playerName, textAreaWidth - ImGui.CalcTextSize("...").X);
+                    ImGui.Text($"{truncatedName}...");
+                    
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip(playerName); // Show full name on hover
+                    }
+                }
+                else
+                {
+                    ImGui.Text(playerName);
+                }
             }
             
-            // Job information
-            using (var jobColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+            // World information with text clipping
+            using (var worldColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
             {
-                ImGui.Text("Unknown Job");
+                var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
+                var worldSize = ImGui.CalcTextSize(homeWorldName);
+                
+                if (worldSize.X > textAreaWidth)
+                {
+                    var truncatedWorld = TruncateText(homeWorldName, textAreaWidth - ImGui.CalcTextSize("...").X);
+                    ImGui.Text($"{truncatedWorld}...");
+                    
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip(homeWorldName);
+                    }
+                }
+                else
+                {
+                    ImGui.Text(homeWorldName);
+                }
             }
             
             // Status with colored indicator
@@ -86,13 +122,32 @@ public class PlayerCard : BaseComponent
             
             using (var textColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
             {
-                ImGui.Text($" {GetLastSeenText()}");
+                var statusText = $" {GetLastSeenText()}";
+                var statusSize = ImGui.CalcTextSize(statusText);
+                var availableStatusWidth = textAreaWidth - ImGui.CalcTextSize("● ").X;
+                
+                if (statusSize.X > availableStatusWidth)
+                {
+                    var truncatedStatus = TruncateText(statusText.Trim(), availableStatusWidth - ImGui.CalcTextSize("...").X);
+                    ImGui.Text($" {truncatedStatus}...");
+                    
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip(statusText.Trim());
+                    }
+                }
+                else
+                {
+                    ImGui.Text(statusText);
+                }
             }
             
             ImGui.EndGroup();
             
-            // Right side: Action buttons
+            // Right side: Action buttons - positioned absolutely to prevent overflow
+            var buttonStartX = contentArea.X - buttonAreaWidth + ImGui.GetStyle().WindowPadding.X;
             ImGui.SameLine();
+            ImGui.SetCursorPosX(buttonStartX);
             
             ImGui.BeginGroup();
             
@@ -211,10 +266,19 @@ public class PlayerCard : BaseComponent
 
     private string GetLastSeenText()
     {
+        // First check if player has been scanned recently (for currently visible players)
         if (PersistenceContext._recentlyScannedPlayers.TryGetValue(_contentId, out var recentEntry))
         {
             var lastSeen = DateTimeOffset.FromUnixTimeSeconds(recentEntry.ScannedAt);
             var timeAgo = DateTimeOffset.Now - lastSeen;
+            return $"Last seen {FormatTimeAgo(timeAgo)}";
+        }
+        
+        // Fall back to cached player data for previously scanned players
+        if (_cachedPlayer.LastScannedAt.HasValue)
+        {
+            var lastScanned = _cachedPlayer.LastScannedAt.Value;
+            var timeAgo = DateTime.UtcNow - lastScanned;
             return $"Last seen {FormatTimeAgo(timeAgo)}";
         }
         
@@ -244,6 +308,7 @@ public class PlayerCard : BaseComponent
 
     private Vector4 GetStatusColor()
     {
+        // First check if player has been scanned recently (for currently visible players)
         if (PersistenceContext._recentlyScannedPlayers.TryGetValue(_contentId, out var recentEntry))
         {
             var lastSeen = DateTimeOffset.FromUnixTimeSeconds(recentEntry.ScannedAt);
@@ -251,6 +316,16 @@ public class PlayerCard : BaseComponent
             
             if (timeAgo.TotalHours < 1) return ThemeManager.Colors.Success; // Green for recent
             if (timeAgo.TotalDays < 1) return ThemeManager.Colors.Warning; // Yellow for moderate
+        }
+        // Fall back to cached player data for previously scanned players
+        else if (_cachedPlayer.LastScannedAt.HasValue)
+        {
+            var lastScanned = _cachedPlayer.LastScannedAt.Value;
+            var timeAgo = DateTime.UtcNow - lastScanned;
+            
+            if (timeAgo.TotalHours < 1) return ThemeManager.Colors.Success; // Green for recent
+            if (timeAgo.TotalDays < 1) return ThemeManager.Colors.Warning; // Yellow for moderate
+            if (timeAgo.TotalDays < 7) return ThemeManager.Colors.Warning; // Yellow for week old
         }
         
         return ThemeManager.Colors.Error; // Red for old/never seen
@@ -304,5 +379,34 @@ public class PlayerCard : BaseComponent
                 _hasQueuedForRefresh = true;
             }
         }
+    }
+
+    private string TruncateText(string text, float maxWidth)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        
+        // Binary search to find the longest substring that fits
+        int left = 0;
+        int right = text.Length;
+        string result = text;
+        
+        while (left <= right)
+        {
+            int mid = (left + right) / 2;
+            var candidate = text.Substring(0, mid);
+            var size = ImGui.CalcTextSize(candidate);
+            
+            if (size.X <= maxWidth)
+            {
+                result = candidate;
+                left = mid + 1;
+            }
+            else
+            {
+                right = mid - 1;
+            }
+        }
+        
+        return result;
     }
 }

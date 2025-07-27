@@ -26,6 +26,7 @@ public class ModernMainWindow : BaseModernWindow
     private string _searchText = "";
     private int _selectedTab = 0;
     private bool _showAdvancedFilters = false;
+    private bool _showDatabaseClearConfirm = true;
     
     // Advanced filter state
     private bool _favoritesOnly = false;
@@ -601,7 +602,67 @@ public class ModernMainWindow : BaseModernWindow
             ImGuiHelpers.ScaledDummy(5f);
             if (ImGui.Button("Clear Cache"))
             {
-                ShowComingSoon("Cache management coming soon!");
+                PersistenceContext.ClearCache();
+                ShowNotification("Cache cleared successfully!", NotificationType.Success);
+            }
+            
+            ImGui.SameLine();
+            using (var color = ThemeManager.PushColor(ImGuiCol.Button, ThemeManager.Colors.Error))
+            {
+                if (ImGui.Button("Clear Database"))
+                {
+                    ImGui.OpenPopup("ConfirmDatabaseClear");
+                }
+            }
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("WARNING: This will permanently delete all local player data!\nServer data remains safe.");
+            }
+            
+            // Confirmation popup for database clear
+            if (ImGui.BeginPopupModal("ConfirmDatabaseClear", ref _showDatabaseClearConfirm, ImGuiWindowFlags.AlwaysAutoResize))
+            {
+                ImGui.Text("Are you sure you want to clear the entire local database?");
+                ImGui.Text("This will permanently delete ALL cached player data.");
+                ImGui.Separator();
+                
+                using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+                {
+                    ImGui.Text("• All player names, avatars, and cache data will be lost");
+                    ImGui.Text("• Data will be rebuilt as you encounter players in-game");
+                    ImGui.Text("• Server data remains completely unaffected");
+                    ImGui.Text("• This action cannot be undone");
+                }
+                
+                ImGui.Separator();
+                ImGuiHelpers.ScaledDummy(5f);
+                
+                using (var buttonColor = ThemeManager.PushColor(ImGuiCol.Button, ThemeManager.Colors.Error))
+                {
+                    if (ImGui.Button("Yes, Clear Database"))
+                    {
+                        try
+                        {
+                            PersistenceContext.ClearDatabase();
+                            ShowNotification("Database cleared successfully!", NotificationType.Success);
+                            ImGui.CloseCurrentPopup();
+                        }
+                        catch (Exception ex)
+                        {
+                            Plugin.Log.Error(ex, "Failed to clear database");
+                            ShowNotification("Failed to clear database - check logs", NotificationType.Error);
+                        }
+                    }
+                }
+                
+                ImGui.SameLine();
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+                
+                ImGui.EndPopup();
             }
         }
     }
@@ -615,10 +676,10 @@ public class ModernMainWindow : BaseModernWindow
         }
         else
         {
-            // Render card view with proper spacing
-            var cardWidth = 320f * ImGuiHelpers.GlobalScale;
+            // Render card view with proper spacing and responsive layout
+            var cardWidth = 320f * ImGuiHelpers.GlobalScale; // Updated to match PlayerCard size
             var cardHeight = 120f * ImGuiHelpers.GlobalScale;
-            var spacing = 8f * ImGuiHelpers.GlobalScale;
+            var spacing = 10f * ImGuiHelpers.GlobalScale; // Slightly larger spacing for better visual separation
             var availableWidth = ImGui.GetContentRegionAvail().X;
             var cardsPerRow = Math.Max(1, (int)((availableWidth + spacing) / (cardWidth + spacing)));
             

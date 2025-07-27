@@ -84,7 +84,8 @@ internal sealed unsafe class GameHooks : IDisposable
                         CreatedAt = Tools.UnixTime,
                     };
 
-                    Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(new List<PlayerMapping> { mapping }));
+                    var currentWorldId = (ushort?)playerRequest.CurrentWorldId;
+                    Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(new List<PlayerMapping> { mapping }, currentWorldId));
                     PersistenceContext.AddPlayerUploadData(new List<PostPlayerRequest> { playerRequest });
                 }
             }
@@ -147,7 +148,10 @@ internal sealed unsafe class GameHooks : IDisposable
             }
 
             if (mappings.Count > 0)
-                Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(mappings));
+            {
+                var currentWorldId = (ushort?)PersistenceContext.GetCurrentWorld();
+                Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(mappings, currentWorldId));
+            }
             
             if (playerRequests.Count > 0)
                 PersistenceContext.AddPlayerUploadData(playerRequests);

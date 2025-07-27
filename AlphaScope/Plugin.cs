@@ -362,6 +362,8 @@ public sealed class Plugin : IDalamudPlugin
                         LocalContentId INTEGER PRIMARY KEY,
                         Name TEXT NOT NULL,
                         AccountId INTEGER NULL,
+                        HomeWorldId INTEGER NULL,
+                        CurrentWorldId INTEGER NULL,
                         CurrentJobId INTEGER NULL,
                         CurrentJobLevel INTEGER NULL,
                         AvatarLink TEXT NULL,
@@ -395,6 +397,8 @@ public sealed class Plugin : IDalamudPlugin
                 bool hasJobLevel = false;
                 bool hasAvatarLink = false;
                 bool hasLastScannedAt = false;
+                bool hasHomeWorldId = false;
+                bool hasCurrentWorldId = false;
                 while (playerReader.Read())
                 {
                     var columnName = playerReader.GetString(1); // name column
@@ -402,6 +406,8 @@ public sealed class Plugin : IDalamudPlugin
                     if (columnName == "CurrentJobLevel") hasJobLevel = true;
                     if (columnName == "AvatarLink") hasAvatarLink = true;
                     if (columnName == "LastScannedAt") hasLastScannedAt = true;
+                    if (columnName == "HomeWorldId") hasHomeWorldId = true;
+                    if (columnName == "CurrentWorldId") hasCurrentWorldId = true;
                 }
                 playerReader.Close();
                 
@@ -429,6 +435,19 @@ public sealed class Plugin : IDalamudPlugin
                 if (!hasLastScannedAt)
                 {
                     command.CommandText = "ALTER TABLE Players ADD COLUMN LastScannedAt TEXT NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                // Add world tracking columns if they don't exist (for player card display)
+                if (!hasHomeWorldId)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN HomeWorldId INTEGER NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                if (!hasCurrentWorldId)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN CurrentWorldId INTEGER NULL;";
                     command.ExecuteNonQuery();
                 }
             }

@@ -40,8 +40,8 @@ public class PlayerDetailsWindow : BaseModernWindow
         _cachedPlayer = cachedPlayer ?? throw new ArgumentNullException(nameof(cachedPlayer));
         _isFavorited = Plugin.Instance.Configuration.FavoritedPlayer.ContainsKey((long)contentId);
         
-        // Load LastScannedAt from database
-        _lastScannedAt = GetLastScannedAt();
+        // Load LastScannedAt from cached player data
+        _lastScannedAt = _cachedPlayer.LastScannedAt;
         
         // Get avatar URL from cached player
         _avatarUrl = _cachedPlayer.AvatarLink;
@@ -214,6 +214,14 @@ public class PlayerDetailsWindow : BaseModernWindow
             }
             
             DrawInfoRow("Status", _isFavorited ? "⭐ Favorited" : "Standard");
+            
+            // World information - always show separate fields
+            var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
+            var currentWorldName = _cachedPlayer.CurrentWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.CurrentWorldId.Value) : "Unknown";
+            
+            DrawInfoRow("Home World", homeWorldName);
+            DrawInfoRow("Current World", currentWorldName);
+            
             DrawInfoRow("Last Seen", GetLastSeenText());
             DrawInfoRow("Last Scanned", GetLastScannedText());
         }
@@ -270,7 +278,11 @@ public class PlayerDetailsWindow : BaseModernWindow
                         try
                         {
                             await PersistenceContext.RefreshPlayerImmediately(_contentId);
-                            _lastScannedAt = GetLastScannedAt(); // Refresh the timestamp
+                            // Refresh cached player data and timestamp
+                            if (PersistenceContext._playerCache.TryGetValue(_contentId, out var refreshedPlayer))
+                            {
+                                _lastScannedAt = refreshedPlayer.LastScannedAt;
+                            }
                         }
                         finally
                         {

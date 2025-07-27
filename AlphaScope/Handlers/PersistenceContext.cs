@@ -173,10 +173,14 @@ internal sealed class PersistenceContext
         // Load existing data from database into memory caches
         _logger.LogInformation("PersistenceContext: Calling ReloadCache() during initialization...");
         ReloadCache();
+        
+        // One-time cleanup: remove players with null homeworld data so they get re-scanned properly
+        CleanupPlayersWithNullHomeworld();
 
-        // Background upload processing disabled for debugging
+        // Start background upload processing
         _cancellationTokenSource = new CancellationTokenSource();
-        _logger.LogInformation("PersistenceContext: Server upload disabled for debugging");
+        _ = Task.Run(() => PostPlayerData(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+        _logger.LogInformation("PersistenceContext: Background server upload task started");
     }
     /// <summary>
     /// Clears all in-memory caches. Useful when database is reset or when fresh start is needed.
@@ -190,6 +194,41 @@ internal sealed class PersistenceContext
         _UploadedPlayersCache.Clear();
         _recentlyScannedPlayers.Clear();
         _logger?.LogInformation("All caches cleared successfully");
+    }
+
+    /// <summary>
+    /// Clears all data from the local database and resets caches.
+    /// This will delete all stored player data permanently from the local cache.
+    /// Server data remains unaffected.
+    /// </summary>
+    public static void ClearDatabase()
+    {
+        try
+        {
+            _logger?.LogWarning("Clearing local database - all player data will be deleted permanently");
+            
+            using var scope = _serviceProvider.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+            
+            // Get count before deletion for logging
+            var playerCount = dbContext.Players.Count();
+            
+            // Clear all players from database
+            dbContext.Players.RemoveRange(dbContext.Players);
+            var deletedRows = dbContext.SaveChanges();
+            
+            _logger?.LogWarning($"Database cleared: {deletedRows} players deleted from local database");
+            
+            // Clear all in-memory caches after successful database clear
+            ClearCache();
+            
+            _logger?.LogInformation("Database and cache clearing completed successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to clear local database");
+            throw;
+        }
     }
 
     /// <summary>
@@ -219,8 +258,15 @@ internal sealed class PersistenceContext
                         AccountId = player.AccountId,
                         Name = player.Name ?? string.Empty,
                         AvatarLink = player.AvatarLink,
+                        HomeWorldId = player.HomeWorldId,
+                        CurrentWorldId = player.CurrentWorldId,
+                        LastScannedAt = player.LastScannedAt,
                     };
                     playerCount++;
+                    
+                    // Debug logging to see what data we're loading
+                    _logger?.LogInformation($"[HOMEWORLD DEBUG] Loaded player {player.Name}: HomeWorldId={player.HomeWorldId}, LastScannedAt={player.LastScannedAt}");
+                    
                     if (!string.IsNullOrEmpty(player.AvatarLink))
                     {
                         avatarCount++;
@@ -479,7 +525,7 @@ internal sealed class PersistenceContext
     }
 
 
-    private void HandleContentIdMappingFallback(PlayerMapping mapping)
+    private void HandleContentIdMappingFallback(PlayerMapping mapping, ushort? currentWorldId = null)
     {
         try
         {
@@ -502,11 +548,13 @@ internal sealed class PersistenceContext
                         LocalContentId = mapping.ContentId,
                         Name = mapping.PlayerName,
                         AccountId = mapping.AccountId,
+                        HomeWorldId = mapping.WorldId,
                     });
                 else
                 {
                     dbPlayer.Name = mapping.PlayerName;
                     dbPlayer.AccountId ??= mapping.AccountId;
+                    dbPlayer.HomeWorldId ??= mapping.WorldId;
                     dbContext.Entry(dbPlayer).State = EntityState.Modified;
                 }
 
@@ -521,6 +569,9 @@ internal sealed class PersistenceContext
                     AccountId = mapping.AccountId,
                     Name = mapping.PlayerName,
                     AvatarLink = null,
+                    HomeWorldId = mapping.WorldId,
+                    CurrentWorldId = currentWorldId,
+                    LastScannedAt = null,
                 };
                 _playerCache[mapping.ContentId] = newCachedPlayer;
                 
@@ -545,7 +596,7 @@ internal sealed class PersistenceContext
     }
 
     public static SemaphoreSlim processPlayers = new SemaphoreSlim(1, 999);
-    public async Task HandleContentIdMappingAsync(IReadOnlyList<PlayerMapping> mappings)
+    public async Task HandleContentIdMappingAsync(IReadOnlyList<PlayerMapping> mappings, ushort? currentWorldId = null)
     {
         // Filter to only players that actually need updates (not cached or have changes)
         var updates = new List<PlayerMapping>();
@@ -598,11 +649,13 @@ internal sealed class PersistenceContext
                             LocalContentId = update.ContentId,
                             Name = update.PlayerName,
                             AccountId = update.AccountId,
+                            HomeWorldId = update.WorldId,
                         });
                     else
                     {
                         dbPlayer.Name = update.PlayerName;
                         dbPlayer.AccountId ??= update.AccountId;
+                        dbPlayer.HomeWorldId ??= update.WorldId;
                         dbContext.Entry(dbPlayer).State = EntityState.Modified;
                     }
                 }
@@ -629,6 +682,9 @@ internal sealed class PersistenceContext
                     AccountId = player.AccountId,
                     Name = player.PlayerName,
                     AvatarLink = null,
+                    HomeWorldId = player.WorldId,
+                    CurrentWorldId = currentWorldId,
+                    LastScannedAt = null,
                 };
                 _playerCache[player.ContentId] = cachedPlayer;
                 
@@ -640,7 +696,7 @@ internal sealed class PersistenceContext
             _logger.LogError(e, "Database error while persisting multiple mappings, attempting non-batch update");
             foreach (var update in updates)
             {
-                HandleContentIdMappingFallback(update);
+                HandleContentIdMappingFallback(update, currentWorldId);
             }
         }
         catch (InvalidOperationException e)
@@ -648,7 +704,7 @@ internal sealed class PersistenceContext
             _logger.LogWarning(e, "Invalid operation while persisting multiple mappings, attempting non-batch update");
             foreach (var update in updates)
             {
-                HandleContentIdMappingFallback(update);
+                HandleContentIdMappingFallback(update, currentWorldId);
             }
         }
         catch (Exception e)
@@ -656,7 +712,7 @@ internal sealed class PersistenceContext
             _logger.LogWarning(e, "Unexpected error while persisting multiple mappings, attempting non-batch update");
             foreach (var update in updates)
             {
-                HandleContentIdMappingFallback(update);
+                HandleContentIdMappingFallback(update, currentWorldId);
             }
         }
 
@@ -668,6 +724,35 @@ internal sealed class PersistenceContext
         public required ulong? AccountId { get; init; }
         public required string Name { get; init; }
         public string? AvatarLink { get; set; }
+        public ushort? HomeWorldId { get; init; }
+        public ushort? CurrentWorldId { get; init; }
+        public DateTime? LastScannedAt { get; init; }
+    }
+
+    /// <summary>
+    /// Updates the LastScannedAt timestamp for a cached player
+    /// </summary>
+    public static void UpdateCachedPlayerLastScannedAt(ulong contentId, DateTime lastScannedAt)
+    {
+        if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
+        {
+            // Create new cached player instance with updated timestamp (since LastScannedAt is init-only)
+            _playerCache[contentId] = new CachedPlayer
+            {
+                AccountId = cachedPlayer.AccountId,
+                Name = cachedPlayer.Name,
+                AvatarLink = cachedPlayer.AvatarLink,
+                HomeWorldId = cachedPlayer.HomeWorldId,
+                CurrentWorldId = cachedPlayer.CurrentWorldId,
+                LastScannedAt = lastScannedAt,
+            };
+            
+            _logger?.LogDebug($"Updated LastScannedAt for cached player {cachedPlayer.Name}: {lastScannedAt:yyyy-MM-dd HH:mm:ss} UTC");
+        }
+        else
+        {
+            _logger?.LogWarning($"Could not find player in cache to update LastScannedAt - ContentId: {contentId}");
+        }
     }
 
     /// <summary>
@@ -754,6 +839,49 @@ internal sealed class PersistenceContext
             _logger?.LogError(ex, $"Failed to perform immediate refresh for player {contentId}");
         }
         return false;
+    }
+
+    /// <summary>
+    /// One-time cleanup to remove players with null homeworld data so they get re-scanned with proper data
+    /// </summary>
+    private static void CleanupPlayersWithNullHomeworld()
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+            
+            var playersWithNullHomeworld = dbContext.Players
+                .Where(p => p.HomeWorldId == null)
+                .ToList();
+                
+            if (playersWithNullHomeworld.Count > 0)
+            {
+                _logger?.LogInformation($"Cleaning up {playersWithNullHomeworld.Count} players with null homeworld data for re-scanning...");
+                
+                foreach (var player in playersWithNullHomeworld)
+                {
+                    _logger?.LogInformation($"Removing {player.Name} (will be re-scanned with proper homeworld data)");
+                    
+                    // Remove from cache
+                    _playerCache.TryRemove(player.LocalContentId, out _);
+                }
+                
+                // Remove from database
+                dbContext.Players.RemoveRange(playersWithNullHomeworld);
+                var deletedCount = dbContext.SaveChanges();
+                
+                _logger?.LogInformation($"Cleanup complete: removed {deletedCount} players with null homeworld data. They will be re-scanned when encountered again.");
+            }
+            else
+            {
+                _logger?.LogInformation("No players with null homeworld data found - cleanup not needed");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error during cleanup of players with null homeworld data");
+        }
     }
 
 }

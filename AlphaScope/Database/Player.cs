@@ -32,6 +32,18 @@ public class Player
     public ulong? AccountId { get; set; }
 
     /// <summary>
+    /// ID of the character's home world (original world where character was created).
+    /// This may differ from CurrentWorldId if the character has world transferred.
+    /// </summary>
+    public ushort? HomeWorldId { get; set; }
+
+    /// <summary>
+    /// ID of the world where the character is currently located.
+    /// This may differ from HomeWorldId due to world visit or world transfer.
+    /// </summary>
+    public ushort? CurrentWorldId { get; set; }
+
+    /// <summary>
     /// ID of the character's currently equipped job/class when last seen.
     /// Corresponds to FFXIV's internal job/class identification system.
     /// Nullable because job information may not be available in all scanning contexts.

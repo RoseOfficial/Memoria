@@ -105,9 +105,7 @@ namespace AlphaScopeServer.Controllers
                     }
                 }
 
-                // Apply privacy filter (hide private players unless owned by current user)
-                var gameAccountId = HttpContext.Items["GameAccountId"] as int?;
-                query = query.Where(p => !p.IsPrivate || p.AccountId == gameAccountId);
+                // Privacy filter removed - public API shows all players
 
                 // Apply cursor-based pagination
                 query = query.Where(p => p.LocalContentId >= Cursor)
@@ -168,12 +166,7 @@ namespace AlphaScopeServer.Controllers
                     return NotFound("Player not found");
                 }
 
-                // Check privacy settings
-                var gameAccountId = HttpContext.Items["GameAccountId"] as int?;
-                if (player.IsPrivate && player.AccountId != gameAccountId)
-                {
-                    return Forbid("Player profile is private");
-                }
+                // Privacy check removed - public API allows viewing all players
 
                 // Map to detailed DTO
                 var detailed = new PlayerDetailed
@@ -245,18 +238,7 @@ namespace AlphaScopeServer.Controllers
                     CurrentJobLevel = player.CurrentJobLevel
                 };
 
-                // Record profile visit
-                if (gameAccountId.HasValue)
-                {
-                    var visit = new PlayerProfileVisit
-                    {
-                        PlayerLocalContentId = id,
-                        VisitorId = gameAccountId.ToString(),
-                        VisitedAt = DateTime.UtcNow
-                    };
-                    _context.PlayerProfileVisits.Add(visit);
-                    await _context.SaveChangesAsync();
-                }
+                // Profile visit tracking removed - public API
 
                 return Ok(detailed);
             }
@@ -272,11 +254,7 @@ namespace AlphaScopeServer.Controllers
         {
             try
             {
-                var gameAccountId = HttpContext.Items["GameAccountId"] as int?;
-                if (!gameAccountId.HasValue)
-                {
-                    return Unauthorized("Game account ID not found");
-                }
+                // Authentication removed - public API for plugin uploads
 
                 foreach (var playerRequest in players)
                 {
@@ -483,14 +461,7 @@ namespace AlphaScopeServer.Controllers
                     });
                 }
 
-                // Update user stats
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.GameAccountId == gameAccountId.Value);
-                if (user != null)
-                {
-                    user.UploadedPlayersCount += players.Count;
-                    user.UploadedPlayerInfoCount += players.Count;
-                    await _context.SaveChangesAsync();
-                }
+                // User stats tracking removed - public API
 
                 return Ok(new { message = "Players uploaded successfully", count = players.Count });
             }

@@ -116,7 +116,8 @@ internal sealed class ObjectTableHandler : IDisposable
 
         if (playerMappings.Count > 0)
         {
-            Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(playerMappings));
+            var currentWorldId = (ushort?)PersistenceContext.GetCurrentWorld();
+            Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(playerMappings, currentWorldId));
             
             // Only queue truly NEW players for Lodestone refresh (not every player every frame)
             foreach (var mapping in playerMappings)
@@ -129,9 +130,9 @@ internal sealed class ObjectTableHandler : IDisposable
             }
         }
 
-        // Server upload disabled for debugging - focus on local database only
-        // if (playerRequests.Count > 0)
-        //     PersistenceContext.AddPlayerUploadData(playerRequests);
+        // Queue players for server upload
+        if (playerRequests.Count > 0)
+            PersistenceContext.AddPlayerUploadData(playerRequests);
     #if DEBUG
         _logger.LogTrace("ObjectTable handling for {Count} players took {TimeMs}", playerMappings.Count, TimeSpan.FromMilliseconds(Environment.TickCount64 - now));
     #endif
