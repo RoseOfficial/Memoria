@@ -9,6 +9,6 @@ namespace AlphaScope.API.Models
 {
     public class UserUpdateDto
     {
-        public List<UserCharacterDto?> Characters { get; set; }
+        public required List<UserCharacterDto?> Characters { get; set; }
     }
 }

@@ -87,7 +87,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         // Arrange
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", apiKey);
+        context.Request.Headers["api-key"] = apiKey;
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);
@@ -112,7 +112,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         // Arrange
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", apiKey);
+        context.Request.Headers["api-key"] = apiKey;
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);
@@ -131,7 +131,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         // Arrange
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", "nonexistent-key-12345");
+        context.Request.Headers["api-key"] = "nonexistent-key-12345";
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);
@@ -164,7 +164,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
 
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", "test-key-12345");
+        context.Request.Headers["api-key"] = "test-key-12345";
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);
@@ -212,7 +212,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
 
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", "test-key-12345"); // Only the prefix part
+        context.Request.Headers["api-key"] = "test-key-12345"; // Only the prefix part
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);
@@ -242,7 +242,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
 
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", "test-key-67890"); // Wrong account ID
+        context.Request.Headers["api-key"] = "test-key-67890"; // Wrong account ID
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);
@@ -258,7 +258,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         // Arrange
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", "test-key-12345");
+        context.Request.Headers["api-key"] = "test-key-12345";
 
         // Dispose the context to cause a database error
         _dbContext.Dispose();
@@ -291,10 +291,10 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     }
 
     [Theory]
-    [InlineData("test-key-123", "test-key", 123)]
-    [InlineData("abc123-456", "abc123", 456)]
-    [InlineData("complex_key!@#-789", "complex_key!@#", 789)]
-    public async Task InvokeAsync_ShouldParseApiKeyFormatCorrectly(string apiKey, string expectedUserKey, int expectedAccountId)
+    [InlineData("test-key-123", 123)]
+    [InlineData("abc123-456", 456)]
+    [InlineData("complex_key!@#-789", 789)]
+    public async Task InvokeAsync_ShouldParseApiKeyFormatCorrectly(string apiKey, int expectedAccountId)
     {
         // Arrange
         var user = new ApplicationUser
@@ -312,7 +312,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
 
         var context = CreateHttpContext();
         context.Request.Path = "/api/players";
-        context.Request.Headers.Add("api-key", apiKey);
+        context.Request.Headers["api-key"] = apiKey;
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);

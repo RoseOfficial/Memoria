@@ -321,7 +321,7 @@ public class PlayersControllerTests : IDisposable
     [Theory]
     [InlineData("")]
     [InlineData(null)]
-    public async Task SearchPlayers_ShouldHandleEmptyNameFilter(string emptyName)
+    public async Task SearchPlayers_ShouldHandleEmptyNameFilter(string? emptyName)
     {
         // Arrange
         var players = new List<Player>

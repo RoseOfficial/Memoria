@@ -4,7 +4,7 @@ namespace TestUtilities;
 
 public static class DatabaseTestUtilities
 {
-    public static DbContextOptions<T> CreateInMemoryDbOptions<T>(string databaseName = null) where T : DbContext
+    public static DbContextOptions<T> CreateInMemoryDbOptions<T>(string? databaseName = null) where T : DbContext
     {
         databaseName ??= Guid.NewGuid().ToString();
         
@@ -14,7 +14,7 @@ public static class DatabaseTestUtilities
             .Options;
     }
 
-    public static async Task<T> CreateCleanDatabaseAsync<T>(Func<DbContextOptions<T>, T> contextFactory, string databaseName = null) where T : DbContext
+    public static async Task<T> CreateCleanDatabaseAsync<T>(Func<DbContextOptions<T>, T> contextFactory, string? databaseName = null) where T : DbContext
     {
         var options = CreateInMemoryDbOptions<T>(databaseName);
         var context = contextFactory(options);

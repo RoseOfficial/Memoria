@@ -79,7 +79,7 @@ namespace AlphaScope
         }
         public static string UnixTimeConverter(int? unixTime)
         {
-            return DateTimeOffset.FromUnixTimeSeconds((int)unixTime).ToLocalTime().DateTime.ToString();
+            return DateTimeOffset.FromUnixTimeSeconds(unixTime!.Value).ToLocalTime().DateTime.ToString();
         }
 
         public static TerritoryType? GetTerritory(ushort territoryId) => new ExcelResolver<TerritoryType>(territoryId).GameData;

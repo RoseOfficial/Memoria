@@ -24,7 +24,6 @@ public class PlayerCard : BaseComponent
     private readonly ulong _contentId;
     private bool _isFavorited;
     private string? _avatarUrl;
-    private bool _fetchingAvatar = false;
     private bool _hasQueuedForRefresh = false;
     
     internal PersistenceContext.CachedPlayer Player => _cachedPlayer;

@@ -26,8 +26,6 @@ public class ModernMainWindow : BaseModernWindow
     private string _searchText = "";
     private int _selectedTab = 0;
     private bool _showAdvancedFilters = false;
-    private bool _dockingInitialized = false;
-    private uint _dockspaceId;
     
     // Advanced filter state
     private bool _favoritesOnly = false;

@@ -314,7 +314,7 @@ namespace AlphaScope
 
         public static void Text(Vector4? col, string s)
         {
-            ImGui.PushStyleColor(ImGuiCol.Text, (System.Numerics.Vector4)col);
+            ImGui.PushStyleColor(ImGuiCol.Text, (System.Numerics.Vector4)col!.Value);
             ImGui.TextUnformatted(s);
             ImGui.PopStyleColor();
         }
@@ -390,7 +390,7 @@ namespace AlphaScope
         public static void HeaderProfileVisitInfoText(PlayerDetailed.PlayerProfileVisitInfoDto visitInfo)
         {
             ImGuiHelpers.ScaledDummy(5.0f);
-            TextWrapped(string.Format(Loc.DtCharacterVisitInfo, Tools.ToTimeSinceString((int)visitInfo.LastProfileVisitDate), visitInfo.ProfileTotalVisitCount, visitInfo.UniqueVisitorCount));
+            TextWrapped(string.Format(Loc.DtCharacterVisitInfo, Tools.ToTimeSinceString((int)visitInfo.LastProfileVisitDate!.Value), visitInfo.ProfileTotalVisitCount, visitInfo.UniqueVisitorCount));
             ImGuiHelpers.ScaledDummy(5.0f);
             ImGui.Separator();
         }

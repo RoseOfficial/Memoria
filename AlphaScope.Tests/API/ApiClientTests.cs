@@ -111,34 +111,12 @@ public class ApiClientTests : IDisposable
     {
         var client = new ApiClient(_mockLogger);
         
-        var act = async () => await client.PostPlayers(null);
+        var act = async () => await client.PostPlayers(null!);
         
         // Should either handle null gracefully or throw ArgumentNullException
         await act.Should().NotThrowAsync<NullReferenceException>();
     }
 
-    [Fact]
-    public async Task PostRetainers_ShouldHandleEmptyList()
-    {
-        var client = new ApiClient(_mockLogger);
-        var emptyList = new List<PostRetainerRequest>();
-        
-        var result = await client.PostRetainers(emptyList);
-        
-        // Should handle empty list gracefully
-        result.Should().BeFalse(); // Expecting false for empty list
-    }
-
-    [Fact]
-    public async Task PostRetainers_ShouldHandleNullList()
-    {
-        var client = new ApiClient(_mockLogger);
-        
-        var act = async () => await client.PostRetainers(null);
-        
-        // Should either handle null gracefully or throw ArgumentNullException
-        await act.Should().NotThrowAsync<NullReferenceException>();
-    }
 
     [Fact]
     public void Config_ShouldBeAccessible()
@@ -150,7 +128,7 @@ public class ApiClientTests : IDisposable
     }
 
     [Fact]
-    public async Task PostPlayerRequest_ShouldHaveRequiredProperties()
+    public Task PostPlayerRequest_ShouldHaveRequiredProperties()
     {
         var request = new PostPlayerRequest
         {
@@ -171,47 +149,10 @@ public class ApiClientTests : IDisposable
         request.TerritoryId.Should().Be(123);
         request.CurrentWorldId.Should().Be(65);
         request.CreatedAt.Should().BeGreaterThan(0);
+        
+        return Task.CompletedTask;
     }
 
-    [Fact]
-    public async Task PostRetainerRequest_ShouldHaveRequiredProperties()
-    {
-        var request = new PostRetainerRequest
-        {
-            LocalContentId = 987654321,
-            Name = "TestRetainer",
-            WorldId = 65,
-            OwnerLocalContentId = 123456789,
-            CreatedAt = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        };
-
-        // Verify all required properties can be set
-        request.LocalContentId.Should().Be(987654321);
-        request.Name.Should().Be("TestRetainer");
-        request.WorldId.Should().Be(65);
-        request.OwnerLocalContentId.Should().Be(123456789);
-        request.CreatedAt.Should().BeGreaterThan(0);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("ValidRetainerName")]
-    [InlineData("A")]
-    [InlineData("VeryLongRetainerNameThatMightExceedLimits")]
-    public void PostRetainerRequest_NameValidation_ShouldHandleVariousInputs(string retainerName)
-    {
-        var request = new PostRetainerRequest
-        {
-            LocalContentId = 123,
-            Name = retainerName,
-            WorldId = 65,
-            OwnerLocalContentId = 456,
-            CreatedAt = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-        };
-
-        // Should not throw when setting name
-        request.Name.Should().Be(retainerName);
-    }
 
     [Fact]
     public void StaticRestClient_ShouldBeAccessible()
@@ -221,12 +162,14 @@ public class ApiClientTests : IDisposable
     }
 
     [Fact]
-    public async Task Instance_ShouldBeSingleton()
+    public Task Instance_ShouldBeSingleton()
     {
         var client1 = new ApiClient(_mockLogger);
         var client2 = new ApiClient(_mockLogger);
 
         // The second instance should replace the first in the static Instance property
         ApiClient.Instance.Should().BeSameAs(client2);
+        
+        return Task.CompletedTask;
     }
 }

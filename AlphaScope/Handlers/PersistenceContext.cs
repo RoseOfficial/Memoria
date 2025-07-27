@@ -57,17 +57,17 @@ internal sealed class PersistenceContext
     /// <summary>
     /// Logger for persistence operations and debugging
     /// </summary>
-    public static ILogger<PersistenceContext> _logger;
+    public static ILogger<PersistenceContext> _logger = null!;
     
     /// <summary>
     /// Dalamud client state service for accessing current player information
     /// </summary>
-    public static IClientState _clientState;
+    public static IClientState _clientState = null!;
     
     /// <summary>
     /// Service provider for dependency injection and database access
     /// </summary>
-    public static IServiceProvider _serviceProvider;
+    public static IServiceProvider _serviceProvider = null!;
     
     
     /// <summary>
@@ -128,7 +128,7 @@ internal sealed class PersistenceContext
     /// <summary>
     /// Singleton instance of the persistence context
     /// </summary>
-    private static PersistenceContext _instance = null;
+    private static PersistenceContext? _instance = null;
     
     /// <summary>
     /// Gets the singleton instance of the persistence context
@@ -137,7 +137,7 @@ internal sealed class PersistenceContext
     {
         get
         {
-            return _instance;
+            return _instance!;
         }
     }
 
@@ -244,7 +244,7 @@ internal sealed class PersistenceContext
             if (player.Value.AccountId != null)
             {
                 var _GetAccountsCache = _AccountIdCache.TryGetValue((ulong)player.Value.AccountId, out var AccountContentIds);
-                if (_GetAccountsCache )
+                if (_GetAccountsCache && AccountContentIds != null)
                 {
                     if (!AccountContentIds.Contains(player.Key))
                     {

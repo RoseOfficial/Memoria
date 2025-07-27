@@ -50,11 +50,6 @@ public class AlphaScopeDbContextTests : IDisposable
         _context.PlayerLodestones.Should().NotBeNull();
         _context.PlayerProfileVisits.Should().NotBeNull();
 
-        // Assert - Retainer entities
-        _context.Retainers.Should().NotBeNull();
-        _context.RetainerNameHistory.Should().NotBeNull();
-        _context.RetainerWorldHistory.Should().NotBeNull();
-
         // Assert - User entities
         _context.Users.Should().NotBeNull();
         _context.UserCharacters.Should().NotBeNull();
@@ -133,38 +128,6 @@ public class AlphaScopeDbContextTests : IDisposable
         updatedUser!.Name.Should().Be("Updated User");
     }
 
-    [Fact]
-    public async Task Retainers_ShouldSupportBasicCrudOperations()
-    {
-        // Arrange
-        var player = new Player
-        {
-            LocalContentId = 123456789,
-            Name = "Player Owner",
-            AccountId = 987654321,
-            HomeWorldId = 65,
-            CurrentWorldId = 65
-        };
-
-        var retainer = new Retainer
-        {
-            LocalContentId = 555666777,
-            Name = "Test Retainer",
-            WorldId = 65,
-            OwnerLocalContentId = player.LocalContentId
-        };
-
-        // Act - Create
-        _context.Players.Add(player);
-        _context.Retainers.Add(retainer);
-        await _context.SaveChangesAsync();
-
-        // Assert - Read
-        var savedRetainer = await _context.Retainers.FindAsync(retainer.LocalContentId);
-        savedRetainer.Should().NotBeNull();
-        savedRetainer!.Name.Should().Be("Test Retainer");
-        savedRetainer.OwnerLocalContentId.Should().Be(player.LocalContentId);
-    }
 
     [Fact]
     public async Task PlayerNameHistory_ShouldMaintainCascadeRelationship()
@@ -273,49 +236,6 @@ public class AlphaScopeDbContextTests : IDisposable
         playerWithLodestone.Lodestone!.LodestoneId.Should().Be(987654321);
     }
 
-    [Fact]
-    public async Task RetainerOwnerRelationship_ShouldWorkCorrectly()
-    {
-        // Arrange
-        var player = new Player
-        {
-            LocalContentId = 123456789,
-            Name = "Player Owner",
-            AccountId = 987654321,
-            HomeWorldId = 65,
-            CurrentWorldId = 65
-        };
-
-        var retainer1 = new Retainer
-        {
-            LocalContentId = 111111111,
-            Name = "Retainer One",
-            WorldId = 65,
-            OwnerLocalContentId = player.LocalContentId
-        };
-
-        var retainer2 = new Retainer
-        {
-            LocalContentId = 222222222,
-            Name = "Retainer Two",
-            WorldId = 65,
-            OwnerLocalContentId = player.LocalContentId
-        };
-
-        // Act
-        _context.Players.Add(player);
-        _context.Retainers.AddRange(retainer1, retainer2);
-        await _context.SaveChangesAsync();
-
-        // Assert
-        var playerWithRetainers = await _context.Players
-            .Include(p => p.Retainers)
-            .FirstAsync(p => p.LocalContentId == player.LocalContentId);
-
-        playerWithRetainers.Retainers.Should().HaveCount(2);
-        playerWithRetainers.Retainers.Should().Contain(r => r.Name == "Retainer One");
-        playerWithRetainers.Retainers.Should().Contain(r => r.Name == "Retainer Two");
-    }
 
     [Fact]
     public async Task UserCharacterRelationship_ShouldWorkCorrectly()
@@ -482,14 +402,6 @@ public class AlphaScopeDbContextTests : IDisposable
             CurrentWorldId = 65
         };
 
-        var retainer = new Retainer
-        {
-            LocalContentId = 111111111,
-            Name = "Test Retainer",
-            WorldId = 65,
-            OwnerLocalContentId = player.LocalContentId
-        };
-
         var nameHistory = new PlayerNameHistory
         {
             PlayerLocalContentId = player.LocalContentId,
@@ -498,17 +410,14 @@ public class AlphaScopeDbContextTests : IDisposable
 
         // Act
         _context.Players.Add(player);
-        _context.Retainers.Add(retainer);
         _context.PlayerNameHistory.Add(nameHistory);
         await _context.SaveChangesAsync();
 
         // Verify initial state
         var initialPlayerCount = await _context.Players.CountAsync();
-        var initialRetainerCount = await _context.Retainers.CountAsync();
         var initialHistoryCount = await _context.PlayerNameHistory.CountAsync();
 
         initialPlayerCount.Should().Be(1);
-        initialRetainerCount.Should().Be(1);
         initialHistoryCount.Should().Be(1);
 
         // Act - Delete player
@@ -517,11 +426,9 @@ public class AlphaScopeDbContextTests : IDisposable
 
         // Assert - All related entities should be deleted
         var finalPlayerCount = await _context.Players.CountAsync();
-        var finalRetainerCount = await _context.Retainers.CountAsync();
         var finalHistoryCount = await _context.PlayerNameHistory.CountAsync();
 
         finalPlayerCount.Should().Be(0);
-        finalRetainerCount.Should().Be(0);
         finalHistoryCount.Should().Be(0);
     }
 

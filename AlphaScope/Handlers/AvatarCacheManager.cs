@@ -112,7 +112,7 @@ namespace AlphaScope.Handlers
         }
 
 
-        private async Task<IDalamudTextureWrap> DownloadImageAsync(string avatarUrl)
+        private async Task<IDalamudTextureWrap?> DownloadImageAsync(string avatarUrl)
         {
             try
             {

@@ -15,12 +15,12 @@ public static class LoggerTestUtilities
         logger.Received().Log(
             logLevel,
             Arg.Any<EventId>(),
-            Arg.Is<object>(o => o.ToString().Contains(message)),
-            Arg.Any<Exception>(),
-            Arg.Any<Func<object, Exception, string>>());
+            Arg.Is<object>(o => o.ToString()!.Contains(message)),
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
-    public static void VerifyLogCalled<T>(ILogger<T> logger, LogLevel logLevel, Times times = null)
+    public static void VerifyLogCalled<T>(ILogger<T> logger, LogLevel logLevel, Times? times = null)
     {
         var expectedTimes = times?.Value ?? 1;
         
@@ -28,8 +28,8 @@ public static class LoggerTestUtilities
             logLevel,
             Arg.Any<EventId>(),
             Arg.Any<object>(),
-            Arg.Any<Exception>(),
-            Arg.Any<Func<object, Exception, string>>());
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 
     public static void VerifyNoLogsCalled<T>(ILogger<T> logger)
@@ -38,8 +38,8 @@ public static class LoggerTestUtilities
             Arg.Any<LogLevel>(),
             Arg.Any<EventId>(),
             Arg.Any<object>(),
-            Arg.Any<Exception>(),
-            Arg.Any<Func<object, Exception, string>>());
+            Arg.Any<Exception?>(),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 }
 

@@ -22,7 +22,7 @@ public static class TestHelpers
         {
             throw new ArgumentException($"Field '{fieldName}' not found on type '{obj.GetType()}'");
         }
-        return (T)field.GetValue(obj);
+        return (T)field.GetValue(obj)!;
     }
 
     public static async Task<T> CallPrivateMethod<T>(object obj, string methodName, params object[] parameters)
@@ -43,10 +43,10 @@ public static class TestHelpers
         if (result is Task task)
         {
             await task;
-            return default(T);
+            return default(T)!;
         }
 
-        return (T)result;
+        return (T)result!;
     }
 
     public static string GenerateRandomString(int length = 10)

@@ -125,7 +125,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>
     /// Manager for caching and retrieving character avatar images from Lodestone
     /// </summary>
-    public static AvatarCacheManager AvatarCacheManager;
+    public static AvatarCacheManager AvatarCacheManager = null!;
     
     /// <summary>
     /// Background service for continuously refreshing character data from Lodestone
@@ -292,7 +292,7 @@ public sealed class Plugin : IDalamudPlugin
                     try
                     {
                         Log.Information("Testing Lodestone refresh service...");
-                        var success = await _lodestoneRefreshService?.ForceProcessNextPlayer();
+                        var success = await (_lodestoneRefreshService?.ForceProcessNextPlayer() ?? Task.FromResult(false));
                         Log.Information($"Test result: {success}");
                     }
                     catch (Exception ex)

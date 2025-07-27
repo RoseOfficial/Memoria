@@ -323,9 +323,9 @@ public class UsersControllerTests : IDisposable
 
         user.Characters.First().Privacy.Should().NotBeNull();
         // Default privacy settings should be set
-        user.Characters.First().Privacy.HideFullProfile.Should().BeFalse();
-        user.Characters.First().Privacy.HideTerritoryInfo.Should().BeFalse();
-        user.Characters.First().Privacy.HideCustomizations.Should().BeFalse();
+        user.Characters.First().Privacy!.HideFullProfile.Should().BeFalse();
+        user.Characters.First().Privacy!.HideTerritoryInfo.Should().BeFalse();
+        user.Characters.First().Privacy!.HideCustomizations.Should().BeFalse();
     }
 
     [Fact]

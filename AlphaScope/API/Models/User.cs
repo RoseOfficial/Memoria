@@ -16,7 +16,7 @@ namespace AlphaScope.API.Models
     public class User
     {
         [JsonProperty("0")]
-        public string BaseUrl { get; set; }
+        public required string BaseUrl { get; set; }
         [JsonProperty("1")]
         public int GameAccountId { get; set; }
         [JsonProperty("2")]

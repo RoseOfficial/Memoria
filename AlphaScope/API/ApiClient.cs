@@ -176,14 +176,14 @@ namespace AlphaScope.API
         /// <summary>
         /// Cached server statistics and last status message
         /// </summary>
-        public (ServerStatsDto ServerStats, string Message) _LastServerStats = new();
+        public (ServerStatsDto? ServerStats, string Message) _LastServerStats = new();
         
         /// <summary>
         /// Retrieves comprehensive server statistics including user counts, data metrics, and system info.
         /// Caches the results for display in the UI.
         /// </summary>
         /// <returns>Tuple containing server stats DTO and status message</returns>
-        public async Task<(ServerStatsDto ServerStats, string Message)> CheckServerStats()
+        public async Task<(ServerStatsDto? ServerStats, string Message)> CheckServerStats()
         {
             string Message = string.Empty;
             try
@@ -308,7 +308,7 @@ namespace AlphaScope.API
         /// </summary>
         /// <param name="id">Player's Content ID (LocalContentId)</param>
         /// <returns>Tuple containing detailed player data and status message</returns>
-        public async Task<(PlayerDetailed Player, string Message)> GetPlayerById(long id)
+        public async Task<(PlayerDetailed? Player, string Message)> GetPlayerById(long id)
         {
             string Message = string.Empty;
             try
@@ -377,7 +377,7 @@ namespace AlphaScope.API
                 
                 return (false, false);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 return (false, false);
             }
@@ -443,6 +443,7 @@ namespace AlphaScope.API
                                     // Return a simplified user object with the API key
                                     var user = new User 
                                     { 
+                                        BaseUrl = Config.BaseUrl,
                                         Name = register.Name,
                                         GameAccountId = register.GameAccountId,
                                         LocalContentId = register.UserLocalContentId

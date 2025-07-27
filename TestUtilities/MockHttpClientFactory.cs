@@ -5,7 +5,7 @@ namespace TestUtilities;
 
 public static class MockHttpClientFactory
 {
-    public static HttpClient CreateMockHttpClient(HttpStatusCode statusCode = HttpStatusCode.OK, string responseContent = "", Dictionary<string, string> headers = null)
+    public static HttpClient CreateMockHttpClient(HttpStatusCode statusCode = HttpStatusCode.OK, string responseContent = "", Dictionary<string, string>? headers = null)
     {
         var handler = new MockHttpMessageHandler(statusCode, responseContent, headers);
         return new HttpClient(handler);
@@ -27,12 +27,12 @@ public static class MockHttpClientFactory
 public class MockHttpMessageHandler : HttpMessageHandler
 {
     private readonly HttpStatusCode _statusCode;
-    private readonly string _responseContent;
-    private readonly Dictionary<string, string> _headers;
+    private readonly string _responseContent = string.Empty;
+    private readonly Dictionary<string, string> _headers = new();
     private readonly TimeSpan? _delay;
-    private readonly Exception _exception;
+    private readonly Exception? _exception;
 
-    public MockHttpMessageHandler(HttpStatusCode statusCode, string responseContent, Dictionary<string, string> headers = null, TimeSpan? delay = null)
+    public MockHttpMessageHandler(HttpStatusCode statusCode, string responseContent, Dictionary<string, string>? headers = null, TimeSpan? delay = null)
     {
         _statusCode = statusCode;
         _responseContent = responseContent;

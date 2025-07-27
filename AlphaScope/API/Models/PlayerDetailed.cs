@@ -97,7 +97,7 @@ namespace AlphaScope.API.Models
         public class FlagInfo
         {
             public FontAwesomeIcon Icon { get; set;}
-            public string Message { get; set; }
+            public required string Message { get; set; }
             public Vector4 Color { get; set; }
         }
 

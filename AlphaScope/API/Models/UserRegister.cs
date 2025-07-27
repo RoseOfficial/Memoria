@@ -13,8 +13,8 @@ namespace AlphaScope.API.Models
     {
         public int GameAccountId { get; set; }
         public long UserLocalContentId { get; set; }
-        public string Name { get; set; }
-        public string ClientId { get; set; }
-        public string Version { get; set; }
+        public required string Name { get; set; }
+        public required string ClientId { get; set; }
+        public required string Version { get; set; }
     }
 }
