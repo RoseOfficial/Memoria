@@ -71,4 +71,30 @@ public class Player
     /// Nullable because characters may not have been scanned yet by the refresh service.
     /// </summary>
     public DateTime? LastScannedAt { get; set; }
+
+    /// <summary>
+    /// JSON string containing complete job level data from Lodestone.
+    /// Stores all job/class levels as a serialized dictionary for comprehensive job tracking.
+    /// Example: {"1": 90, "2": 85, "3": 80} where keys are job IDs and values are levels.
+    /// </summary>
+    [MaxLength(2000)]
+    public string? LodestoneJobData { get; set; }
+
+    /// <summary>
+    /// Main job/class ID from Lodestone profile (typically the highest level job).
+    /// This represents the character's primary job as displayed on their Lodestone profile.
+    /// </summary>
+    public byte? MainJobId { get; set; }
+
+    /// <summary>
+    /// Level of the main job/class from Lodestone profile.
+    /// Corresponds to the level of the MainJobId.
+    /// </summary>
+    public short? MainJobLevel { get; set; }
+
+    /// <summary>
+    /// Timestamp of when job data was last updated from Lodestone.
+    /// Used to track freshness of job information separately from general profile scans.
+    /// </summary>
+    public DateTime? LastJobDataUpdate { get; set; }
 }

@@ -120,8 +120,21 @@ namespace AlphaScopeServer.Migrations
                     b.Property<bool>("IsPrivate")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("LastJobDataUpdate")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastScannedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("LodestoneJobData")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte?>("MainJobId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<short?>("MainJobLevel")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()

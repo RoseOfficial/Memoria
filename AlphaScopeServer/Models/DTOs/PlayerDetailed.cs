@@ -17,6 +17,10 @@ namespace AlphaScopeServer.Models.DTOs
         [JsonProperty("0")] public PlayerProfileVisitInfoDto? ProfileVisitInfo { get; set; } = null;
         [JsonProperty("J")] public byte? CurrentJobId { get; set; }
         [JsonProperty("K")] public short? CurrentJobLevel { get; set; }
+        [JsonProperty("LJ")] public string? LodestoneJobData { get; set; }
+        [JsonProperty("MJ")] public byte? MainJobId { get; set; }
+        [JsonProperty("ML")] public short? MainJobLevel { get; set; }
+        [JsonProperty("LU")] public DateTime? LastJobDataUpdate { get; set; }
     }
 
     public class PlayerProfileVisitInfoDto

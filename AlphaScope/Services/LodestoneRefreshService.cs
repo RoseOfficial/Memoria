@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -397,10 +398,11 @@ internal sealed class LodestoneRefreshService : IDisposable
                 return true;
             }
             
-            var avatarUrl = await FetchLodestoneAvatarUrl(player.Name, player.LocalContentId);
+            var (avatarUrl, jobLevels, mainJobId, mainJobLevel) = await FetchLodestonePlayerData(player.Name, player.LocalContentId);
             
             var hasUpdates = false;
             
+            // Handle avatar updates
             if (!string.IsNullOrEmpty(avatarUrl) && avatarUrl != player.AvatarLink)
             {
                 player.AvatarLink = avatarUrl;
@@ -421,6 +423,35 @@ internal sealed class LodestoneRefreshService : IDisposable
             else
             {
                 _logger.LogDebug($"Avatar URL unchanged for player {player.Name}");
+            }
+            
+            // Handle job data updates
+            if (jobLevels != null && jobLevels.Count > 0)
+            {
+                var jobDataJson = JsonSerializer.Serialize(jobLevels);
+                
+                if (jobDataJson != player.LodestoneJobData)
+                {
+                    var jobDataUpdateTime = DateTime.UtcNow;
+                    player.LodestoneJobData = jobDataJson;
+                    player.MainJobId = mainJobId;
+                    player.MainJobLevel = mainJobLevel;
+                    player.LastJobDataUpdate = jobDataUpdateTime;
+                    hasUpdates = true;
+                    
+                    // Update cached player data so UI reflects changes immediately
+                    PersistenceContext.UpdateCachedPlayerJobData(player.LocalContentId, jobDataJson, mainJobId, mainJobLevel, jobDataUpdateTime);
+                    
+                    _logger.LogInformation($"Updated job data for player {player.Name}: {jobLevels.Count} jobs, main job {mainJobId} level {mainJobLevel}");
+                }
+                else
+                {
+                    _logger.LogDebug($"Job data unchanged for player {player.Name}");
+                }
+            }
+            else
+            {
+                _logger.LogWarning($"Could not extract job data for player {player.Name}");
             }
             
             // Always update LastScannedAt to track when we attempted refresh
@@ -449,9 +480,9 @@ internal sealed class LodestoneRefreshService : IDisposable
     }
 
     /// <summary>
-    /// Fetches avatar URL directly from Lodestone using character search
+    /// Fetches comprehensive player data from Lodestone including avatar and job information
     /// </summary>
-    private async Task<string?> FetchLodestoneAvatarUrl(string characterName, ulong contentId)
+    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel)> FetchLodestonePlayerData(string characterName, ulong contentId)
     {
         try
         {
@@ -470,7 +501,7 @@ internal sealed class LodestoneRefreshService : IDisposable
             if (string.IsNullOrEmpty(lodestoneId))
             {
                 _logger.LogWarning($"Could not find Lodestone ID for character {characterName}");
-                return null;
+                return (null, null, null, null);
             }
             
             // Fetch character profile page
@@ -487,21 +518,40 @@ internal sealed class LodestoneRefreshService : IDisposable
             // Extract avatar URL from profile page
             var avatarUrl = ExtractAvatarUrlFromProfile(profileResponse);
             
+            // Fetch separate Class/Job page for job data
+            var classJobUrl = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/class_job/";
+            _logger.LogDebug($"Fetching class/job page: {classJobUrl}");
+            
+            var classJobResponse = await httpClient.GetStringAsync(classJobUrl);
+            _logger.LogInformation($"Class/Job HTML length: {classJobResponse.Length} chars");
+            
+            // Extract job data from class/job page
+            var (jobLevels, mainJobId, mainJobLevel) = ExtractJobDataFromProfile(classJobResponse);
+            
             if (!string.IsNullOrEmpty(avatarUrl))
             {
                 _logger.LogInformation($"Found avatar URL for {characterName}: {avatarUrl}");
-                return avatarUrl;
             }
             else
             {
                 _logger.LogWarning($"Could not extract avatar URL from profile for {characterName}");
-                return null;
             }
+            
+            if (jobLevels != null && jobLevels.Count > 0)
+            {
+                _logger.LogInformation($"Found job data for {characterName}: {jobLevels.Count} jobs, main job {mainJobId} level {mainJobLevel}");
+            }
+            else
+            {
+                _logger.LogWarning($"Could not extract job data from profile for {characterName}");
+            }
+            
+            return (avatarUrl, jobLevels, mainJobId, mainJobLevel);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error fetching Lodestone avatar for {characterName}");
-            return null;
+            _logger.LogError(ex, $"Error fetching Lodestone data for {characterName}");
+            return (null, null, null, null);
         }
     }
 
@@ -618,6 +668,243 @@ internal sealed class LodestoneRefreshService : IDisposable
         {
             _logger.LogError(ex, "Error extracting avatar URL from profile");
             return null;
+        }
+    }
+
+    // FFXIV job validation constants
+    private const short MAX_JOB_LEVEL = 100;
+    private const short MIN_JOB_LEVEL = 1;
+    private const byte MIN_JOB_ID = 1;
+    private const byte MAX_JOB_ID = 100; // Expanded range to capture all possible job IDs
+
+    // Job name to ID mapping for text-based parsing
+    private static readonly Dictionary<string, byte> JobNameToId = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase)
+    {
+        // Tank Jobs
+        {"Paladin", 19}, {"Warrior", 21}, {"Dark Knight", 32}, {"Gunbreaker", 37},
+        // Healer Jobs  
+        {"White Mage", 24}, {"Scholar", 28}, {"Astrologian", 33}, {"Sage", 40},
+        // Melee DPS Jobs
+        {"Monk", 20}, {"Dragoon", 22}, {"Ninja", 30}, {"Samurai", 34}, {"Reaper", 39}, {"Viper", 41},
+        // Physical Ranged DPS
+        {"Bard", 23}, {"Machinist", 31}, {"Dancer", 38},
+        // Magical Ranged DPS
+        {"Black Mage", 25}, {"Summoner", 27}, {"Red Mage", 35}, {"Blue Mage", 36}, {"Pictomancer", 42},
+        // Base Classes
+        {"Gladiator", 1}, {"Pugilist", 2}, {"Marauder", 3}, {"Lancer", 4}, {"Archer", 5},
+        {"Conjurer", 6}, {"Thaumaturge", 7}, {"Arcanist", 26}, {"Rogue", 29},
+        // Crafters
+        {"Carpenter", 8}, {"Blacksmith", 9}, {"Armorer", 10}, {"Goldsmith", 11},
+        {"Leatherworker", 12}, {"Weaver", 13}, {"Alchemist", 14}, {"Culinarian", 15},
+        // Gatherers
+        {"Miner", 16}, {"Botanist", 17}, {"Fisher", 18}
+    };
+
+    /// <summary>
+    /// Validates if a job ID is within valid FFXIV range
+    /// </summary>
+    private bool IsValidJobId(byte jobId)
+    {
+        return jobId >= MIN_JOB_ID && jobId <= MAX_JOB_ID;
+    }
+
+    /// <summary>
+    /// Validates if a job level is within valid FFXIV range
+    /// </summary>
+    private bool IsValidJobLevel(short level)
+    {
+        return level >= MIN_JOB_LEVEL && level <= MAX_JOB_LEVEL;
+    }
+
+    /// <summary>
+    /// Extracts complete job level data from character profile HTML
+    /// </summary>
+    private (Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel) ExtractJobDataFromProfile(string html)
+    {
+        try
+        {
+            _logger.LogDebug($"Extracting job data from HTML (length: {html.Length})");
+            
+            // Debug: Log samples of HTML that might contain job data
+            var jobKeywords = new[] { "character__job", "class_job", "db-tooltip", "job--", "level", "classjob", "class/job" };
+            foreach (var keyword in jobKeywords)
+            {
+                if (html.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    var startIndex = html.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+                    if (startIndex >= 0)
+                    {
+                        var endIndex = Math.Min(startIndex + 1000, html.Length);
+                        var jobSample = html.Substring(Math.Max(0, startIndex - 100), endIndex - Math.Max(0, startIndex - 100));
+                        _logger.LogInformation($"HTML job section sample ({keyword}): {jobSample}");
+                        
+                        // Also look for more instances
+                        var nextIndex = html.IndexOf(keyword, startIndex + 1, StringComparison.OrdinalIgnoreCase);
+                        if (nextIndex > 0)
+                        {
+                            var nextEndIndex = Math.Min(nextIndex + 800, html.Length);
+                            var nextSample = html.Substring(Math.Max(0, nextIndex - 50), nextEndIndex - Math.Max(0, nextIndex - 50));
+                            _logger.LogInformation($"HTML job section sample 2 ({keyword}): {nextSample}");
+                        }
+                        break; // Only log first keyword to avoid spam
+                    }
+                }
+            }
+            
+            var jobLevels = new Dictionary<byte, short>();
+            byte? mainJobId = null;
+            short? mainJobLevel = null;
+            
+            // Look for job data in the character profile
+            // FFXIV Lodestone displays job levels in specific HTML patterns
+            
+            // Pattern 1: Look for job level data in class/job sections
+            // Patterns removed - using text-based parsing only since ID patterns are unreliable
+            var jobPatterns = new string[0]; // Empty array to skip ID-based parsing
+            
+            foreach (var pattern in jobPatterns)
+            {
+                var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                _logger.LogDebug($"Pattern '{pattern}' found {matches.Count} matches");
+                
+                foreach (Match match in matches)
+                {
+                    if (match.Groups.Count >= 3 && 
+                        byte.TryParse(match.Groups[1].Value, out var jobId) && 
+                        short.TryParse(match.Groups[2].Value, out var level))
+                    {
+                        // Validate job ID and level ranges
+                        if (!IsValidJobId(jobId))
+                        {
+                            _logger.LogWarning($"Invalid job ID {jobId} found in Lodestone data (valid range: {MIN_JOB_ID}-{MAX_JOB_ID})");
+                            continue;
+                        }
+
+                        if (!IsValidJobLevel(level))
+                        {
+                            _logger.LogWarning($"Invalid job level {level} found for job {jobId} in Lodestone data (valid range: {MIN_JOB_LEVEL}-{MAX_JOB_LEVEL})");
+                            continue;
+                        }
+
+                        // Only store valid job data
+                        jobLevels[jobId] = level;
+                        _logger.LogDebug($"Found job {jobId} at level {level}");
+                        
+                        // Track the highest level job as main job
+                        if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
+                        {
+                            mainJobId = jobId;
+                            mainJobLevel = level;
+                        }
+                    }
+                }
+            }
+            
+            // Alternative: Look for specific class/job blocks with stricter constraints
+            var jobBlockPattern = @"character__job[^>]*job--(\d{1,2})[^>]*>.*?character__job__level[^>]*>(\d{1,3})<";
+            var jobBlockMatches = Regex.Matches(html, jobBlockPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            _logger.LogDebug($"Job block pattern found {jobBlockMatches.Count} matches");
+            
+            foreach (Match match in jobBlockMatches)
+            {
+                if (match.Groups.Count >= 3 && 
+                    byte.TryParse(match.Groups[1].Value, out var jobId) && 
+                    short.TryParse(match.Groups[2].Value, out var level))
+                {
+                    // Validate job ID and level ranges
+                    if (!IsValidJobId(jobId))
+                    {
+                        _logger.LogWarning($"Invalid job ID {jobId} found in job block (valid range: {MIN_JOB_ID}-{MAX_JOB_ID})");
+                        continue;
+                    }
+
+                    if (!IsValidJobLevel(level))
+                    {
+                        _logger.LogWarning($"Invalid job level {level} found for job {jobId} in job block (valid range: {MIN_JOB_LEVEL}-{MAX_JOB_LEVEL})");
+                        continue;
+                    }
+
+                    // Only store valid job data (avoid duplicates)
+                    if (!jobLevels.ContainsKey(jobId))
+                    {
+                        jobLevels[jobId] = level;
+                        _logger.LogDebug($"Found job block {jobId} at level {level}");
+                        
+                        if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
+                        {
+                            mainJobId = jobId;
+                            mainJobLevel = level;
+                        }
+                    }
+                }
+            }
+            
+            // Use text-based parsing to match exact Lodestone format: "80 Paladin 571,166 / 5,992,000"
+            _logger.LogInformation("Using text-based parsing for Lodestone job data...");
+            
+            // Pattern for HTML structure: <div class="character__job__level">100</div><div class="character__job__name">Paladin</div>
+            var textPatterns = new[]
+            {
+                // Primary pattern: Level div followed by name div (actual Lodestone HTML structure)
+                @"<div\s+class=""character__job__level"">(\d{1,3})</div>.*?<div\s+class=""character__job__name[^""]*""[^>]*>([A-Za-z\s]+?)</div>",
+                // Alternative pattern: Level and name in separate HTML tags
+                @"character__job__level"">(\d{1,3})</[^>]+>.*?character__job__name[^>]*>([A-Za-z\s]+?)</",
+                // Fallback pattern: Level followed by job name in any HTML structure
+                @">(\d{1,3})<[^>]*>.*?js__tooltip[^>]*>([A-Za-z\s]+?)<"
+            };
+                
+                foreach (var pattern in textPatterns)
+                {
+                    var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                    _logger.LogDebug($"Text pattern '{pattern}' found {matches.Count} matches");
+                    
+                    foreach (Match match in matches)
+                    {
+                        if (match.Groups.Count >= 3 && 
+                            short.TryParse(match.Groups[1].Value, out var level) &&
+                            !string.IsNullOrWhiteSpace(match.Groups[2].Value))
+                        {
+                            var jobName = match.Groups[2].Value.Trim();
+                            
+                            // Clean up job name - remove extra whitespace and common artifacts
+                            jobName = System.Text.RegularExpressions.Regex.Replace(jobName, @"\s+", " ");
+                            jobName = jobName.Replace("  ", " ").Trim();
+                            
+                            // Try to map job name to ID
+                            if (JobNameToId.TryGetValue(jobName, out var jobId))
+                            {
+                                if (IsValidJobLevel(level))
+                                {
+                                    jobLevels[jobId] = level;
+                                    _logger.LogDebug($"Found job by name: {jobName} (ID {jobId}) at level {level}");
+                                    
+                                    if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
+                                    {
+                                        mainJobId = jobId;
+                                        mainJobLevel = level;
+                                    }
+                                }
+                                else
+                                {
+                                    _logger.LogWarning($"Invalid level {level} for job {jobName}");
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogDebug($"Unknown job name: '{jobName}' with level {level}");
+                            }
+                        }
+                    }
+                }
+            
+            _logger.LogInformation($"Extracted {jobLevels.Count} job levels from profile, main job: {mainJobId} level {mainJobLevel}");
+            
+            return jobLevels.Count > 0 ? (jobLevels, mainJobId, mainJobLevel) : (null, null, null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error extracting job data from profile");
+            return (null, null, null);
         }
     }
 

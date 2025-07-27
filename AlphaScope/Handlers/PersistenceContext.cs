@@ -261,6 +261,10 @@ internal sealed class PersistenceContext
                         HomeWorldId = player.HomeWorldId,
                         CurrentWorldId = player.CurrentWorldId,
                         LastScannedAt = player.LastScannedAt,
+                        LodestoneJobData = player.LodestoneJobData,
+                        MainJobId = player.MainJobId,
+                        MainJobLevel = player.MainJobLevel,
+                        LastJobDataUpdate = player.LastJobDataUpdate,
                     };
                     playerCount++;
                     if (!string.IsNullOrEmpty(player.AvatarLink))
@@ -571,6 +575,10 @@ internal sealed class PersistenceContext
                     HomeWorldId = mapping.WorldId,
                     CurrentWorldId = mapping.CurrentWorldId,
                     LastScannedAt = DateTime.UtcNow,
+                    LodestoneJobData = null,
+                    MainJobId = null,
+                    MainJobLevel = null,
+                    LastJobDataUpdate = null,
                 };
                 _playerCache[mapping.ContentId] = newCachedPlayer;
                 
@@ -686,6 +694,10 @@ internal sealed class PersistenceContext
                     HomeWorldId = player.WorldId,
                     CurrentWorldId = player.CurrentWorldId,
                     LastScannedAt = DateTime.UtcNow,
+                    LodestoneJobData = null,
+                    MainJobId = null,
+                    MainJobLevel = null,
+                    LastJobDataUpdate = null,
                 };
                 _playerCache[player.ContentId] = cachedPlayer;
                 
@@ -728,6 +740,10 @@ internal sealed class PersistenceContext
         public ushort? HomeWorldId { get; init; }
         public ushort? CurrentWorldId { get; init; }
         public DateTime? LastScannedAt { get; init; }
+        public string? LodestoneJobData { get; init; }
+        public byte? MainJobId { get; init; }
+        public short? MainJobLevel { get; init; }
+        public DateTime? LastJobDataUpdate { get; init; }
     }
 
     /// <summary>
@@ -746,6 +762,10 @@ internal sealed class PersistenceContext
                 HomeWorldId = cachedPlayer.HomeWorldId,
                 CurrentWorldId = cachedPlayer.CurrentWorldId,
                 LastScannedAt = lastScannedAt,
+                LodestoneJobData = cachedPlayer.LodestoneJobData,
+                MainJobId = cachedPlayer.MainJobId,
+                MainJobLevel = cachedPlayer.MainJobLevel,
+                LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
             };
             
             _logger?.LogDebug($"Updated LastScannedAt for cached player {cachedPlayer.Name}: {lastScannedAt:yyyy-MM-dd HH:mm:ss} UTC");
@@ -793,6 +813,62 @@ internal sealed class PersistenceContext
         else
         {
             _logger?.LogWarning($"[AVATAR DEBUG] Could not find player in cache to update avatar - ContentId: {contentId}");
+        }
+    }
+
+    /// <summary>
+    /// Updates the job data for a cached player and persists it to the database
+    /// </summary>
+    public static void UpdateCachedPlayerJobData(ulong contentId, string? lodestoneJobData, byte? mainJobId, short? mainJobLevel, DateTime? lastJobDataUpdate)
+    {
+        if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
+        {
+            // Create new cached player instance with updated job data
+            _playerCache[contentId] = new CachedPlayer
+            {
+                AccountId = cachedPlayer.AccountId,
+                Name = cachedPlayer.Name,
+                AvatarLink = cachedPlayer.AvatarLink,
+                HomeWorldId = cachedPlayer.HomeWorldId,
+                CurrentWorldId = cachedPlayer.CurrentWorldId,
+                LastScannedAt = cachedPlayer.LastScannedAt,
+                LodestoneJobData = lodestoneJobData,
+                MainJobId = mainJobId,
+                MainJobLevel = mainJobLevel,
+                LastJobDataUpdate = lastJobDataUpdate,
+            };
+            
+            _logger?.LogDebug($"Updated job data for cached player {cachedPlayer.Name}: Main job {mainJobId} level {mainJobLevel}");
+            
+            // Persist to database
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+                
+                var player = dbContext.Players.Find(contentId);
+                if (player != null)
+                {
+                    player.LodestoneJobData = lodestoneJobData;
+                    player.MainJobId = mainJobId;
+                    player.MainJobLevel = mainJobLevel;
+                    player.LastJobDataUpdate = lastJobDataUpdate;
+                    dbContext.SaveChanges();
+                    _logger?.LogDebug($"Persisted job data for player {cachedPlayer.Name} to database");
+                }
+                else
+                {
+                    _logger?.LogWarning($"Could not find player {contentId} in database to update job data");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Failed to persist job data for player {cachedPlayer.Name}");
+            }
+        }
+        else
+        {
+            _logger?.LogWarning($"Could not find player in cache to update job data - ContentId: {contentId}");
         }
     }
 

@@ -10,5 +10,9 @@ namespace AlphaScopeServer.Models.DTOs
         [JsonProperty("B")] public string? AvatarLink { get; set; }
         [JsonProperty("J")] public byte? CurrentJobId { get; set; }
         [JsonProperty("K")] public short? CurrentJobLevel { get; set; }
+        [JsonProperty("LJ")] public string? LodestoneJobData { get; set; }
+        [JsonProperty("MJ")] public byte? MainJobId { get; set; }
+        [JsonProperty("ML")] public short? MainJobLevel { get; set; }
+        [JsonProperty("LU")] public DateTime? LastJobDataUpdate { get; set; }
     }
 }

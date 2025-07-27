@@ -133,12 +133,29 @@ namespace AlphaScope
             if (!jobId.HasValue || jobId.Value == 0)
                 return "Unknown";
 
+            // Validate job ID is within reasonable bounds (1-100 to allow for future jobs)
+            if (jobId.Value > 100)
+            {
+                Plugin.Log.Warning($"Invalid job ID {jobId.Value} detected - outside valid range (1-100)");
+                return "Unknown";
+            }
+
             var jobSheet = Plugin.DataManager.GetExcelSheet<ClassJob>();
             if (jobSheet.TryGetRow(jobId.Value, out var job))
             {
-                return ToTitleCase(job.Name.ToString());
+                var jobName = job.Name.ToString();
+                
+                // Additional validation - ensure we got a valid name
+                if (string.IsNullOrWhiteSpace(jobName))
+                {
+                    Plugin.Log.Warning($"Job ID {jobId.Value} returned empty name from game data");
+                    return "Unknown";
+                }
+                
+                return ToTitleCase(jobName);
             }
 
+            Plugin.Log.Warning($"Job ID {jobId.Value} not found in game data sheet");
             return "Unknown";
         }
 
@@ -147,12 +164,29 @@ namespace AlphaScope
             if (!jobId.HasValue || jobId.Value == 0)
                 return "???";
 
+            // Validate job ID is within reasonable bounds (1-100 to allow for future jobs)
+            if (jobId.Value > 100)
+            {
+                Plugin.Log.Warning($"Invalid job ID {jobId.Value} detected for abbreviation - outside valid range (1-100)");
+                return "???";
+            }
+
             var jobSheet = Plugin.DataManager.GetExcelSheet<ClassJob>();
             if (jobSheet.TryGetRow(jobId.Value, out var job))
             {
-                return job.Abbreviation.ToString();
+                var abbreviation = job.Abbreviation.ToString();
+                
+                // Additional validation - ensure we got a valid abbreviation
+                if (string.IsNullOrWhiteSpace(abbreviation))
+                {
+                    Plugin.Log.Warning($"Job ID {jobId.Value} returned empty abbreviation from game data");
+                    return "???";
+                }
+                
+                return abbreviation;
             }
 
+            Plugin.Log.Warning($"Job ID {jobId.Value} not found in game data sheet for abbreviation");
             return "???";
         }
 

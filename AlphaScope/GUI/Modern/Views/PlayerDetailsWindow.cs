@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ImGuiNET;
 using Dalamud.Interface.Utility;
@@ -82,6 +85,12 @@ public class PlayerDetailsWindow : BaseModernWindow
             if (ImGui.BeginTabItem("History"))
             {
                 DrawHistoryTab();
+                ImGui.EndTabItem();
+            }
+            
+            if (ImGui.BeginTabItem("Jobs"))
+            {
+                DrawJobsTab();
                 ImGui.EndTabItem();
             }
             
@@ -224,6 +233,18 @@ public class PlayerDetailsWindow : BaseModernWindow
             
             DrawInfoRow("Last Seen", GetLastSeenText());
             DrawInfoRow("Last Scanned", GetLastScannedText());
+            
+            // Main job information from Lodestone
+            if (PersistenceContext._playerCache.TryGetValue(_contentId, out var freshPlayerData) && 
+                freshPlayerData.MainJobId.HasValue && freshPlayerData.MainJobLevel.HasValue)
+            {
+                var mainJobName = Utils.GetJobName(freshPlayerData.MainJobId.Value);
+                DrawInfoRow("Main Job (Lodestone)", $"{mainJobName} Lv.{freshPlayerData.MainJobLevel.Value}");
+            }
+            else
+            {
+                DrawInfoRow("Main Job (Lodestone)", "Not available");
+            }
         }
         
         ImGuiHelpers.ScaledDummy(10f);
@@ -389,6 +410,204 @@ public class PlayerDetailsWindow : BaseModernWindow
             {
                 existingFavorite.Note = "";
                 config.Save();
+            }
+        }
+    }
+
+    private void DrawJobsTab()
+    {
+        // Get job data from the cached player or fresh data
+        Dictionary<byte, short>? jobLevels = null;
+        byte? mainJobId = null;
+        short? mainJobLevel = null;
+        DateTime? lastJobDataUpdate = null;
+
+        // Try to get fresh player data from cache first
+        if (PersistenceContext._playerCache.TryGetValue(_contentId, out var freshPlayerData))
+        {
+            if (!string.IsNullOrEmpty(freshPlayerData.LodestoneJobData))
+            {
+                try
+                {
+                    var rawJobLevels = JsonSerializer.Deserialize<Dictionary<byte, short>>(freshPlayerData.LodestoneJobData);
+                    if (rawJobLevels != null)
+                    {
+                        // Validate and filter job data
+                        jobLevels = new Dictionary<byte, short>();
+                        foreach (var kvp in rawJobLevels)
+                        {
+                            // Validate job ID (1-100) and level (1-100)
+                            if (kvp.Key >= 1 && kvp.Key <= 100 && kvp.Value >= 1 && kvp.Value <= 100)
+                            {
+                                jobLevels[kvp.Key] = kvp.Value;
+                            }
+                            else
+                            {
+                                Plugin.Log.Warning($"Filtered invalid job data for player {_contentId}: Job ID {kvp.Key}, Level {kvp.Value}");
+                            }
+                        }
+                    }
+                    
+                    // Validate main job data
+                    if (freshPlayerData.MainJobId.HasValue && 
+                        (freshPlayerData.MainJobId.Value < 1 || freshPlayerData.MainJobId.Value > 100))
+                    {
+                        Plugin.Log.Warning($"Invalid main job ID {freshPlayerData.MainJobId.Value} for player {_contentId}");
+                        mainJobId = null;
+                        mainJobLevel = null;
+                    }
+                    else if (freshPlayerData.MainJobLevel.HasValue && 
+                             (freshPlayerData.MainJobLevel.Value < 1 || freshPlayerData.MainJobLevel.Value > 100))
+                    {
+                        Plugin.Log.Warning($"Invalid main job level {freshPlayerData.MainJobLevel.Value} for player {_contentId}");
+                        mainJobLevel = null;
+                    }
+                    else
+                    {
+                        mainJobId = freshPlayerData.MainJobId;
+                        mainJobLevel = freshPlayerData.MainJobLevel;
+                    }
+                    
+                    lastJobDataUpdate = freshPlayerData.LastJobDataUpdate;
+                }
+                catch (JsonException ex)
+                {
+                    Plugin.Log.Warning($"Failed to parse job data for player {_contentId}: {ex.Message}");
+                }
+            }
+        }
+
+        // Job Data Header
+        if (ImGui.CollapsingHeader("Job Information", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            if (jobLevels != null && jobLevels.Count > 0)
+            {
+                // Main Job Information
+                if (mainJobId.HasValue && mainJobLevel.HasValue)
+                {
+                    ImGui.Text("Main Job:");
+                    ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
+                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+                    {
+                        var mainJobName = Utils.GetJobName(mainJobId.Value);
+                        ImGui.Text($"{mainJobName} Lv.{mainJobLevel.Value}");
+                    }
+                }
+
+                ImGuiHelpers.ScaledDummy(5f);
+                
+                // Last Updated
+                if (lastJobDataUpdate.HasValue)
+                {
+                    ImGui.Text("Last Updated:");
+                    ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
+                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+                    {
+                        var timeAgo = DateTime.UtcNow - lastJobDataUpdate.Value;
+                        ImGui.Text(FormatTimeAgo(timeAgo));
+                    }
+                }
+
+                ImGuiHelpers.ScaledDummy(10f);
+
+                // Job Levels Table
+                ImGui.Text("All Job Levels:");
+                ImGuiHelpers.ScaledDummy(5f);
+
+                if (ImGui.BeginTable("JobLevelsTable", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable))
+                {
+                    ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 120f * ImGuiHelpers.GlobalScale);
+                    ImGui.TableSetupColumn("Level", ImGuiTableColumnFlags.WidthFixed, 60f * ImGuiHelpers.GlobalScale);
+                    ImGui.TableSetupColumn("Abbreviation", ImGuiTableColumnFlags.WidthFixed, 80f * ImGuiHelpers.GlobalScale);
+                    ImGui.TableHeadersRow();
+
+                    // Sort jobs by level (highest first), then by name
+                    var sortedJobs = jobLevels.OrderByDescending(j => j.Value).ThenBy(j => Utils.GetJobName(j.Key));
+
+                    foreach (var job in sortedJobs)
+                    {
+                        ImGui.TableNextRow();
+                        
+                        ImGui.TableSetColumnIndex(0);
+                        var jobName = Utils.GetJobName(job.Key);
+                        
+                        // Highlight main job
+                        if (job.Key == mainJobId)
+                        {
+                            using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+                            {
+                                ImGui.Text($"★ {jobName}");
+                            }
+                        }
+                        else
+                        {
+                            ImGui.Text(jobName);
+                        }
+
+                        ImGui.TableSetColumnIndex(1);
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, 
+                            job.Value >= 90 ? ThemeManager.Colors.Success : 
+                            job.Value >= 50 ? ThemeManager.Colors.Warning : 
+                            ThemeManager.Colors.TextSecondary))
+                        {
+                            ImGui.Text(job.Value.ToString());
+                        }
+
+                        ImGui.TableSetColumnIndex(2);
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+                        {
+                            ImGui.Text(Utils.GetJobAbbreviation(job.Key));
+                        }
+                    }
+
+                    ImGui.EndTable();
+                }
+
+                ImGuiHelpers.ScaledDummy(10f);
+
+                // Job Statistics
+                if (ImGui.CollapsingHeader("Job Statistics"))
+                {
+                    var totalJobs = jobLevels.Count;
+                    var maxLevel = jobLevels.Values.Max();
+                    var averageLevel = jobLevels.Values.Select(v => (double)v).Average();
+                    var jobsAt90Plus = jobLevels.Values.Count(l => l >= 90);
+
+                    DrawInfoRow("Total Jobs", totalJobs.ToString());
+                    DrawInfoRow("Highest Level", maxLevel.ToString());
+                    DrawInfoRow("Average Level", $"{averageLevel:F1}");
+                    DrawInfoRow("Jobs at Lv.90+", jobsAt90Plus.ToString());
+                }
+            }
+            else
+            {
+                using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+                {
+                    ImGui.Text("No job data available yet.");
+                    ImGui.Text("Job data will be collected when this player's Lodestone profile is refreshed.");
+                }
+
+                ImGuiHelpers.ScaledDummy(10f);
+
+                if (ImGui.Button("Refresh Lodestone Data"))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await PersistenceContext.RefreshPlayerImmediately(_contentId);
+                        }
+                        catch (Exception ex)
+                        {
+                            Plugin.Log.Error($"Failed to refresh player data: {ex}");
+                        }
+                    });
+                }
+
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("Fetch job data from Lodestone immediately");
+                }
             }
         }
     }

@@ -33,5 +33,13 @@ namespace AlphaScope.API.Models
         public byte? CurrentJobId { get; set; }
         [JsonProperty("11")]
         public short? CurrentJobLevel { get; set; }
+        [JsonProperty("12")]
+        public string? LodestoneJobData { get; set; }
+        [JsonProperty("13")]
+        public byte? MainJobId { get; set; }
+        [JsonProperty("14")]
+        public short? MainJobLevel { get; set; }
+        [JsonProperty("15")]
+        public DateTime? LastJobDataUpdate { get; set; }
     }
 }

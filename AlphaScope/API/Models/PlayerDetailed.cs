@@ -45,6 +45,14 @@ namespace AlphaScope.API.Models
         public byte? CurrentJobId { get; set; }
         [JsonProperty("K")]
         public short? CurrentJobLevel { get; set; }
+        [JsonProperty("L")]
+        public string? LodestoneJobData { get; set; }
+        [JsonProperty("M")]
+        public byte? MainJobId { get; set; }
+        [JsonProperty("N")]
+        public short? MainJobLevel { get; set; }
+        [JsonProperty("O")]
+        public DateTime? LastJobDataUpdate { get; set; }
         public class PlayerProfileVisitInfoDto
         {
             [JsonProperty("1")]

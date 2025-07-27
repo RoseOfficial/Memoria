@@ -367,7 +367,11 @@ public sealed class Plugin : IDalamudPlugin
                         CurrentJobId INTEGER NULL,
                         CurrentJobLevel INTEGER NULL,
                         AvatarLink TEXT NULL,
-                        LastScannedAt TEXT NULL
+                        LastScannedAt TEXT NULL,
+                        LodestoneJobData TEXT NULL,
+                        MainJobId INTEGER NULL,
+                        MainJobLevel INTEGER NULL,
+                        LastJobDataUpdate TEXT NULL
                     );
                 ";
                 command.ExecuteNonQuery();
@@ -399,6 +403,10 @@ public sealed class Plugin : IDalamudPlugin
                 bool hasLastScannedAt = false;
                 bool hasHomeWorldId = false;
                 bool hasCurrentWorldId = false;
+                bool hasLodestoneJobData = false;
+                bool hasMainJobId = false;
+                bool hasMainJobLevel = false;
+                bool hasLastJobDataUpdate = false;
                 while (playerReader.Read())
                 {
                     var columnName = playerReader.GetString(1); // name column
@@ -408,6 +416,10 @@ public sealed class Plugin : IDalamudPlugin
                     if (columnName == "LastScannedAt") hasLastScannedAt = true;
                     if (columnName == "HomeWorldId") hasHomeWorldId = true;
                     if (columnName == "CurrentWorldId") hasCurrentWorldId = true;
+                    if (columnName == "LodestoneJobData") hasLodestoneJobData = true;
+                    if (columnName == "MainJobId") hasMainJobId = true;
+                    if (columnName == "MainJobLevel") hasMainJobLevel = true;
+                    if (columnName == "LastJobDataUpdate") hasLastJobDataUpdate = true;
                 }
                 playerReader.Close();
                 
@@ -448,6 +460,31 @@ public sealed class Plugin : IDalamudPlugin
                 if (!hasCurrentWorldId)
                 {
                     command.CommandText = "ALTER TABLE Players ADD COLUMN CurrentWorldId INTEGER NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                // Add Lodestone job data columns if they don't exist (for comprehensive job tracking)
+                if (!hasLodestoneJobData)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN LodestoneJobData TEXT NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                if (!hasMainJobId)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN MainJobId INTEGER NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                if (!hasMainJobLevel)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN MainJobLevel INTEGER NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                if (!hasLastJobDataUpdate)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastJobDataUpdate TEXT NULL;";
                     command.ExecuteNonQuery();
                 }
             }
