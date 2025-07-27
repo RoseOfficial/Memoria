@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using System.Threading.Tasks;
 using ImGuiNET;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Components;
@@ -8,6 +9,8 @@ using Dalamud.Interface.Utility.Raii;
 using AlphaScope.GUI.Modern.Base;
 using AlphaScope.Handlers;
 using AlphaScope.GUI;
+using AlphaScope.Database;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AlphaScope.GUI.Modern.Views;
 
@@ -20,6 +23,10 @@ public class PlayerDetailsWindow : BaseModernWindow
     private readonly ulong _contentId;
     private readonly PersistenceContext.CachedPlayer _cachedPlayer;
     private bool _isFavorited;
+    private DateTime? _lastScannedAt;
+    private bool _isRefreshing = false;
+    private string? _avatarUrl;
+    private bool _hasQueuedForRefresh = false;
     
     internal PlayerDetailsWindow(ulong contentId, PersistenceContext.CachedPlayer cachedPlayer) 
         : base($"PlayerDetails_{contentId}", $"Player Details - {cachedPlayer.Name}")
@@ -27,6 +34,12 @@ public class PlayerDetailsWindow : BaseModernWindow
         _contentId = contentId;
         _cachedPlayer = cachedPlayer ?? throw new ArgumentNullException(nameof(cachedPlayer));
         _isFavorited = Plugin.Instance.Configuration.FavoritedPlayer.ContainsKey((long)contentId);
+        
+        // Load LastScannedAt from database
+        _lastScannedAt = GetLastScannedAt();
+        
+        // Get avatar URL from cached player
+        _avatarUrl = _cachedPlayer.AvatarLink;
         
         SizeConstraints = new WindowSizeConstraints
         {
@@ -83,11 +96,7 @@ public class PlayerDetailsWindow : BaseModernWindow
         var avatarSize = ImGuiHelpers.ScaledVector2(80f, 80f);
         
         // Left side: Avatar
-        ImGui.Button("👤", avatarSize);
-        if (ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip("Avatar (Coming Soon)");
-        }
+        RenderAvatar(avatarSize);
         
         ImGui.SameLine();
         
@@ -192,6 +201,7 @@ public class PlayerDetailsWindow : BaseModernWindow
             
             DrawInfoRow("Status", _isFavorited ? "⭐ Favorited" : "Standard");
             DrawInfoRow("Last Seen", GetLastSeenText());
+            DrawInfoRow("Last Scanned", GetLastScannedText());
         }
         
         ImGuiHelpers.ScaledDummy(10f);
@@ -226,6 +236,39 @@ public class PlayerDetailsWindow : BaseModernWindow
             if (ImGui.Button("Search Similar"))
             {
                 ShowComingSoon("Similar player search");
+            }
+            
+            // Refresh button
+            if (_isRefreshing)
+            {
+                using (ImRaii.Disabled(true))
+                {
+                    ImGui.Button("Refreshing...");
+                }
+            }
+            else
+            {
+                if (ImGui.Button("Refresh Lodestone Data"))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        _isRefreshing = true;
+                        try
+                        {
+                            await PersistenceContext.RefreshPlayerImmediately(_contentId);
+                            _lastScannedAt = GetLastScannedAt(); // Refresh the timestamp
+                        }
+                        finally
+                        {
+                            _isRefreshing = false;
+                        }
+                    });
+                }
+            }
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Fetch fresh data from Lodestone immediately");
             }
         }
     }
@@ -413,5 +456,86 @@ public class PlayerDetailsWindow : BaseModernWindow
     private void ShowNotification(string message)
     {
         Plugin.Log.Info($"[PlayerDetails] {message}");
+    }
+
+    private DateTime? GetLastScannedAt()
+    {
+        try
+        {
+            if (Plugin._serviceProvider == null) return null;
+            
+            using var scope = Plugin._serviceProvider.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+            var player = dbContext.Players.Find(_contentId);
+            return player?.LastScannedAt;
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error($"Error retrieving LastScannedAt for player {_contentId}: {ex}");
+            return null;
+        }
+    }
+
+    private string GetLastScannedText()
+    {
+        if (_lastScannedAt == null)
+        {
+            return "Never scanned";
+        }
+
+        var timeAgo = DateTime.UtcNow - _lastScannedAt.Value;
+        return $"Scanned {FormatTimeAgo(timeAgo)}";
+    }
+
+    private void RenderAvatar(Vector2 avatarSize)
+    {
+        nint avatarHandle = 0;
+        
+        // Get fresh player data from cache every frame to pick up background updates
+        if (PersistenceContext._playerCache.TryGetValue(_contentId, out var freshPlayerData))
+        {
+            // Check if we got a new avatar URL from the background service
+            if (!string.IsNullOrEmpty(freshPlayerData.AvatarLink) && _avatarUrl != freshPlayerData.AvatarLink)
+            {
+                _avatarUrl = freshPlayerData.AvatarLink;
+                _hasQueuedForRefresh = false; // Reset flag when we get a new avatar URL
+            }
+        }
+        
+        // Also check the original cached player reference (fallback)
+        if (!string.IsNullOrEmpty(_cachedPlayer.AvatarLink) && _avatarUrl != _cachedPlayer.AvatarLink)
+        {
+            _avatarUrl = _cachedPlayer.AvatarLink;
+            _hasQueuedForRefresh = false; // Reset flag when we get a new avatar URL
+        }
+        
+        // Try to get avatar from cache if URL is available
+        if (!string.IsNullOrEmpty(_avatarUrl))
+        {
+            avatarHandle = Plugin.AvatarCacheManager.GetAvatarHandle(_avatarUrl);
+        }
+        
+        if (avatarHandle != 0)
+        {
+            // Display the actual avatar image
+            ImGui.Image(avatarHandle, avatarSize);
+        }
+        else
+        {
+            // Fall back to placeholder button
+            ImGui.Button("👤", avatarSize);
+            
+            // Queue player for background refresh if no avatar available (only once)
+            if (string.IsNullOrEmpty(_avatarUrl) && !_hasQueuedForRefresh)
+            {
+                PersistenceContext.QueuePlayerForLodestoneRefresh(_contentId);
+                _hasQueuedForRefresh = true;
+            }
+        }
+        
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(string.IsNullOrEmpty(_avatarUrl) ? "Loading avatar..." : "Player Avatar");
+        }
     }
 }

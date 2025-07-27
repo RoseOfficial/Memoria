@@ -13,16 +13,21 @@ builder.Services.AddControllers()
         options.SerializerSettings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
     });
 
-// Configure Entity Framework
+// Configure Entity Framework with performance optimizations
 builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Data Source=AlphaScope.db";
+        ?? "Data Source=AlphaScope.db;Cache=Shared;Pooling=true";
     options.UseSqlite(connectionString, sqliteOptions =>
     {
-        sqliteOptions.CommandTimeout(30);
+        sqliteOptions.CommandTimeout(10); // Reduced timeout for faster failure detection
     });
-});
+    
+    // Performance optimizations
+    options.EnableSensitiveDataLogging(false);
+    options.EnableServiceProviderCaching();
+    options.EnableDetailedErrors(false);
+}, ServiceLifetime.Scoped);
 
 // Configure CORS
 builder.Services.AddCors(options =>
@@ -59,9 +64,11 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Configure logging
+// Configure logging with performance filters
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Information);
 
 var app = builder.Build();
 

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
+using System.Threading.Tasks;
 using ImGuiNET;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Components;
@@ -20,7 +22,9 @@ public class PlayerCard : BaseComponent
     private readonly PersistenceContext.CachedPlayer _cachedPlayer;
     private readonly ulong _contentId;
     private bool _isFavorited;
-    private string _avatarUrl = string.Empty;
+    private string? _avatarUrl;
+    private bool _fetchingAvatar = false;
+    private bool _hasQueuedForRefresh = false;
     
     internal PersistenceContext.CachedPlayer Player => _cachedPlayer;
     public ulong ContentId => _contentId;
@@ -32,8 +36,8 @@ public class PlayerCard : BaseComponent
         _cachedPlayer = cachedPlayer ?? throw new ArgumentNullException(nameof(cachedPlayer));
         _isFavorited = Plugin.Instance.Configuration.FavoritedPlayer.ContainsKey((long)contentId);
         
-        // Try to get avatar URL (placeholder for now)
-        _avatarUrl = ""; // TODO: Get from avatar cache when implemented
+        // Get avatar URL from cached player
+        _avatarUrl = _cachedPlayer.AvatarLink;
     }
 
     protected override void OnRender()
@@ -50,8 +54,8 @@ public class PlayerCard : BaseComponent
             // Left side: Avatar placeholder and basic info
             var avatarSize = ImGuiHelpers.ScaledVector2(64f, 64f);
             
-            // Simple avatar placeholder using button
-            ImGui.Button("👤", avatarSize);
+            // Avatar display with fallback to placeholder
+            RenderAvatar(avatarSize);
             
             ImGui.SameLine();
             
@@ -176,6 +180,58 @@ public class PlayerCard : BaseComponent
         catch (Exception ex)
         {
             Plugin.Log.Error($"Failed to open adventure plate for {_contentId}: {ex}");
+        }
+    }
+
+    // Background refresh service handles avatar fetching - no manual fetching needed
+
+    private void RenderAvatar(Vector2 avatarSize)
+    {
+        nint avatarHandle = 0;
+        
+        // Get fresh player data from cache every frame to pick up background updates
+        if (PersistenceContext._playerCache.TryGetValue(_contentId, out var freshPlayerData))
+        {
+            // Check if we got a new avatar URL from the background service
+            if (!string.IsNullOrEmpty(freshPlayerData.AvatarLink) && _avatarUrl != freshPlayerData.AvatarLink)
+            {
+                _avatarUrl = freshPlayerData.AvatarLink;
+                _hasQueuedForRefresh = false; // Reset flag when we get a new avatar URL
+            }
+        }
+        
+        // Also check the original cached player reference (fallback)
+        if (!string.IsNullOrEmpty(_cachedPlayer.AvatarLink) && _avatarUrl != _cachedPlayer.AvatarLink)
+        {
+            _avatarUrl = _cachedPlayer.AvatarLink;
+            _hasQueuedForRefresh = false; // Reset flag when we get a new avatar URL
+        }
+        
+        // Try to get avatar from cache if URL is available
+        if (!string.IsNullOrEmpty(_avatarUrl))
+        {
+            avatarHandle = Plugin.AvatarCacheManager.GetAvatarHandle(_avatarUrl);
+        }
+        else
+        {
+        }
+        
+        if (avatarHandle != 0)
+        {
+            // Display the actual avatar image
+            ImGui.Image(avatarHandle, avatarSize);
+        }
+        else
+        {
+            // Fall back to placeholder button
+            ImGui.Button("👤", avatarSize);
+            
+            // Queue player for background refresh if no avatar available (only once)
+            if (string.IsNullOrEmpty(_avatarUrl) && !_hasQueuedForRefresh)
+            {
+                PersistenceContext.QueuePlayerForLodestoneRefresh(_contentId);
+                _hasQueuedForRefresh = true;
+            }
         }
     }
 }

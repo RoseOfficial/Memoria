@@ -23,12 +23,14 @@ using AlphaScope.Database;
 using AlphaScope.GUI;
 using AlphaScope.Handlers;
 using AlphaScope.Properties;
+using AlphaScope.Services;
 
 // System dependencies
 using System;
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace AlphaScope;
 
@@ -124,6 +126,11 @@ public sealed class Plugin : IDalamudPlugin
     /// Manager for caching and retrieving character avatar images from Lodestone
     /// </summary>
     public static AvatarCacheManager AvatarCacheManager;
+    
+    /// <summary>
+    /// Background service for continuously refreshing character data from Lodestone
+    /// </summary>
+    private LodestoneRefreshService? _lodestoneRefreshService;
     /// <summary>
     /// Initializes the AlphaScope plugin with dependency injection from Dalamud.
     /// Sets up the service container, configures database connections, initializes UI windows,
@@ -196,9 +203,16 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton<ObjectTableHandler>();           // Scans nearby players and objects
         serviceCollection.AddSingleton<GameHooks>();                    // Low-level game event hooks
         serviceCollection.AddSingleton<ApiClient>();                    // HTTP client for server communication
+        serviceCollection.AddSingleton<LodestoneRefreshService>();       // Background Lodestone data refresh service
         
         // Load plugin configuration from Dalamud config system
         Configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        
+        // Migrate configuration to newer versions
+        MigrateConfiguration(pluginInterface);
+        
+        // Register configuration as a service
+        serviceCollection.AddSingleton(Configuration);
 
         // Initialize localization based on user preference or system culture
         if (string.IsNullOrWhiteSpace(Configuration.Language.ToString()))
@@ -270,7 +284,27 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (command == "/alpha")
         {
-            ModernMainWindow.IsOpen = true;
+            if (arguments.Trim().ToLower() == "test")
+            {
+                // Test the Lodestone refresh service
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        Log.Information("Testing Lodestone refresh service...");
+                        var success = await _lodestoneRefreshService?.ForceProcessNextPlayer();
+                        Log.Information($"Test result: {success}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Error testing Lodestone service");
+                    }
+                });
+            }
+            else
+            {
+                ModernMainWindow.IsOpen = true;
+            }
         }
     }
 
@@ -305,6 +339,7 @@ public sealed class Plugin : IDalamudPlugin
         try
         {
             var connection = dbContext.Database.GetDbConnection();
+            Log.Information($"Database connection string: {connection.ConnectionString}");
             connection.Open();
             
             using var command = connection.CreateCommand();
@@ -316,6 +351,7 @@ public sealed class Plugin : IDalamudPlugin
             
             var result = command.ExecuteScalar();
             bool playersTableExists = result != null;
+            Log.Information($"Players table exists: {playersTableExists}");
             
             if (!playersTableExists)
             {
@@ -327,7 +363,9 @@ public sealed class Plugin : IDalamudPlugin
                         Name TEXT NOT NULL,
                         AccountId INTEGER NULL,
                         CurrentJobId INTEGER NULL,
-                        CurrentJobLevel INTEGER NULL
+                        CurrentJobLevel INTEGER NULL,
+                        AvatarLink TEXT NULL,
+                        LastScannedAt TEXT NULL
                     );
                 ";
                 command.ExecuteNonQuery();
@@ -355,11 +393,15 @@ public sealed class Plugin : IDalamudPlugin
                 using var playerReader = command.ExecuteReader();
                 bool hasJobId = false;
                 bool hasJobLevel = false;
+                bool hasAvatarLink = false;
+                bool hasLastScannedAt = false;
                 while (playerReader.Read())
                 {
                     var columnName = playerReader.GetString(1); // name column
                     if (columnName == "CurrentJobId") hasJobId = true;
                     if (columnName == "CurrentJobLevel") hasJobLevel = true;
+                    if (columnName == "AvatarLink") hasAvatarLink = true;
+                    if (columnName == "LastScannedAt") hasLastScannedAt = true;
                 }
                 playerReader.Close();
                 
@@ -373,6 +415,20 @@ public sealed class Plugin : IDalamudPlugin
                 if (!hasJobLevel)
                 {
                     command.CommandText = "ALTER TABLE Players ADD COLUMN CurrentJobLevel INTEGER NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                // Add avatar link column if it doesn't exist
+                if (!hasAvatarLink)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN AvatarLink TEXT NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                // Add last scanned timestamp column if it doesn't exist (for background refresh system)
+                if (!hasLastScannedAt)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastScannedAt TEXT NULL;";
                     command.ExecuteNonQuery();
                 }
             }
@@ -393,7 +449,7 @@ public sealed class Plugin : IDalamudPlugin
     /// Order matters - some services depend on others being initialized first.
     /// </summary>
     /// <param name="serviceProvider">Service provider containing registered services</param>
-    private static void InitializeRequiredServices(ServiceProvider serviceProvider)
+    private void InitializeRequiredServices(ServiceProvider serviceProvider)
     {
         
         // Start social system monitoring
@@ -402,7 +458,33 @@ public sealed class Plugin : IDalamudPlugin
         // Start player scanning and game event monitoring
         serviceProvider.GetRequiredService<ObjectTableHandler>();
         serviceProvider.GetRequiredService<GameHooks>();
+        
+        // Start background Lodestone refresh service
+        Log.Information("Plugin: Initializing LodestoneRefreshService...");
+        _lodestoneRefreshService = serviceProvider.GetRequiredService<LodestoneRefreshService>();
+        Log.Information("Plugin: LodestoneRefreshService instance created, starting background task...");
+        
+        // Start the service immediately in a fire-and-forget manner
+        var startTask = _lodestoneRefreshService.StartAsync();
+        _ = startTask.ContinueWith(task =>
+        {
+            if (task.IsCompletedSuccessfully)
+            {
+                Log.Information("Plugin: LodestoneRefreshService.StartAsync() completed successfully");
+            }
+            else if (task.IsFaulted)
+            {
+                Log.Error(task.Exception, "Plugin: Failed to start LodestoneRefreshService");
+            }
+            else
+            {
+                Log.Warning("Plugin: LodestoneRefreshService.StartAsync() was cancelled");
+            }
+        }, TaskScheduler.Default);
+
+        // Authentication check removed - users will need to manually configure API keys
     }
+
 
     /// <summary>
     /// Disposes of all plugin resources when the plugin is unloaded.
@@ -411,6 +493,10 @@ public sealed class Plugin : IDalamudPlugin
     /// </summary>
     public void Dispose()
     {
+        // Stop background Lodestone refresh service
+        _lodestoneRefreshService?.StopAsync().GetAwaiter().GetResult();
+        _lodestoneRefreshService?.Dispose();
+        
         // Dispose of dependency injection container and all registered services
         _serviceProvider?.Dispose();
         
@@ -430,5 +516,52 @@ public sealed class Plugin : IDalamudPlugin
         // Ensure SQLite connection pool is cleared to prevent file locking issues
         using (SqliteConnection sqliteConnection = new(_sqliteConnectionString))
             SqliteConnection.ClearPool(sqliteConnection);
+    }
+
+    /// <summary>
+    /// Migrates configuration settings from older versions to maintain compatibility
+    /// and ensure users get performance improvements automatically
+    /// </summary>
+    private void MigrateConfiguration(IDalamudPluginInterface pluginInterface)
+    {
+        bool needsSave = false;
+        
+        // Migrate from version 1 to version 2: Faster Lodestone refresh settings
+        if (Configuration.Version < 2)
+        {
+            Log.Information("Migrating configuration from version {OldVersion} to version 2", Configuration.Version);
+            
+            // Update Lodestone refresh timings for much faster avatar processing
+            if (Configuration.LodestoneRefreshDelaySeconds > 1)
+            {
+                Log.Information("Updating LodestoneRefreshDelaySeconds from {Old}s to 1s", Configuration.LodestoneRefreshDelaySeconds);
+                Configuration.LodestoneRefreshDelaySeconds = 1;
+                needsSave = true;
+            }
+            
+            if (Configuration.LodestoneRefreshIdleDelayMinutes > 1)
+            {
+                Log.Information("Updating LodestoneRefreshIdleDelayMinutes from {Old}m to 0m", Configuration.LodestoneRefreshIdleDelayMinutes);
+                Configuration.LodestoneRefreshIdleDelayMinutes = 0;
+                needsSave = true;
+            }
+            
+            // Add the new LodestoneRefreshIdleDelaySeconds setting
+            Configuration.LodestoneRefreshIdleDelaySeconds = 5;
+            Log.Information("Added LodestoneRefreshIdleDelaySeconds = 5s for faster processing");
+            needsSave = true;
+            
+            Configuration.Version = 2;
+            needsSave = true;
+            
+            Log.Information("Configuration migration to version 2 completed");
+        }
+        
+        // Save configuration if any changes were made
+        if (needsSave)
+        {
+            Configuration.Save(pluginInterface);
+            Log.Information("Configuration saved after migration");
+        }
     }
 }

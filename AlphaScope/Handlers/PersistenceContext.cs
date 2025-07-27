@@ -37,6 +37,7 @@ using AlphaScope.API;
 using AlphaScope.API.Models;
 using AlphaScope.Database;
 using AlphaScope.GUI;
+using AlphaScope.Services;
 
 // Static imports for specific functionality
 using static FFXIVClientStructs.Havok.Animation.Deform.Skinning.hkaMeshBinding;
@@ -160,13 +161,37 @@ internal sealed class PersistenceContext
         _clientState = clientState;
         _serviceProvider = serviceProvider;
 
+        // Force clear all static caches immediately on startup
+        _logger.LogInformation("PersistenceContext: Force clearing all static caches on startup");
+        _playerCache.Clear();
+        _AccountIdCache.Clear();
+        _UploadPlayers.Clear();
+        _UploadedPlayersCache.Clear();
+        _recentlyScannedPlayers.Clear();
+        _logger.LogInformation($"PersistenceContext: After force clear - playerCache has {_playerCache.Count} entries");
+
         // Load existing data from database into memory caches
+        _logger.LogInformation("PersistenceContext: Calling ReloadCache() during initialization...");
         ReloadCache();
 
-        // Start background upload processing
+        // Background upload processing disabled for debugging
         _cancellationTokenSource = new CancellationTokenSource();
-        _ = PostPlayerData(_cancellationTokenSource.Token);
+        _logger.LogInformation("PersistenceContext: Server upload disabled for debugging");
     }
+    /// <summary>
+    /// Clears all in-memory caches. Useful when database is reset or when fresh start is needed.
+    /// </summary>
+    public static void ClearCache()
+    {
+        _logger?.LogInformation("Clearing all in-memory caches...");
+        _playerCache.Clear();
+        _AccountIdCache.Clear();
+        _UploadPlayers.Clear();
+        _UploadedPlayersCache.Clear();
+        _recentlyScannedPlayers.Clear();
+        _logger?.LogInformation("All caches cleared successfully");
+    }
+
     /// <summary>
     /// Reloads all in-memory caches from the local SQLite database.
     /// This method rebuilds player caches from persistent storage.
@@ -174,20 +199,43 @@ internal sealed class PersistenceContext
     /// </summary>
     public static void ReloadCache()
     {
-        using (IServiceScope scope = _serviceProvider.CreateScope())
+        try
         {
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-
-            foreach (var player in dbContext.Players)
+            // Clear existing cache first to ensure fresh state
+            ClearCache();
+            
+            using (IServiceScope scope = _serviceProvider.CreateScope())
             {
-                _playerCache[player.LocalContentId] = new CachedPlayer
+                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+
+                var playerCount = 0;
+                var avatarCount = 0;
+                _logger?.LogInformation("Starting cache reload from database...");
+                
+                foreach (var player in dbContext.Players)
                 {
-                    AccountId = player.AccountId,
-                    Name = player.Name ?? string.Empty,
-                };
+                    _playerCache[player.LocalContentId] = new CachedPlayer
+                    {
+                        AccountId = player.AccountId,
+                        Name = player.Name ?? string.Empty,
+                        AvatarLink = player.AvatarLink,
+                    };
+                    playerCount++;
+                    if (!string.IsNullOrEmpty(player.AvatarLink))
+                    {
+                        avatarCount++;
+                        _logger?.LogInformation($"[AVATAR DEBUG] Loaded player {player.Name} with avatar: {player.AvatarLink}");
+                    }
+                }
+                _logger?.LogInformation($"Cache reload completed: loaded {playerCount} players, {avatarCount} with avatars");
             }
         }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Error during cache reload from database");
+        }
     }
+
 
    public static void UpdateAccountIds()
     {
@@ -325,7 +373,9 @@ internal sealed class PersistenceContext
 
         while (!_cancellationTokenSource.IsCancellationRequested && !_UploadPlayers.IsEmpty && !uploadSuccess && retryCount < maxRetries)
         {
-            if (await ApiClient.Instance.PostPlayers(itemsToUpload).ConfigureAwait(false))
+            var uploadResult = await ApiClient.Instance.PostPlayersWithDetails(itemsToUpload).ConfigureAwait(false);
+            
+            if (uploadResult.Success)
             {
                 foreach (var item in itemsToUpload)
                 {
@@ -335,6 +385,25 @@ internal sealed class PersistenceContext
                 }
                 //_logger.LogInformation("Player upload successful, items added to cache.");
                 uploadSuccess = true;
+            }
+            else if (uploadResult.AuthenticationFailure)
+            {
+                _logger.LogWarning("Authentication failure detected during player upload. Please check your API key configuration.");
+                
+                // Show user notification about authentication failure
+                Plugin.Notification.AddNotification(new Dalamud.Interface.ImGuiNotification.Notification
+                {
+                    Content = "AlphaScope: Authentication failed. Please check your API key configuration.",
+                    Type = Dalamud.Interface.ImGuiNotification.NotificationType.Error,
+                    Minimized = false
+                });
+                
+                // Mark as not logged in so user knows there's an issue
+                Plugin.Instance.Configuration.LoggedIn = false;
+                Plugin.Instance.Configuration.Save();
+                
+                // Stop retrying for this batch since authentication is invalid
+                break;
             }
             else
             {
@@ -451,6 +520,7 @@ internal sealed class PersistenceContext
                 {
                     AccountId = mapping.AccountId,
                     Name = mapping.PlayerName,
+                    AvatarLink = null,
                 };
                 _playerCache[mapping.ContentId] = newCachedPlayer;
                 
@@ -477,33 +547,38 @@ internal sealed class PersistenceContext
     public static SemaphoreSlim processPlayers = new SemaphoreSlim(1, 999);
     public async Task HandleContentIdMappingAsync(IReadOnlyList<PlayerMapping> mappings)
     {
-        
-        var updates = mappings.DistinctBy(x => x.ContentId)
+        // Filter to only players that actually need updates (not cached or have changes)
+        var updates = new List<PlayerMapping>();
+        var validMappings = mappings.DistinctBy(x => x.ContentId)
             .Where(mapping => mapping.ContentId != 0 && !string.IsNullOrEmpty(mapping.PlayerName))
-            .Where(mapping =>
-            {
-                if (_playerCache.TryGetValue(mapping.ContentId, out CachedPlayer? cachedPlayer))
-                {
-                    if (mapping.PlayerName != cachedPlayer.Name)
-                    {
-                        _logger.LogInformation($"Player name updated: {cachedPlayer.Name} > {mapping.PlayerName} [{mapping.ContentId}]");
-                        return true;
-                    }
-
-                    if (mapping.AccountId != null)
-                    {
-                        if (mapping.AccountId != cachedPlayer.AccountId)
-                        {
-                            _logger.LogInformation($"Player AccountId added: {mapping.PlayerName} - AccId:[{mapping.AccountId}] CId:[{mapping.ContentId}]");
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-
-                return true;
-            })
             .ToList();
+
+        foreach (var mapping in validMappings)
+        {
+            // Check if player is in recently scanned cache (to avoid immediate re-processing)
+            if (_recentlyScannedPlayers.TryGetValue(mapping.ContentId, out var recentData))
+            {
+                var timeSinceLastScan = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - recentData.ScannedAt;
+                if (timeSinceLastScan < 300) // Skip if scanned within last 5 minutes
+                {
+                    continue;
+                }
+            }
+
+            // Check if we need to update based on cache
+            if (_playerCache.TryGetValue(mapping.ContentId, out var cachedPlayer))
+            {
+                // Only update if data has actually changed
+                if (mapping.PlayerName == cachedPlayer.Name && mapping.AccountId == cachedPlayer.AccountId)
+                {
+                    continue; // No changes needed
+                }
+            }
+            
+            updates.Add(mapping);
+        }
+        
+        _logger.LogInformation($"Processing {updates.Count} player updates out of {mappings.Count} total mappings");
         if (updates.Count == 0)
             return;
 
@@ -532,13 +607,18 @@ internal sealed class PersistenceContext
                     }
                 }
 
+                _logger.LogInformation($"Attempting to save {updates.Count} players to database...");
                 int changeCount = await dbContext.SaveChangesAsync();
                 if (changeCount > 0)
                 {
                     // foreach (var update in updates)
                     //_logger.LogDebug("  {ContentId} = {Name} ({AccountId})", update.ContentId, update.PlayerName,  update.AccountId);
 
-                    _logger.LogDebug("Saved {Count} player mappings", changeCount);
+                    _logger.LogInformation($"Successfully saved {changeCount} player mappings to database");
+                }
+                else
+                {
+                    _logger.LogWarning("Database save completed but no rows were affected");
                 }
             }
 
@@ -548,6 +628,7 @@ internal sealed class PersistenceContext
                 {
                     AccountId = player.AccountId,
                     Name = player.PlayerName,
+                    AvatarLink = null,
                 };
                 _playerCache[player.ContentId] = cachedPlayer;
                 
@@ -586,5 +667,93 @@ internal sealed class PersistenceContext
     {
         public required ulong? AccountId { get; init; }
         public required string Name { get; init; }
+        public string? AvatarLink { get; set; }
     }
+
+    /// <summary>
+    /// Updates the avatar link for a cached player and persists it to the database
+    /// </summary>
+    public static void UpdateCachedPlayerAvatar(ulong contentId, string avatarLink)
+    {
+        _logger?.LogInformation($"[AVATAR DEBUG] UpdateCachedPlayerAvatar called - ContentId: {contentId}, AvatarLink: '{avatarLink}'");
+        
+        if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
+        {
+            cachedPlayer.AvatarLink = avatarLink;
+            _logger?.LogInformation($"[AVATAR DEBUG] Updated avatar for cached player {cachedPlayer.Name}: {avatarLink}");
+            
+            // Persist to database
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+                var dbPlayer = dbContext.Players.Find(contentId);
+                if (dbPlayer != null)
+                {
+                    dbPlayer.AvatarLink = avatarLink;
+                    dbContext.SaveChanges();
+                    _logger?.LogInformation($"[AVATAR DEBUG] Persisted avatar URL to database for player {cachedPlayer.Name}");
+                }
+                else
+                {
+                    _logger?.LogWarning($"[AVATAR DEBUG] Could not find player in database to update avatar - ContentId: {contentId}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"[AVATAR DEBUG] Failed to persist avatar URL for player {cachedPlayer.Name}");
+            }
+        }
+        else
+        {
+            _logger?.LogWarning($"[AVATAR DEBUG] Could not find player in cache to update avatar - ContentId: {contentId}");
+        }
+    }
+
+    /// <summary>
+    /// Checks if a player is already cached locally
+    /// </summary>
+    public static bool IsPlayerCached(ulong contentId)
+    {
+        return _playerCache.ContainsKey(contentId);
+    }
+
+    /// <summary>
+    /// Queues a player for background Lodestone data refresh
+    /// </summary>
+    /// <param name="contentId">Content ID of the player to refresh</param>
+    /// <param name="isNewPlayer">If true, adds to priority queue for immediate processing</param>
+    public static void QueuePlayerForLodestoneRefresh(ulong contentId, bool isNewPlayer = false)
+    {
+        try
+        {
+            var refreshService = _serviceProvider.GetService<LodestoneRefreshService>();
+            refreshService?.QueuePlayerForRefresh(contentId, isNewPlayer);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, $"Failed to queue player {contentId} for Lodestone refresh");
+        }
+    }
+
+    /// <summary>
+    /// Forces an immediate Lodestone refresh for a specific player
+    /// </summary>
+    public static async Task<bool> RefreshPlayerImmediately(ulong contentId)
+    {
+        try
+        {
+            var refreshService = _serviceProvider.GetService<LodestoneRefreshService>();
+            if (refreshService != null)
+            {
+                return await refreshService.RefreshPlayerImmediately(contentId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, $"Failed to perform immediate refresh for player {contentId}");
+        }
+        return false;
+    }
+
 }

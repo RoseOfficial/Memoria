@@ -34,6 +34,14 @@ namespace AlphaScope.Handlers
             }
             _avatarCache.Clear();
         }
+        
+        /// <summary>
+        /// Clears failed downloads count for a specific URL, allowing retry of avatar download
+        /// </summary>
+        public void ClearFailedDownloads(string avatarUrl)
+        {
+            _failedDownloads.TryRemove(avatarUrl, out _);
+        }
 
         public nint GetAvatarHandle(string avatarUrl)
         {
@@ -49,12 +57,14 @@ namespace AlphaScope.Handlers
             // Check if this URL has failed too many times recently
             if (_failedDownloads.TryGetValue(avatarUrl, out var failCount) && failCount >= 3)
             {
-                Plugin.Log.Debug($"Skipping avatar download - too many failures: {avatarUrl}");
+                // Log once per URL when blocked due to failures
+                Plugin.Log.Debug($"Avatar download blocked - too many failures for URL: {avatarUrl}");
                 return 0;
             }
 
             if (!_ongoingDownloads.ContainsKey(avatarUrl))
             {
+                Plugin.Log.Debug($"Starting avatar download for URL: {avatarUrl}");
                 _ongoingDownloads[avatarUrl] = Task.Run(async () =>
                 {
                     try

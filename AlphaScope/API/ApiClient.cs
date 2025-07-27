@@ -346,20 +346,40 @@ namespace AlphaScope.API
         /// <returns>True if upload was successful, false otherwise</returns>
         public async Task<bool> PostPlayers(List<PostPlayerRequest> players)
         {
+            var result = await PostPlayersWithDetails(players);
+            return result.Success;
+        }
+
+        /// <summary>
+        /// Uploads a batch of player data to the server with detailed error information.
+        /// Used by the persistence system to sync locally collected player information and detect authentication failures.
+        /// </summary>
+        /// <param name="players">List of player data to upload</param>
+        /// <returns>Tuple with success status and authentication failure indicator</returns>
+        public async Task<(bool Success, bool AuthenticationFailure)> PostPlayersWithDetails(List<PostPlayerRequest> players)
+        {
             try
             {
                 var request = new RestRequest($"players").AddHeader("api-key", Token).AddHeader("V", Utils.clientVer).AddHeader("L", Config.Language);
                 request.AddJsonBody(players);
                 var response = await _restClient.ExecutePostAsync(request).ConfigureAwait(false);
+                
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
-                    return true;
+                    return (true, false);
                 }
-                return false;
+                
+                // Check for authentication failures
+                if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    return (false, true);
+                }
+                
+                return (false, false);
             }
             catch (Exception ex)
             {
-                return false;
+                return (false, false);
             }
         }
         // ========== USER AUTHENTICATION AND MANAGEMENT ==========
@@ -412,7 +432,25 @@ namespace AlphaScope.API
                             if (message.Contains("Login successful"))
                             {
                                 IsLoggingIn = false;
-                                // Settings refresh is now handled by modern UI
+                                
+                                // Extract API key from the message if present
+                                if (message.Contains("API Key:"))
+                                {
+                                    var apiKeyStart = message.IndexOf("API Key:") + "API Key:".Length;
+                                    var extractedApiKey = message.Substring(apiKeyStart).Trim();
+                                    Message = $"Registration successful! API Key: {extractedApiKey}";
+                                    
+                                    // Return a simplified user object with the API key
+                                    var user = new User 
+                                    { 
+                                        Name = register.Name,
+                                        GameAccountId = register.GameAccountId,
+                                        LocalContentId = register.UserLocalContentId
+                                    };
+                                    
+                                    // Store API key in the message for extraction by caller
+                                    return (user, extractedApiKey);
+                                }
                                 break;
                             }
                         }

@@ -447,46 +447,41 @@ namespace AlphaScopeServer.Controllers
                 // Save history entries
                 await _context.SaveChangesAsync();
 
-                // Auto-link Lodestone profiles for new/updated players (background task)
-                var serviceScope = HttpContext.RequestServices.CreateScope();
-                _ = Task.Run(async () =>
+                // Schedule auto-linking for players without avatars (rate-limited background task)
+                var playersNeedingAvatars = players.Where(p => p.LocalContentId != 0).Take(5).ToList(); // Limit to 5 players per batch
+                if (playersNeedingAvatars.Any())
                 {
-                    try
+                    var serviceScope = HttpContext.RequestServices.CreateScope();
+                    _ = Task.Run(async () =>
                     {
-                        using var scope = serviceScope;
-                        var scopedContext = scope.ServiceProvider.GetRequiredService<AlphaScopeDbContext>();
-                        var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<PlayersController>>();
-                        
-                        foreach (var playerRequest in players)
+                        try
                         {
-                            var player = await scopedContext.Players
-                                .FirstOrDefaultAsync(p => p.LocalContentId == (long)playerRequest.LocalContentId);
+                            using var scope = serviceScope;
+                            var scopedContext = scope.ServiceProvider.GetRequiredService<AlphaScopeDbContext>();
+                            var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<PlayersController>>();
                             
-                            if (player != null)
+                            foreach (var playerRequest in playersNeedingAvatars)
                             {
-                                scopedLogger.LogInformation($"Checking player {player.Name} for auto-linking. Current AvatarLink: '{player.AvatarLink}', IsNullOrEmpty: {string.IsNullOrEmpty(player.AvatarLink)}");
+                                var player = await scopedContext.Players
+                                    .FirstOrDefaultAsync(p => p.LocalContentId == (long)playerRequest.LocalContentId);
                                 
-                                if (string.IsNullOrEmpty(player.AvatarLink))
+                                if (player != null && string.IsNullOrEmpty(player.AvatarLink))
                                 {
-                                    scopedLogger.LogInformation($"Starting auto-link process for {player.Name}");
+                                    scopedLogger.LogDebug($"Auto-linking {player.Name}");
                                     await AutoLinkLodestoneForPlayer(player, scopedContext, scopedLogger);
                                     await scopedContext.SaveChangesAsync();
                                     
-                                    // Add delay to avoid rate limiting
-                                    await Task.Delay(2000);
-                                }
-                                else
-                                {
-                                    scopedLogger.LogInformation($"Skipping {player.Name} - already has avatar link");
+                                    // Rate limiting: 5 seconds between requests
+                                    await Task.Delay(5000);
                                 }
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error in background Lodestone auto-linking");
-                    }
-                });
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error in background Lodestone auto-linking");
+                        }
+                    });
+                }
 
                 // Update user stats
                 var user = await _context.Users.FirstOrDefaultAsync(u => u.GameAccountId == gameAccountId.Value);
@@ -543,9 +538,10 @@ namespace AlphaScopeServer.Controllers
                         var foundName = nameNode.InnerText.Trim();
                         var foundWorld = worldNode.InnerText.Trim();
 
-                        // Check for exact match
+                        // Check for exact match (world name may include data center, e.g., "Famfrit [Primal]")
+                        var foundWorldName = foundWorld.Split('[')[0].Trim(); // Extract world name without data center
                         if (string.Equals(foundName, characterName, StringComparison.OrdinalIgnoreCase) &&
-                            string.Equals(foundWorld, worldName, StringComparison.OrdinalIgnoreCase))
+                            string.Equals(foundWorldName, worldName, StringComparison.OrdinalIgnoreCase))
                         {
                             var href = linkNode.GetAttributeValue("href", "");
                             var match = Regex.Match(href, @"/lodestone/character/(\d+)/");
@@ -639,18 +635,35 @@ namespace AlphaScopeServer.Controllers
                     return false;
                 }
 
-                // Get world name
-                var worldName = GetWorldNameFromId(player.HomeWorldId ?? player.CurrentWorldId);
-                if (string.IsNullOrEmpty(worldName))
+                // Try searching with both home world and current world
+                int? lodestoneId = null;
+                
+                // First try with HomeWorldId if available
+                if (player.HomeWorldId.HasValue)
                 {
-                    logger.LogWarning($"Could not determine world name for player {player.Name} (WorldId: {player.HomeWorldId ?? player.CurrentWorldId})");
-                    return false;
+                    var homeWorldName = GetWorldNameFromId(player.HomeWorldId);
+                    if (!string.IsNullOrEmpty(homeWorldName))
+                    {
+                        logger.LogDebug($"Searching Lodestone for {player.Name} on home world {homeWorldName}");
+                        lodestoneId = await SearchLodestoneCharacter(player.Name, homeWorldName, logger);
+                    }
                 }
-
-                // Search Lodestone for this character
-                var lodestoneId = await SearchLodestoneCharacter(player.Name, worldName, logger);
+                
+                // If not found and CurrentWorldId is different, try current world
+                if (!lodestoneId.HasValue && player.CurrentWorldId.HasValue && player.CurrentWorldId != player.HomeWorldId)
+                {
+                    var currentWorldName = GetWorldNameFromId(player.CurrentWorldId);
+                    if (!string.IsNullOrEmpty(currentWorldName))
+                    {
+                        logger.LogDebug($"Searching Lodestone for {player.Name} on current world {currentWorldName}");
+                        lodestoneId = await SearchLodestoneCharacter(player.Name, currentWorldName, logger);
+                    }
+                }
+                
+                // If still not found, log the issue and return
                 if (!lodestoneId.HasValue)
                 {
+                    logger.LogInformation($"Could not find {player.Name} on Lodestone (tried Home: {GetWorldNameFromId(player.HomeWorldId)}, Current: {GetWorldNameFromId(player.CurrentWorldId)})");
                     return false;
                 }
 
@@ -698,30 +711,47 @@ namespace AlphaScopeServer.Controllers
         {
             if (!worldId.HasValue) return null;
             
-            // World mapping for FFXIV worlds
+            // World mapping for FFXIV worlds (corrected to match official game data)
             var worldMap = new Dictionary<short, string>
             {
                 // Aether Data Center
-                { 34, "Brynhildr" }, { 37, "Diabolos" }, { 40, "Malboro" }, { 41, "Mateus" },
-                { 53, "Adamantoise" }, { 54, "Cactuar" }, { 57, "Faerie" }, { 58, "Gilgamesh" },
-                { 63, "Jenova" }, { 64, "Midgardsormr" }, { 65, "Sargatanas" }, { 67, "Siren" },
+                { 34, "Brynhildr" }, { 62, "Diabolos" }, { 75, "Malboro" }, { 37, "Mateus" },
+                { 73, "Adamantoise" }, { 79, "Cactuar" }, { 54, "Faerie" }, { 63, "Gilgamesh" },
+                { 40, "Jenova" }, { 65, "Midgardsormr" }, { 99, "Sargatanas" }, { 57, "Siren" },
                 
                 // Primal Data Center  
-                { 35, "Exodus" }, { 68, "Behemoth" }, { 69, "Excalibur" }, { 71, "Famfrit" },
-                { 74, "Hyperion" }, { 78, "Lamia" }, { 79, "Leviathan" }, { 81, "Ultros" },
+                { 53, "Exodus" }, { 78, "Behemoth" }, { 93, "Excalibur" }, { 35, "Famfrit" },
+                { 95, "Hyperion" }, { 55, "Lamia" }, { 64, "Leviathan" }, { 77, "Ultros" },
                 
                 // Crystal Data Center
-                { 95, "Balmung" }, { 99, "Goblin" }, { 100, "Zalera" }, { 76, "Halicarnassus" },
+                { 91, "Balmung" }, { 81, "Goblin" }, { 41, "Zalera" }, { 74, "Coeurl" },
                 
                 // Chaos Data Center (EU)
-                { 80, "Cerberus" }, { 33, "Louise" }, { 36, "Moogle" }, { 56, "Omega" },
-                { 66, "Ragnarok" }, { 77, "Spriggan" },
+                { 80, "Cerberus" }, { 71, "Moogle" }, { 39, "Omega" }, { 97, "Ragnarok" },
+                { 85, "Spriggan" },
                 
                 // Light Data Center (EU)
-                { 42, "Lich" }, { 39, "Odin" }, { 59, "Phoenix" }, { 83, "Shiva" },
-                { 97, "Twintania" }, { 401, "Alpha" }, { 402, "Raiden" },
+                { 36, "Lich" }, { 66, "Odin" }, { 56, "Phoenix" }, { 67, "Shiva" },
+                { 33, "Twintania" },
                 
-                // Add more as needed...
+                // Elemental Data Center (JP)
+                { 23, "Asura" }, { 45, "Carbuncle" }, { 58, "Garuda" }, { 59, "Ifrit" },
+                { 49, "Kujata" }, { 50, "Typhon" },
+                
+                // Gaia Data Center (JP)
+                { 43, "Alexander" }, { 69, "Bahamut" }, { 92, "Durandal" }, { 46, "Fenrir" },
+                { 51, "Ultima" }, { 98, "Ridill" },
+                
+                // Mana Data Center (JP)
+                { 44, "Anima" }, { 70, "Chocobo" }, { 47, "Hades" }, { 48, "Ixion" },
+                { 96, "Masamune" }, { 61, "Titan" }, { 28, "Pandaemonium" },
+                
+                // Meteor Data Center (JP)
+                { 24, "Belias" }, { 82, "Mandragora" }, { 60, "Ramuh" }, { 29, "Shinryu" },
+                { 52, "Valefor" }, { 30, "Unicorn" }, { 31, "Yojimbo" }, { 32, "Zeromus" },
+                
+                // Materia Data Center (OCE)
+                { 21, "Ravana" }, { 22, "Bismarck" }, { 86, "Sephirot" }, { 87, "Sophia" }, { 88, "Zurvan" }
             };
 
             return worldMap.TryGetValue(worldId.Value, out var worldName) ? worldName : null;
@@ -753,13 +783,50 @@ namespace AlphaScopeServer.Controllers
                     success = result, 
                     playerName = player.Name,
                     avatarLink = player.AvatarLink,
-                    worldId = player.HomeWorldId ?? player.CurrentWorldId,
-                    worldName = GetWorldNameFromId(player.HomeWorldId ?? player.CurrentWorldId)
+                    homeWorldId = player.HomeWorldId,
+                    currentWorldId = player.CurrentWorldId,
+                    homeWorldName = GetWorldNameFromId(player.HomeWorldId),
+                    currentWorldName = GetWorldNameFromId(player.CurrentWorldId)
                 });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error in manual auto-link test for {playerName}");
+                return StatusCode(500, ex.Message);
+            }
+        }
+        
+        [HttpPost("test-direct-search/{playerName}/{worldName}")]
+        public async Task<IActionResult> TestDirectSearch(string playerName, string worldName)
+        {
+            try
+            {
+                var lodestoneId = await SearchLodestoneCharacter(playerName, worldName, _logger);
+                if (lodestoneId.HasValue)
+                {
+                    var profileData = await ScrapeLodestoneProfile(lodestoneId.Value, _logger);
+                    return Ok(new { 
+                        success = true,
+                        lodestoneId = lodestoneId.Value,
+                        playerName = playerName,
+                        worldName = worldName,
+                        avatarLink = profileData?.AvatarLink,
+                        nameAndWorld = profileData?.NameAndWorld
+                    });
+                }
+                else
+                {
+                    return Ok(new { 
+                        success = false,
+                        playerName = playerName,
+                        worldName = worldName,
+                        message = "Character not found on Lodestone"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error in direct search test for {playerName}@{worldName}");
                 return StatusCode(500, ex.Message);
             }
         }

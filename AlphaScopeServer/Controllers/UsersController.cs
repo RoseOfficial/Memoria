@@ -285,6 +285,15 @@ namespace AlphaScopeServer.Controllers
         {
             try
             {
+                // Check if user already exists
+                var existingUser = await _context.Users
+                    .FirstOrDefaultAsync(u => u.GameAccountId == 1387972975);
+                
+                if (existingUser != null)
+                {
+                    return Ok(new { message = "Test user already exists", apiKey = existingUser.ApiKey });
+                }
+
                 // Create user with AlphaScope's exact API key format
                 var user = new ApplicationUser
                 {
@@ -306,7 +315,7 @@ namespace AlphaScopeServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating test user");
-                return StatusCode(500, "Error creating test user");
+                return StatusCode(500, $"Error creating test user: {ex.Message}");
             }
         }
 
@@ -535,9 +544,10 @@ namespace AlphaScopeServer.Controllers
                         var foundName = nameNode.InnerText.Trim();
                         var foundWorld = worldNode.InnerText.Trim();
 
-                        // Check for exact match
+                        // Check for exact match (world name may include data center, e.g., "Famfrit [Primal]")
+                        var foundWorldName = foundWorld.Split('[')[0].Trim(); // Extract world name without data center
                         if (string.Equals(foundName, characterName, StringComparison.OrdinalIgnoreCase) &&
-                            string.Equals(foundWorld, worldName, StringComparison.OrdinalIgnoreCase))
+                            string.Equals(foundWorldName, worldName, StringComparison.OrdinalIgnoreCase))
                         {
                             var href = linkNode.GetAttributeValue("href", "");
                             var match = Regex.Match(href, @"/lodestone/character/(\d+)/");
@@ -571,18 +581,35 @@ namespace AlphaScopeServer.Controllers
                     return false;
                 }
 
-                // Get world name (you may need to implement world ID to name mapping)
-                var worldName = GetWorldNameFromId(player.HomeWorldId ?? player.CurrentWorldId);
-                if (string.IsNullOrEmpty(worldName))
+                // Try searching with both home world and current world
+                int? lodestoneId = null;
+                
+                // First try with HomeWorldId if available
+                if (player.HomeWorldId.HasValue)
                 {
-                    _logger.LogWarning($"Could not determine world name for player {player.Name} (WorldId: {player.HomeWorldId ?? player.CurrentWorldId})");
-                    return false;
+                    var homeWorldName = GetWorldNameFromId(player.HomeWorldId);
+                    if (!string.IsNullOrEmpty(homeWorldName))
+                    {
+                        _logger.LogDebug($"Searching Lodestone for {player.Name} on home world {homeWorldName}");
+                        lodestoneId = await SearchLodestoneCharacter(player.Name, homeWorldName);
+                    }
                 }
-
-                // Search Lodestone for this character
-                var lodestoneId = await SearchLodestoneCharacter(player.Name, worldName);
+                
+                // If not found and CurrentWorldId is different, try current world
+                if (!lodestoneId.HasValue && player.CurrentWorldId.HasValue && player.CurrentWorldId != player.HomeWorldId)
+                {
+                    var currentWorldName = GetWorldNameFromId(player.CurrentWorldId);
+                    if (!string.IsNullOrEmpty(currentWorldName))
+                    {
+                        _logger.LogDebug($"Searching Lodestone for {player.Name} on current world {currentWorldName}");
+                        lodestoneId = await SearchLodestoneCharacter(player.Name, currentWorldName);
+                    }
+                }
+                
+                // If still not found, log the issue and return
                 if (!lodestoneId.HasValue)
                 {
+                    _logger.LogInformation($"Could not find {player.Name} on Lodestone (tried Home: {GetWorldNameFromId(player.HomeWorldId)}, Current: {GetWorldNameFromId(player.CurrentWorldId)})");
                     return false;
                 }
 
@@ -630,17 +657,47 @@ namespace AlphaScopeServer.Controllers
         {
             if (!worldId.HasValue) return null;
             
-            // This is a simplified world mapping - you may want to expand this
-            // with the full list of FFXIV worlds
+            // World mapping for FFXIV worlds (corrected to match official game data)
             var worldMap = new Dictionary<short, string>
             {
-                { 34, "Brynhildr" }, { 37, "Diabolos" }, { 40, "Malboro" }, { 41, "Mateus" },
-                { 53, "Adamantoise" }, { 54, "Cactuar" }, { 57, "Faerie" }, { 58, "Gilgamesh" },
-                { 63, "Jenova" }, { 64, "Midgardsormr" }, { 65, "Sargatanas" }, { 67, "Siren" },
-                { 68, "Behemoth" }, { 69, "Excalibur" }, { 71, "Famfrit" }, { 74, "Hyperion" },
-                { 78, "Lamia" }, { 79, "Leviathan" }, { 81, "Ultros" }, { 95, "Balmung" },
-                { 99, "Goblin" }, { 100, "Zalera" }, { 35, "Exodus" }, { 76, "Halicarnassus" }
-                // Add more worlds as needed
+                // Aether Data Center
+                { 34, "Brynhildr" }, { 62, "Diabolos" }, { 75, "Malboro" }, { 37, "Mateus" },
+                { 73, "Adamantoise" }, { 79, "Cactuar" }, { 54, "Faerie" }, { 63, "Gilgamesh" },
+                { 40, "Jenova" }, { 65, "Midgardsormr" }, { 99, "Sargatanas" }, { 57, "Siren" },
+                
+                // Primal Data Center  
+                { 53, "Exodus" }, { 78, "Behemoth" }, { 93, "Excalibur" }, { 35, "Famfrit" },
+                { 95, "Hyperion" }, { 55, "Lamia" }, { 64, "Leviathan" }, { 77, "Ultros" },
+                
+                // Crystal Data Center
+                { 91, "Balmung" }, { 81, "Goblin" }, { 41, "Zalera" }, { 74, "Coeurl" },
+                
+                // Chaos Data Center (EU)
+                { 80, "Cerberus" }, { 71, "Moogle" }, { 39, "Omega" }, { 97, "Ragnarok" },
+                { 85, "Spriggan" },
+                
+                // Light Data Center (EU)
+                { 36, "Lich" }, { 66, "Odin" }, { 56, "Phoenix" }, { 67, "Shiva" },
+                { 33, "Twintania" },
+                
+                // Elemental Data Center (JP)
+                { 23, "Asura" }, { 45, "Carbuncle" }, { 58, "Garuda" }, { 59, "Ifrit" },
+                { 49, "Kujata" }, { 50, "Typhon" },
+                
+                // Gaia Data Center (JP)
+                { 43, "Alexander" }, { 69, "Bahamut" }, { 92, "Durandal" }, { 46, "Fenrir" },
+                { 51, "Ultima" }, { 98, "Ridill" },
+                
+                // Mana Data Center (JP)
+                { 44, "Anima" }, { 70, "Chocobo" }, { 47, "Hades" }, { 48, "Ixion" },
+                { 96, "Masamune" }, { 61, "Titan" }, { 28, "Pandaemonium" },
+                
+                // Meteor Data Center (JP)
+                { 24, "Belias" }, { 82, "Mandragora" }, { 60, "Ramuh" }, { 29, "Shinryu" },
+                { 52, "Valefor" }, { 30, "Unicorn" }, { 31, "Yojimbo" }, { 32, "Zeromus" },
+                
+                // Materia Data Center (OCE)
+                { 21, "Ravana" }, { 22, "Bismarck" }, { 86, "Sephirot" }, { 87, "Sophia" }, { 88, "Zurvan" }
             };
 
             return worldMap.TryGetValue(worldId.Value, out var worldName) ? worldName : null;

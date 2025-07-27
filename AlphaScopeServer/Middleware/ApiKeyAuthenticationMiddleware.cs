@@ -108,9 +108,13 @@ namespace AlphaScopeServer.Middleware
                 context.Items["UserId"] = user.Id;
                 context.Items["GameAccountId"] = user.GameAccountId;
 
-                // Update last login time
-                user.LastLoginAt = DateTime.UtcNow;
-                await dbContext.SaveChangesAsync();
+                // Update last login time only if it's been more than 5 minutes since last update
+                var timeSinceLastLogin = DateTime.UtcNow - user.LastLoginAt;
+                if (timeSinceLastLogin.TotalMinutes > 5)
+                {
+                    user.LastLoginAt = DateTime.UtcNow;
+                    await dbContext.SaveChangesAsync();
+                }
             }
             catch (Exception ex)
             {

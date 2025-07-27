@@ -78,13 +78,17 @@ internal sealed class ObjectTableHandler : IDisposable
 
                 var Customization = bc->DrawData.CustomizeData;
 
+                // Get world IDs directly from game data
+                var homeWorld = bc->HomeWorld;
+                var currentWorld = bc->CurrentWorld;
+
                 playerRequests.Add(new PostPlayerRequest
                 {
                     LocalContentId = bc->ContentId,
                     Name = bc->NameString,
                     AccountId = (int?)bc->AccountId,
-                    HomeWorldId = bc->HomeWorld,
-                    CurrentWorldId = bc->CurrentWorld,
+                    HomeWorldId = homeWorld,
+                    CurrentWorldId = currentWorld,
                     TerritoryId = (short)PersistenceContext._clientState.TerritoryType,
                     CurrentJobId = bc->CharacterData.ClassJob != 0 ? bc->CharacterData.ClassJob : null,
                     CurrentJobLevel = bc->CharacterData.Level != 0 ? (short)bc->CharacterData.Level : null,
@@ -111,10 +115,23 @@ internal sealed class ObjectTableHandler : IDisposable
         }
 
         if (playerMappings.Count > 0)
+        {
             Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(playerMappings));
+            
+            // Only queue truly NEW players for Lodestone refresh (not every player every frame)
+            foreach (var mapping in playerMappings)
+            {
+                // Check if this is a newly discovered player (not in cache)
+                if (!PersistenceContext.IsPlayerCached(mapping.ContentId))
+                {
+                    PersistenceContext.QueuePlayerForLodestoneRefresh(mapping.ContentId, isNewPlayer: true);
+                }
+            }
+        }
 
-        if (playerRequests.Count > 0)
-            PersistenceContext.AddPlayerUploadData(playerRequests);
+        // Server upload disabled for debugging - focus on local database only
+        // if (playerRequests.Count > 0)
+        //     PersistenceContext.AddPlayerUploadData(playerRequests);
     #if DEBUG
         _logger.LogTrace("ObjectTable handling for {Count} players took {TimeMs}", playerMappings.Count, TimeSpan.FromMilliseconds(Environment.TickCount64 - now));
     #endif

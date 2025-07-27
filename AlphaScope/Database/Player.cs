@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace AlphaScope.Database;
 
@@ -43,4 +44,19 @@ public class Player
     /// Nullable because level information may not be available in all scanning contexts.
     /// </summary>
     public short? CurrentJobLevel { get; set; }
+
+    /// <summary>
+    /// URL to the character's Lodestone avatar image.
+    /// Retrieved from FFXIV Lodestone and cached locally for display purposes.
+    /// Nullable because not all characters may have Lodestone profiles or avatar data may not be fetched yet.
+    /// </summary>
+    [MaxLength(500)]
+    public string? AvatarLink { get; set; }
+
+    /// <summary>
+    /// Timestamp of when this character's Lodestone data was last refreshed.
+    /// Used by the background refresh service to determine refresh priority and track data freshness.
+    /// Nullable because characters may not have been scanned yet by the refresh service.
+    /// </summary>
+    public DateTime? LastScannedAt { get; set; }
 }

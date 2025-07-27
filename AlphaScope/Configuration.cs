@@ -30,32 +30,33 @@ namespace AlphaScope
         /// <summary>
         /// Configuration version for handling config schema updates
         /// </summary>
-        public int Version { get; set; } = 1;
+        public int Version { get; set; } = 2;
         
         /// <summary>
         /// Base URL for the AlphaScopeServer API endpoint
+        /// TODO: Update this to production server URL before distribution
         /// </summary>
         public string BaseUrl { get; set; } = "https://localhost:5001/v1/";
         
         /// <summary>
         /// Current user's character name
         /// </summary>
-        public string Username { get; set; } = "Rose Ultima";
+        public string Username { get; set; } = "";
         
         /// <summary>
         /// Current user's FFXIV Content ID (unique character identifier)
         /// </summary>
-        public long ContentId { get; set; } = 18014498559422700;
+        public long ContentId { get; set; } = 0;
         
         /// <summary>
         /// Current user's Account ID for API authentication
         /// </summary>
-        public int AccountId { get; set; } = 1387972975;
+        public int AccountId { get; set; } = 0;
         
         /// <summary>
-        /// API key for server authentication (randomly generated on first install)
+        /// API key for server authentication (randomly generated during registration)
         /// </summary>
-        public string Key { get; set; } = "PrkdCR9gOCSYZYOlGruL";
+        public string Key { get; set; } = "";
         
         /// <summary>
         /// Whether the user is currently logged into the API server
@@ -65,7 +66,7 @@ namespace AlphaScope
         /// <summary>
         /// Flag indicating if this is a fresh plugin installation (used for initial setup)
         /// </summary>
-        public bool FreshInstall { get; set; } = true;
+        public bool FreshInstall { get; set; } = false;
         
         /// <summary>
         /// User's role ID on the server (for permission management)
@@ -136,6 +137,46 @@ namespace AlphaScope
         /// </summary>
         public int ObjectTableRefreshInterval { get; set; } = 5_000;
 
+        // ========== LODESTONE REFRESH SERVICE SETTINGS ==========
+        
+        /// <summary>
+        /// Whether the background Lodestone refresh service is enabled
+        /// </summary>
+        public bool LodestoneRefreshEnabled { get; set; } = true;
+        
+        /// <summary>
+        /// Delay in seconds between individual Lodestone refresh requests (default: 1 second)
+        /// Processing is now one player per second instead of batches
+        /// </summary>
+        public int LodestoneRefreshDelaySeconds { get; set; } = 1;
+        
+        /// <summary>
+        /// Number of hours after which a player is considered stale and needs refresh (default: 24 hours)
+        /// </summary>
+        public int LodestoneStaleThresholdHours { get; set; } = 24;
+        
+        /// <summary>
+        /// Maximum number of players to process in a single refresh batch (default: 10)
+        /// NOTE: This setting is deprecated - processing is now one player per second
+        /// </summary>
+        public int LodestoneRefreshBatchSize { get; set; } = 10;
+        
+        /// <summary>
+        /// Delay in minutes between refresh batches when queue is not empty (default: 0 minutes)
+        /// NOTE: This setting is deprecated - processing is now one player per second
+        /// </summary>
+        public int LodestoneRefreshBatchDelayMinutes { get; set; } = 0;
+        
+        /// <summary>
+        /// Delay in minutes between refresh cycles when queue is empty (default: 0.1 minutes = 6 seconds)
+        /// </summary>
+        public int LodestoneRefreshIdleDelayMinutes { get; set; } = 0;
+        
+        /// <summary>
+        /// Delay in seconds between refresh cycles when queue is empty (default: 5 seconds)
+        /// </summary>
+        public int LodestoneRefreshIdleDelaySeconds { get; set; } = 5;
+
         /// <summary>
         /// Represents a cached favorited player with their basic information and user notes.
         /// This data is stored locally to provide quick access to favorite player information.
@@ -184,6 +225,15 @@ namespace AlphaScope
         public void Save()
         {
             Plugin.Instance._pluginInterface.SavePluginConfig(this);
+        }
+
+        /// <summary>
+        /// Saves the current configuration to disk using the provided plugin interface.
+        /// Used during initialization when Plugin.Instance may not be available yet.
+        /// </summary>
+        public void Save(IDalamudPluginInterface pluginInterface)
+        {
+            pluginInterface.SavePluginConfig(this);
         }
     }
 
