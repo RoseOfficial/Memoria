@@ -52,7 +52,7 @@ public class Player
 
     /// <summary>
     /// Level of the character's currently equipped job/class when last seen.
-    /// Range typically 1-90+ depending on current expansion level cap.
+    /// Range typically 1-100+ depending on current expansion level cap.
     /// Nullable because level information may not be available in all scanning contexts.
     /// </summary>
     public short? CurrentJobLevel { get; set; }

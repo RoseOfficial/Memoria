@@ -571,12 +571,12 @@ public class PlayerDetailsWindow : BaseModernWindow
                     var totalJobs = jobLevels.Count;
                     var maxLevel = jobLevels.Values.Max();
                     var averageLevel = jobLevels.Values.Select(v => (double)v).Average();
-                    var jobsAt90Plus = jobLevels.Values.Count(l => l >= 90);
+                    var jobsAt100Plus = jobLevels.Values.Count(l => l >= 100);
 
                     DrawInfoRow("Total Jobs", totalJobs.ToString());
                     DrawInfoRow("Highest Level", maxLevel.ToString());
                     DrawInfoRow("Average Level", $"{averageLevel:F1}");
-                    DrawInfoRow("Jobs at Lv.90+", jobsAt90Plus.ToString());
+                    DrawInfoRow("Jobs at Lv.100+", jobsAt100Plus.ToString());
                 }
             }
             else
