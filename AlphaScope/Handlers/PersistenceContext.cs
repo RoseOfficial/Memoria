@@ -263,10 +263,6 @@ internal sealed class PersistenceContext
                         LastScannedAt = player.LastScannedAt,
                     };
                     playerCount++;
-                    
-                    // Debug logging to see what data we're loading
-                    _logger?.LogInformation($"[HOMEWORLD DEBUG] Loaded player {player.Name}: HomeWorldId={player.HomeWorldId}, LastScannedAt={player.LastScannedAt}");
-                    
                     if (!string.IsNullOrEmpty(player.AvatarLink))
                     {
                         avatarCount++;
@@ -549,12 +545,14 @@ internal sealed class PersistenceContext
                         Name = mapping.PlayerName,
                         AccountId = mapping.AccountId,
                         HomeWorldId = mapping.WorldId,
+                        CurrentWorldId = mapping.CurrentWorldId,
                     });
                 else
                 {
                     dbPlayer.Name = mapping.PlayerName;
                     dbPlayer.AccountId ??= mapping.AccountId;
                     dbPlayer.HomeWorldId ??= mapping.WorldId;
+                    dbPlayer.CurrentWorldId = mapping.CurrentWorldId; // Always update current world
                     dbContext.Entry(dbPlayer).State = EntityState.Modified;
                 }
 
@@ -570,7 +568,7 @@ internal sealed class PersistenceContext
                     Name = mapping.PlayerName,
                     AvatarLink = null,
                     HomeWorldId = mapping.WorldId,
-                    CurrentWorldId = currentWorldId,
+                    CurrentWorldId = mapping.CurrentWorldId,
                     LastScannedAt = null,
                 };
                 _playerCache[mapping.ContentId] = newCachedPlayer;
@@ -650,12 +648,14 @@ internal sealed class PersistenceContext
                             Name = update.PlayerName,
                             AccountId = update.AccountId,
                             HomeWorldId = update.WorldId,
+                            CurrentWorldId = update.CurrentWorldId,
                         });
                     else
                     {
                         dbPlayer.Name = update.PlayerName;
                         dbPlayer.AccountId ??= update.AccountId;
                         dbPlayer.HomeWorldId ??= update.WorldId;
+                        dbPlayer.CurrentWorldId = update.CurrentWorldId; // Always update current world
                         dbContext.Entry(dbPlayer).State = EntityState.Modified;
                     }
                 }
@@ -683,7 +683,7 @@ internal sealed class PersistenceContext
                     Name = player.PlayerName,
                     AvatarLink = null,
                     HomeWorldId = player.WorldId,
-                    CurrentWorldId = currentWorldId,
+                    CurrentWorldId = player.CurrentWorldId,
                     LastScannedAt = null,
                 };
                 _playerCache[player.ContentId] = cachedPlayer;

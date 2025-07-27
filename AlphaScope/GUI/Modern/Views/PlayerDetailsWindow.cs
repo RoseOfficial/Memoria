@@ -405,10 +405,19 @@ public class PlayerDetailsWindow : BaseModernWindow
 
     private string GetLastSeenText()
     {
+        // First check if player has been scanned recently (for currently visible players)
         if (PersistenceContext._recentlyScannedPlayers.TryGetValue(_contentId, out var recentEntry))
         {
             var lastSeen = DateTimeOffset.FromUnixTimeSeconds(recentEntry.ScannedAt);
             var timeAgo = DateTimeOffset.Now - lastSeen;
+            return $"Last seen {FormatTimeAgo(timeAgo)}";
+        }
+        
+        // Fall back to cached player data for previously scanned players
+        if (_cachedPlayer.LastScannedAt.HasValue)
+        {
+            var lastScanned = _cachedPlayer.LastScannedAt.Value;
+            var timeAgo = DateTime.UtcNow - lastScanned;
             return $"Last seen {FormatTimeAgo(timeAgo)}";
         }
         
@@ -438,6 +447,7 @@ public class PlayerDetailsWindow : BaseModernWindow
 
     private Vector4 GetStatusColor()
     {
+        // First check if player has been scanned recently (for currently visible players)
         if (PersistenceContext._recentlyScannedPlayers.TryGetValue(_contentId, out var recentEntry))
         {
             var lastSeen = DateTimeOffset.FromUnixTimeSeconds(recentEntry.ScannedAt);
@@ -445,6 +455,16 @@ public class PlayerDetailsWindow : BaseModernWindow
             
             if (timeAgo.TotalHours < 1) return ThemeManager.Colors.Success; // Green for recent
             if (timeAgo.TotalDays < 1) return ThemeManager.Colors.Warning; // Yellow for moderate
+        }
+        // Fall back to cached player data for previously scanned players
+        else if (_cachedPlayer.LastScannedAt.HasValue)
+        {
+            var lastScanned = _cachedPlayer.LastScannedAt.Value;
+            var timeAgo = DateTime.UtcNow - lastScanned;
+            
+            if (timeAgo.TotalHours < 1) return ThemeManager.Colors.Success; // Green for recent
+            if (timeAgo.TotalDays < 1) return ThemeManager.Colors.Warning; // Yellow for moderate
+            if (timeAgo.TotalDays < 7) return ThemeManager.Colors.Warning; // Yellow for week old
         }
         
         return ThemeManager.Colors.Error; // Red for old/never seen
@@ -511,23 +531,6 @@ public class PlayerDetailsWindow : BaseModernWindow
         Plugin.Log.Info($"[PlayerDetails] {message}");
     }
 
-    private DateTime? GetLastScannedAt()
-    {
-        try
-        {
-            if (Plugin._serviceProvider == null) return null;
-            
-            using var scope = Plugin._serviceProvider.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-            var player = dbContext.Players.Find(_contentId);
-            return player?.LastScannedAt;
-        }
-        catch (Exception ex)
-        {
-            Plugin.Log.Error($"Error retrieving LastScannedAt for player {_contentId}: {ex}");
-            return null;
-        }
-    }
 
     private string GetLastScannedText()
     {

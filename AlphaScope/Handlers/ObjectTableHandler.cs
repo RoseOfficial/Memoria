@@ -74,6 +74,7 @@ internal sealed class ObjectTableHandler : IDisposable
                     AccountId = bc->AccountId,
                     PlayerName = bc->NameString,
                     WorldId = bc->HomeWorld,
+                    CurrentWorldId = bc->CurrentWorld,
                 });
 
                 var Customization = bc->DrawData.CustomizeData;
