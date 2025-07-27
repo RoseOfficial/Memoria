@@ -265,9 +265,24 @@ public class AdvancedPlayerTable : BaseComponent
             {
                 if (PersistenceContext._playerCache.TryGetValue(contentId, out var cachedPlayer))
                 {
-                    var detailsWindow = new GUI.Modern.Views.PlayerDetailsWindow(contentId, cachedPlayer);
-                    Plugin.Instance.ws.AddWindow(detailsWindow);
-                    detailsWindow.IsOpen = true;
+                    // Check if window already exists for this content ID
+                    var existingWindow = Plugin.Instance.ws.Windows
+                        .OfType<GUI.Modern.Views.PlayerDetailsWindow>()
+                        .FirstOrDefault(w => w.ContentId == contentId);
+                    
+                    if (existingWindow != null)
+                    {
+                        // Reuse existing window
+                        existingWindow.IsOpen = true;
+                        existingWindow.BringToFront();
+                    }
+                    else
+                    {
+                        // Create new window
+                        var detailsWindow = new GUI.Modern.Views.PlayerDetailsWindow(contentId, cachedPlayer);
+                        Plugin.Instance.ws.AddWindow(detailsWindow);
+                        detailsWindow.IsOpen = true;
+                    }
                 }
                 else
                 {

@@ -28,6 +28,11 @@ public class PlayerDetailsWindow : BaseModernWindow
     private string? _avatarUrl;
     private bool _hasQueuedForRefresh = false;
     
+    /// <summary>
+    /// Public getter for the content ID to allow window identification
+    /// </summary>
+    public ulong ContentId => _contentId;
+    
     internal PlayerDetailsWindow(ulong contentId, PersistenceContext.CachedPlayer cachedPlayer) 
         : base($"PlayerDetails_{contentId}", $"Player Details - {cachedPlayer.Name}")
     {
@@ -125,11 +130,20 @@ public class PlayerDetailsWindow : BaseModernWindow
             }
         }
         
-        // Last seen info
+        // Last seen info with colored indicator
         var lastSeenText = GetLastSeenText();
-        using (var seenColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+        var statusColor = GetStatusColor();
+        using (var circleColor = ThemeManager.PushColor(ImGuiCol.Text, statusColor))
         {
-            ImGui.Text($"● {lastSeenText}");
+            ImGui.Text("●");
+        }
+        
+        ImGui.SameLine();
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() - ImGui.GetStyle().ItemSpacing.X);
+        
+        using (var textColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+        {
+            ImGui.Text($" {lastSeenText}");
         }
         
         ImGui.EndGroup();
@@ -391,10 +405,37 @@ public class PlayerDetailsWindow : BaseModernWindow
 
     private static string FormatTimeAgo(TimeSpan timeAgo)
     {
-        if (timeAgo.TotalMinutes < 1) return "just now";
-        if (timeAgo.TotalHours < 1) return $"{(int)timeAgo.TotalMinutes}m ago";
-        if (timeAgo.TotalDays < 1) return $"{(int)timeAgo.TotalHours}h ago";
-        return $"{(int)timeAgo.TotalDays}d ago";
+        if (timeAgo.TotalSeconds < 30) return "online now";
+        if (timeAgo.TotalMinutes < 2) return "moments ago";
+        if (timeAgo.TotalMinutes < 5) return "a few minutes ago";
+        if (timeAgo.TotalMinutes < 15) return "recently";
+        if (timeAgo.TotalMinutes < 30) return "half an hour ago";
+        if (timeAgo.TotalHours < 1) return "less than an hour ago";
+        if (timeAgo.TotalHours < 2) return "about an hour ago";
+        if (timeAgo.TotalHours < 6) return "a few hours ago";
+        if (timeAgo.TotalHours < 12) return "earlier today";
+        if (timeAgo.TotalDays < 1) return "yesterday";
+        if (timeAgo.TotalDays < 2) return "2 days ago";
+        if (timeAgo.TotalDays < 7) return $"{(int)timeAgo.TotalDays} days ago";
+        if (timeAgo.TotalDays < 14) return "about a week ago";
+        if (timeAgo.TotalDays < 30) return $"{(int)(timeAgo.TotalDays / 7)} weeks ago";
+        if (timeAgo.TotalDays < 60) return "about a month ago";
+        if (timeAgo.TotalDays < 365) return $"{(int)(timeAgo.TotalDays / 30)} months ago";
+        return "over a year ago";
+    }
+
+    private Vector4 GetStatusColor()
+    {
+        if (PersistenceContext._recentlyScannedPlayers.TryGetValue(_contentId, out var recentEntry))
+        {
+            var lastSeen = DateTimeOffset.FromUnixTimeSeconds(recentEntry.ScannedAt);
+            var timeAgo = DateTimeOffset.Now - lastSeen;
+            
+            if (timeAgo.TotalHours < 1) return ThemeManager.Colors.Success; // Green for recent
+            if (timeAgo.TotalDays < 1) return ThemeManager.Colors.Warning; // Yellow for moderate
+        }
+        
+        return ThemeManager.Colors.Error; // Red for old/never seen
     }
 
     private void ToggleFavorite()
