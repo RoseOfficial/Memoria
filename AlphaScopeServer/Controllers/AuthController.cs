@@ -44,7 +44,6 @@ namespace AlphaScopeServer.Controllers
                     }
                 }
                 
-                _logger.LogInformation($"DiscordAuth called with data parameter: {(string.IsNullOrEmpty(data) ? "NULL/EMPTY" : "PROVIDED")}");
                 
                 if (string.IsNullOrEmpty(data))
                 {

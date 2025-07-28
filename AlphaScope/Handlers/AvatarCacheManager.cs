@@ -58,13 +58,11 @@ namespace AlphaScope.Handlers
             if (_failedDownloads.TryGetValue(avatarUrl, out var failCount) && failCount >= 3)
             {
                 // Log once per URL when blocked due to failures
-                Plugin.Log.Debug($"Avatar download blocked - too many failures for URL: {avatarUrl}");
                 return 0;
             }
 
             if (!_ongoingDownloads.ContainsKey(avatarUrl))
             {
-                Plugin.Log.Debug($"Starting avatar download for URL: {avatarUrl}");
                 _ongoingDownloads[avatarUrl] = Task.Run(async () =>
                 {
                     try
@@ -85,7 +83,6 @@ namespace AlphaScope.Handlers
                             if (_avatarCache != null)
                             {
                                 _avatarCache[avatarUrl] = newEntry;
-                                Plugin.Log.Debug($"Avatar cached successfully: {avatarUrl}");
                             }
                         }
                         else
@@ -116,7 +113,6 @@ namespace AlphaScope.Handlers
         {
             try
             {
-                Plugin.Log.Debug($"Attempting to download avatar from: {avatarUrl}");
                 var imageData = await _httpClient.GetByteArrayAsync(avatarUrl);
 
                 if (imageData == null || imageData.Length == 0)
@@ -125,7 +121,6 @@ namespace AlphaScope.Handlers
                     return null;
                 }
 
-                Plugin.Log.Debug($"Downloaded {imageData.Length} bytes for avatar: {avatarUrl}");
 
                 var imageMemory = new ReadOnlyMemory<byte>(imageData);
 
@@ -137,7 +132,6 @@ namespace AlphaScope.Handlers
                 }
                 else
                 {
-                    Plugin.Log.Debug($"Successfully created texture for avatar: {avatarUrl}");
                 }
 
                 return texture;

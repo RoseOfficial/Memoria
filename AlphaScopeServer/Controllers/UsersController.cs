@@ -590,7 +590,6 @@ namespace AlphaScopeServer.Controllers
                     var homeWorldName = GetWorldNameFromId(player.HomeWorldId);
                     if (!string.IsNullOrEmpty(homeWorldName))
                     {
-                        _logger.LogDebug($"Searching Lodestone for {player.Name} on home world {homeWorldName}");
                         lodestoneId = await SearchLodestoneCharacter(player.Name, homeWorldName);
                     }
                 }
@@ -601,7 +600,6 @@ namespace AlphaScopeServer.Controllers
                     var currentWorldName = GetWorldNameFromId(player.CurrentWorldId);
                     if (!string.IsNullOrEmpty(currentWorldName))
                     {
-                        _logger.LogDebug($"Searching Lodestone for {player.Name} on current world {currentWorldName}");
                         lodestoneId = await SearchLodestoneCharacter(player.Name, currentWorldName);
                     }
                 }

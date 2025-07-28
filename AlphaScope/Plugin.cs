@@ -491,10 +491,9 @@ public sealed class Plugin : IDalamudPlugin
             
             connection.Close();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Log database setup errors - database is critical for plugin functionality
-            System.Console.WriteLine($"Error setting up database: {ex.Message}");
             throw; // Re-throw since the plugin cannot function without database access
         }
     }

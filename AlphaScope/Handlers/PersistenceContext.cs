@@ -249,7 +249,6 @@ internal sealed class PersistenceContext
 
                 var playerCount = 0;
                 var avatarCount = 0;
-                _logger?.LogInformation("Starting cache reload from database...");
                 
                 foreach (var player in dbContext.Players)
                 {
@@ -270,7 +269,6 @@ internal sealed class PersistenceContext
                     if (!string.IsNullOrEmpty(player.AvatarLink))
                     {
                         avatarCount++;
-                        _logger?.LogInformation($"[AVATAR DEBUG] Loaded player {player.Name} with avatar: {player.AvatarLink}");
                     }
                 }
                 _logger?.LogInformation($"Cache reload completed: loaded {playerCount} players, {avatarCount} with avatars");
@@ -636,7 +634,6 @@ internal sealed class PersistenceContext
             updates.Add(mapping);
         }
         
-        _logger.LogInformation($"Processing {updates.Count} player updates out of {mappings.Count} total mappings");
         if (updates.Count == 0)
             return;
 
@@ -669,14 +666,12 @@ internal sealed class PersistenceContext
                     }
                 }
 
-                _logger.LogInformation($"Attempting to save {updates.Count} players to database...");
                 int changeCount = await dbContext.SaveChangesAsync();
                 if (changeCount > 0)
                 {
                     // foreach (var update in updates)
                     //_logger.LogDebug("  {ContentId} = {Name} ({AccountId})", update.ContentId, update.PlayerName,  update.AccountId);
 
-                    _logger.LogInformation($"Successfully saved {changeCount} player mappings to database");
                 }
                 else
                 {
@@ -768,7 +763,6 @@ internal sealed class PersistenceContext
                 LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
             };
             
-            _logger?.LogDebug($"Updated LastScannedAt for cached player {cachedPlayer.Name}: {lastScannedAt:yyyy-MM-dd HH:mm:ss} UTC");
         }
         else
         {
@@ -781,12 +775,10 @@ internal sealed class PersistenceContext
     /// </summary>
     public static void UpdateCachedPlayerAvatar(ulong contentId, string avatarLink)
     {
-        _logger?.LogInformation($"[AVATAR DEBUG] UpdateCachedPlayerAvatar called - ContentId: {contentId}, AvatarLink: '{avatarLink}'");
         
         if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
         {
             cachedPlayer.AvatarLink = avatarLink;
-            _logger?.LogInformation($"[AVATAR DEBUG] Updated avatar for cached player {cachedPlayer.Name}: {avatarLink}");
             
             // Persist to database
             try
@@ -798,21 +790,18 @@ internal sealed class PersistenceContext
                 {
                     dbPlayer.AvatarLink = avatarLink;
                     dbContext.SaveChanges();
-                    _logger?.LogInformation($"[AVATAR DEBUG] Persisted avatar URL to database for player {cachedPlayer.Name}");
                 }
                 else
                 {
-                    _logger?.LogWarning($"[AVATAR DEBUG] Could not find player in database to update avatar - ContentId: {contentId}");
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, $"[AVATAR DEBUG] Failed to persist avatar URL for player {cachedPlayer.Name}");
+                _logger?.LogError(ex, $"Failed to persist avatar URL for player {cachedPlayer.Name}");
             }
         }
         else
         {
-            _logger?.LogWarning($"[AVATAR DEBUG] Could not find player in cache to update avatar - ContentId: {contentId}");
         }
     }
 
@@ -838,7 +827,6 @@ internal sealed class PersistenceContext
                 LastJobDataUpdate = lastJobDataUpdate,
             };
             
-            _logger?.LogDebug($"Updated job data for cached player {cachedPlayer.Name}: Main job {mainJobId} level {mainJobLevel}");
             
             // Persist to database
             try
@@ -854,7 +842,6 @@ internal sealed class PersistenceContext
                     player.MainJobLevel = mainJobLevel;
                     player.LastJobDataUpdate = lastJobDataUpdate;
                     dbContext.SaveChanges();
-                    _logger?.LogDebug($"Persisted job data for player {cachedPlayer.Name} to database");
                 }
                 else
                 {

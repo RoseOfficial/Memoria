@@ -49,12 +49,10 @@ internal sealed unsafe class GameHooks : IDisposable
         _logger = logger;
         _persistenceContext = persistenceContext;
 
-        _logger.LogDebug("Initializing game hooks");
         gameInteropProvider.InitializeFromAttributes(this);
         CharacterNameResultHook.Enable();
         SocialListResultHook.Enable();
        
-        _logger.LogDebug("Game hooks initialized");
     }
 
     private int ProcessCharacterNameResult(nint a1, ulong contentId, char* playerName)
@@ -91,8 +89,6 @@ internal sealed unsafe class GameHooks : IDisposable
             }
             else
             {
-                _logger.LogDebug("Content id {ContentId} didn't resolve to a player name, ignoring",
-                    mapping.ContentId);
             }
         }
         catch (Exception e)

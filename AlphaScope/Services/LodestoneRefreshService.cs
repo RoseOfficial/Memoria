@@ -69,7 +69,6 @@ internal sealed class LodestoneRefreshService : IDisposable
     /// </summary>
     public async Task StartAsync()
     {
-        _logger.LogInformation("LodestoneRefreshService.StartAsync() called");
         
         if (!Config.LodestoneRefreshEnabled)
         {
@@ -83,7 +82,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             return;
         }
 
-        _logger.LogInformation("Starting LodestoneRefreshService...");
         _logger.LogInformation($"Configuration - Enabled: {Config.LodestoneRefreshEnabled}, " +
                              $"Processing: 1 player per second, " +
                              $"Stale Threshold: {Config.LodestoneStaleThresholdHours}h, " +
@@ -92,14 +90,11 @@ internal sealed class LodestoneRefreshService : IDisposable
         try
         {
             // Populate initial queue with existing players
-            _logger.LogInformation("Populating initial refresh queue...");
             await PopulateInitialQueue();
             
             // Start background processing
-            _logger.LogInformation("Starting background processing task...");
             _processingTask = Task.Run(() => ProcessRefreshQueue(_cancellationTokenSource.Token));
             
-            _logger.LogInformation("LodestoneRefreshService started successfully");
         }
         catch (Exception ex)
         {
@@ -147,12 +142,10 @@ internal sealed class LodestoneRefreshService : IDisposable
             if (isNewPlayer)
             {
                 _priorityQueue.Enqueue(contentId);
-                _logger.LogDebug($"Queued NEW player {contentId} for priority Lodestone refresh (Priority queue size now: {_priorityQueue.Count})");
             }
             else
             {
                 _refreshQueue.Enqueue(contentId);
-                _logger.LogDebug($"Queued player {contentId} for Lodestone refresh (Queue size now: {_refreshQueue.Count})");
             }
         }
         // Remove the excessive "already queued" logging - this gets called every frame
@@ -163,7 +156,6 @@ internal sealed class LodestoneRefreshService : IDisposable
     /// </summary>
     public async Task<bool> ForceProcessNextPlayer()
     {
-        _logger.LogInformation($"ForceProcessNextPlayer called - Priority queue: {_priorityQueue.Count}, Regular queue: {_refreshQueue.Count}");
         
         // Check priority queue first
         if (_priorityQueue.TryDequeue(out var contentId) || _refreshQueue.TryDequeue(out contentId))
@@ -219,7 +211,6 @@ internal sealed class LodestoneRefreshService : IDisposable
     {
         try
         {
-            _logger.LogInformation("PopulateInitialQueue: Starting...");
             
             using var scope = _serviceProvider.CreateScope();
             using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
@@ -247,11 +238,9 @@ internal sealed class LodestoneRefreshService : IDisposable
                 {
                     _refreshQueue.Enqueue(contentId);
                     queuedCount++;
-                    _logger.LogDebug($"PopulateInitialQueue: Queued player {contentId}");
                 }
                 else
                 {
-                    _logger.LogDebug($"PopulateInitialQueue: Player {contentId} already queued");
                 }
             }
             
@@ -293,12 +282,10 @@ internal sealed class LodestoneRefreshService : IDisposable
                 if (_priorityQueue.TryDequeue(out contentId))
                 {
                     hasPlayer = true;
-                    _logger.LogDebug($"Processing priority player {contentId}");
                 }
                 else if (_refreshQueue.TryDequeue(out contentId))
                 {
                     hasPlayer = true;
-                    _logger.LogDebug($"Processing regular player {contentId}");
                 }
                 
                 if (hasPlayer)
@@ -350,7 +337,6 @@ internal sealed class LodestoneRefreshService : IDisposable
     {
         try
         {
-            _logger.LogDebug($"ProcessSinglePlayer: Starting refresh for player {contentId}");
             
             using var scope = _serviceProvider.CreateScope();
             using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
@@ -362,13 +348,11 @@ internal sealed class LodestoneRefreshService : IDisposable
                 return;
             }
 
-            _logger.LogInformation($"ProcessSinglePlayer: Refreshing Lodestone data for player {player.Name} ({contentId})");
             
             var success = await RefreshPlayerData(player, dbContext);
             if (success)
             {
                 await dbContext.SaveChangesAsync();
-                _logger.LogInformation($"ProcessSinglePlayer: Successfully refreshed data for player {player.Name}");
             }
             else
             {
@@ -388,7 +372,6 @@ internal sealed class LodestoneRefreshService : IDisposable
     {
         try
         {
-            _logger.LogInformation($"Fetching Lodestone data for player {player.Name}...");
             
             // Fetch avatar URL directly from Lodestone using character name and world
             if (string.IsNullOrEmpty(player.Name))
@@ -414,7 +397,6 @@ internal sealed class LodestoneRefreshService : IDisposable
                 // Clear any failed download attempts for this new URL
                 Plugin.AvatarCacheManager.ClearFailedDownloads(player.AvatarLink);
                 
-                _logger.LogInformation($"Updated avatar for player {player.Name}: {player.AvatarLink}");
             }
             else if (string.IsNullOrEmpty(avatarUrl))
             {
@@ -422,7 +404,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
             else
             {
-                _logger.LogDebug($"Avatar URL unchanged for player {player.Name}");
             }
             
             // Handle job data updates
@@ -442,11 +423,9 @@ internal sealed class LodestoneRefreshService : IDisposable
                     // Update cached player data so UI reflects changes immediately
                     PersistenceContext.UpdateCachedPlayerJobData(player.LocalContentId, jobDataJson, mainJobId, mainJobLevel, jobDataUpdateTime);
                     
-                    _logger.LogInformation($"Updated job data for player {player.Name}: {jobLevels.Count} jobs, main job {mainJobId} level {mainJobLevel}");
                 }
                 else
                 {
-                    _logger.LogDebug($"Job data unchanged for player {player.Name}");
                 }
             }
             else
@@ -491,7 +470,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             
             // Search for character on Lodestone
             var searchUrl = $"https://na.finalfantasyxiv.com/lodestone/character/?q={Uri.EscapeDataString(characterName)}&worldname=";
-            _logger.LogDebug($"Searching Lodestone: {searchUrl}");
             
             var searchResponse = await httpClient.GetStringAsync(searchUrl);
             
@@ -506,31 +484,25 @@ internal sealed class LodestoneRefreshService : IDisposable
             
             // Fetch character profile page
             var profileUrl = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/";
-            _logger.LogDebug($"Fetching profile: {profileUrl}");
             
             var profileResponse = await httpClient.GetStringAsync(profileUrl);
-            _logger.LogInformation($"Profile HTML length: {profileResponse.Length} chars");
             
             // Log a snippet of the HTML to check if we're getting valid content
             var htmlSnippet = profileResponse.Length > 500 ? profileResponse.Substring(0, 500) : profileResponse;
-            _logger.LogDebug($"HTML snippet: {htmlSnippet}...");
             
             // Extract avatar URL from profile page
             var avatarUrl = ExtractAvatarUrlFromProfile(profileResponse);
             
             // Fetch separate Class/Job page for job data
             var classJobUrl = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/class_job/";
-            _logger.LogDebug($"Fetching class/job page: {classJobUrl}");
             
             var classJobResponse = await httpClient.GetStringAsync(classJobUrl);
-            _logger.LogInformation($"Class/Job HTML length: {classJobResponse.Length} chars");
             
             // Extract job data from class/job page
             var (jobLevels, mainJobId, mainJobLevel) = ExtractJobDataFromProfile(classJobResponse);
             
             if (!string.IsNullOrEmpty(avatarUrl))
             {
-                _logger.LogInformation($"Found avatar URL for {characterName}: {avatarUrl}");
             }
             else
             {
@@ -539,7 +511,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             
             if (jobLevels != null && jobLevels.Count > 0)
             {
-                _logger.LogInformation($"Found job data for {characterName}: {jobLevels.Count} jobs, main job {mainJobId} level {mainJobLevel}");
             }
             else
             {
@@ -577,7 +548,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             
             if (fallbackMatch.Success)
             {
-                _logger.LogDebug($"Using fallback Lodestone ID extraction for {characterName}");
                 return fallbackMatch.Groups[1].Value;
             }
             
@@ -597,16 +567,12 @@ internal sealed class LodestoneRefreshService : IDisposable
     {
         try
         {
-            _logger.LogDebug($"Extracting avatar from HTML (length: {html.Length})");
             
-            // Find all img tags and log them for debugging
             var allImgMatches = Regex.Matches(html, @"<img[^>]+src=""([^""]*)""\s*[^>]*>", RegexOptions.IgnoreCase);
-            _logger.LogDebug($"Found {allImgMatches.Count} img tags in profile HTML");
             
             foreach (Match imgMatch in allImgMatches)
             {
                 var imgUrl = imgMatch.Groups[1].Value;
-                _logger.LogDebug($"Image found: {imgUrl}");
                 
                 // Skip obvious non-avatar images
                 if (imgUrl.Contains("banner/") || imgUrl.Contains("mogmog") || imgUrl.Contains("logo") || 
@@ -624,7 +590,6 @@ internal sealed class LodestoneRefreshService : IDisposable
                     else if (imgUrl.StartsWith("/"))
                         imgUrl = "https://img.finalfantasyxiv.com" + imgUrl;
                     
-                    _logger.LogInformation($"Found character avatar URL: {imgUrl}");
                     return imgUrl;
                 }
             }
@@ -723,33 +688,7 @@ internal sealed class LodestoneRefreshService : IDisposable
     {
         try
         {
-            _logger.LogDebug($"Extracting job data from HTML (length: {html.Length})");
             
-            // Debug: Log samples of HTML that might contain job data
-            var jobKeywords = new[] { "character__job", "class_job", "db-tooltip", "job--", "level", "classjob", "class/job" };
-            foreach (var keyword in jobKeywords)
-            {
-                if (html.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                {
-                    var startIndex = html.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
-                    if (startIndex >= 0)
-                    {
-                        var endIndex = Math.Min(startIndex + 1000, html.Length);
-                        var jobSample = html.Substring(Math.Max(0, startIndex - 100), endIndex - Math.Max(0, startIndex - 100));
-                        _logger.LogInformation($"HTML job section sample ({keyword}): {jobSample}");
-                        
-                        // Also look for more instances
-                        var nextIndex = html.IndexOf(keyword, startIndex + 1, StringComparison.OrdinalIgnoreCase);
-                        if (nextIndex > 0)
-                        {
-                            var nextEndIndex = Math.Min(nextIndex + 800, html.Length);
-                            var nextSample = html.Substring(Math.Max(0, nextIndex - 50), nextEndIndex - Math.Max(0, nextIndex - 50));
-                            _logger.LogInformation($"HTML job section sample 2 ({keyword}): {nextSample}");
-                        }
-                        break; // Only log first keyword to avoid spam
-                    }
-                }
-            }
             
             var jobLevels = new Dictionary<byte, short>();
             byte? mainJobId = null;
@@ -765,7 +704,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             foreach (var pattern in jobPatterns)
             {
                 var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                _logger.LogDebug($"Pattern '{pattern}' found {matches.Count} matches");
                 
                 foreach (Match match in matches)
                 {
@@ -788,7 +726,6 @@ internal sealed class LodestoneRefreshService : IDisposable
 
                         // Only store valid job data
                         jobLevels[jobId] = level;
-                        _logger.LogDebug($"Found job {jobId} at level {level}");
                         
                         // Track the highest level job as main job
                         if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
@@ -803,7 +740,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             // Alternative: Look for specific class/job blocks with stricter constraints
             var jobBlockPattern = @"character__job[^>]*job--(\d{1,2})[^>]*>.*?character__job__level[^>]*>(\d{1,3})<";
             var jobBlockMatches = Regex.Matches(html, jobBlockPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            _logger.LogDebug($"Job block pattern found {jobBlockMatches.Count} matches");
             
             foreach (Match match in jobBlockMatches)
             {
@@ -828,7 +764,6 @@ internal sealed class LodestoneRefreshService : IDisposable
                     if (!jobLevels.ContainsKey(jobId))
                     {
                         jobLevels[jobId] = level;
-                        _logger.LogDebug($"Found job block {jobId} at level {level}");
                         
                         if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
                         {
@@ -840,7 +775,6 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
             
             // Use text-based parsing to match exact Lodestone format: "80 Paladin 571,166 / 5,992,000"
-            _logger.LogInformation("Using text-based parsing for Lodestone job data...");
             
             // Pattern for HTML structure: <div class="character__job__level">100</div><div class="character__job__name">Paladin</div>
             var textPatterns = new[]
@@ -856,7 +790,6 @@ internal sealed class LodestoneRefreshService : IDisposable
                 foreach (var pattern in textPatterns)
                 {
                     var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                    _logger.LogDebug($"Text pattern '{pattern}' found {matches.Count} matches");
                     
                     foreach (Match match in matches)
                     {
@@ -876,7 +809,6 @@ internal sealed class LodestoneRefreshService : IDisposable
                                 if (IsValidJobLevel(level))
                                 {
                                     jobLevels[jobId] = level;
-                                    _logger.LogDebug($"Found job by name: {jobName} (ID {jobId}) at level {level}");
                                     
                                     if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
                                     {
@@ -891,13 +823,11 @@ internal sealed class LodestoneRefreshService : IDisposable
                             }
                             else
                             {
-                                _logger.LogDebug($"Unknown job name: '{jobName}' with level {level}");
                             }
                         }
                     }
                 }
             
-            _logger.LogInformation($"Extracted {jobLevels.Count} job levels from profile, main job: {mainJobId} level {mainJobLevel}");
             
             return jobLevels.Count > 0 ? (jobLevels, mainJobId, mainJobLevel) : (null, null, null);
         }

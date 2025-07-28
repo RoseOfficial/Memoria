@@ -50,7 +50,6 @@ builder.Services.AddSwaggerGen(c =>
 
 // Configure logging with performance filters
 builder.Logging.AddConsole();
-builder.Logging.AddDebug();
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
 builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Information);
 
@@ -63,11 +62,9 @@ using (var scope = app.Services.CreateScope())
     try
     {
         context.Database.EnsureCreated();
-        Console.WriteLine("Database initialized successfully.");
     }
-    catch (Exception ex)
+    catch (Exception)
     {
-        Console.WriteLine($"Error initializing database: {ex.Message}");
     }
 }
 
@@ -96,10 +93,6 @@ app.MapGet("/health", () => new { status = "healthy", timestamp = DateTimeOffset
     .WithName("HealthCheck")
     .WithOpenApi();
 
-// Log server information
-app.Logger.LogInformation("AlphaScope Server starting...");
-app.Logger.LogInformation("Server URL: https://localhost:5001");
-app.Logger.LogInformation("Swagger UI: https://localhost:5001/swagger");
 
 app.Run();
 

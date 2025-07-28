@@ -445,7 +445,6 @@ namespace AlphaScopeServer.Controllers
                                 
                                 if (player != null && string.IsNullOrEmpty(player.AvatarLink))
                                 {
-                                    scopedLogger.LogDebug($"Auto-linking {player.Name}");
                                     await AutoLinkLodestoneForPlayer(player, scopedContext, scopedLogger);
                                     await scopedContext.SaveChangesAsync();
                                     
@@ -615,7 +614,6 @@ namespace AlphaScopeServer.Controllers
                     var homeWorldName = GetWorldNameFromId(player.HomeWorldId);
                     if (!string.IsNullOrEmpty(homeWorldName))
                     {
-                        logger.LogDebug($"Searching Lodestone for {player.Name} on home world {homeWorldName}");
                         lodestoneId = await SearchLodestoneCharacter(player.Name, homeWorldName, logger);
                     }
                 }
@@ -626,7 +624,6 @@ namespace AlphaScopeServer.Controllers
                     var currentWorldName = GetWorldNameFromId(player.CurrentWorldId);
                     if (!string.IsNullOrEmpty(currentWorldName))
                     {
-                        logger.LogDebug($"Searching Lodestone for {player.Name} on current world {currentWorldName}");
                         lodestoneId = await SearchLodestoneCharacter(player.Name, currentWorldName, logger);
                     }
                 }

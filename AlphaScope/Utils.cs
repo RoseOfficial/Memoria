@@ -891,14 +891,12 @@ namespace AlphaScope
         {
             if (string.IsNullOrWhiteSpace(avatarLink))
             {
-                Plugin.Log.Debug($"Avatar link is null/empty, using blank avatar");
                 avatarLink = BlankAvatar; // Blank image
             }
 
             var sizeSuffix = isLarge ? "fl0.jpg" : "fc0.jpg";
             var url = $"{AvatarBaseUrl}{avatarLink}{sizeSuffix}";
             
-            Plugin.Log.Debug($"GetAvatarUrl: '{avatarLink}' -> '{url}' (isLarge: {isLarge})");
             return url;
         }
 
