@@ -577,10 +577,7 @@ public class PlayerDetailsWindow : BaseModernWindow
 
                                     // Level column
                                     ImGui.TableSetColumnIndex(2);
-                                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, 
-                                        job.Value >= 90 ? ThemeManager.Colors.Success : 
-                                        job.Value >= 50 ? ThemeManager.Colors.Warning : 
-                                        ThemeManager.Colors.TextSecondary))
+                                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, Utils.GetFFLogsLevelColor(job.Value)))
                                     {
                                         ImGui.Text(job.Value.ToString());
                                     }

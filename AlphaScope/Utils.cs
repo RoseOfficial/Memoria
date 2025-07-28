@@ -854,6 +854,25 @@ namespace AlphaScope
         }
 
         /// <summary>
+        /// Gets FFLogs-style parse color based on job level (treating level as percentile)
+        /// </summary>
+        /// <param name="level">The job level (1-100)</param>
+        /// <returns>The color vector corresponding to FFLogs parse percentiles</returns>
+        public static Vector4 GetFFLogsLevelColor(int level)
+        {
+            return level switch
+            {
+                >= 100 => new Vector4(0.90f, 0.80f, 0.50f, 1.0f), // Gold - Perfect (100th percentile)
+                >= 99 => new Vector4(0.89f, 0.41f, 0.66f, 1.0f),  // Pink - 99th percentile  
+                >= 95 => new Vector4(1.0f, 0.50f, 0.0f, 1.0f),    // Orange - 95-98th percentile
+                >= 75 => new Vector4(0.64f, 0.21f, 0.93f, 1.0f),  // Purple - 75-94th percentile
+                >= 50 => new Vector4(0.0f, 0.44f, 0.87f, 1.0f),   // Blue - 50-74th percentile  
+                >= 25 => new Vector4(0.12f, 1.0f, 0.0f, 1.0f),    // Green - 25-49th percentile
+                _ => new Vector4(0.4f, 0.4f, 0.4f, 1.0f)          // Gray - 0-24th percentile
+            };
+        }
+
+        /// <summary>
         /// Returns a ISharedImmediateTexture for the appropriate status.
         /// </summary>
         /// <param name="statusID">ID of the status.</param>
