@@ -597,8 +597,6 @@ public class PlayerDetailsWindow : BaseModernWindow
                             }
                         }
                     }
-
-                    ImGuiHelpers.ScaledDummy(5f);
                 }
 
                 ImGuiHelpers.ScaledDummy(10f);

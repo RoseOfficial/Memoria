@@ -822,14 +822,14 @@ namespace AlphaScope
         {
             return role switch
             {
-                JobRole.Tank => "🛡️ Tank",
-                JobRole.Healer => "💚 Healer", 
-                JobRole.MeleeDPS => "⚔️ Melee DPS",
-                JobRole.PhysicalRangedDPS => "🏹 Physical Ranged DPS",
-                JobRole.MagicalRangedDPS => "🔮 Magical Ranged DPS",
-                JobRole.Crafter => "🔨 Disciples of the Hand",
-                JobRole.Gatherer => "⛏️ Disciples of the Land",
-                _ => "❓ Other"
+                JobRole.Tank => "Tank",
+                JobRole.Healer => "Healer", 
+                JobRole.MeleeDPS => "Melee DPS",
+                JobRole.PhysicalRangedDPS => "Physical Ranged DPS",
+                JobRole.MagicalRangedDPS => "Magical Ranged DPS",
+                JobRole.Crafter => "Disciples of the Hand",
+                JobRole.Gatherer => "Disciples of the Land",
+                _ => "Other"
             };
         }
 
