@@ -739,6 +739,8 @@ internal sealed class PersistenceContext
         public byte? MainJobId { get; init; }
         public short? MainJobLevel { get; init; }
         public DateTime? LastJobDataUpdate { get; init; }
+        public string? LodestoneMinionsData { get; init; }
+        public DateTime? LastMinionsDataUpdate { get; init; }
     }
 
     /// <summary>
@@ -761,6 +763,8 @@ internal sealed class PersistenceContext
                 MainJobId = cachedPlayer.MainJobId,
                 MainJobLevel = cachedPlayer.MainJobLevel,
                 LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
+                LodestoneMinionsData = cachedPlayer.LodestoneMinionsData,
+                LastMinionsDataUpdate = cachedPlayer.LastMinionsDataUpdate,
             };
             
         }
@@ -825,6 +829,8 @@ internal sealed class PersistenceContext
                 MainJobId = mainJobId,
                 MainJobLevel = mainJobLevel,
                 LastJobDataUpdate = lastJobDataUpdate,
+                LodestoneMinionsData = cachedPlayer.LodestoneMinionsData,
+                LastMinionsDataUpdate = cachedPlayer.LastMinionsDataUpdate,
             };
             
             
@@ -856,6 +862,80 @@ internal sealed class PersistenceContext
         else
         {
             _logger?.LogWarning($"Could not find player in cache to update job data - ContentId: {contentId}");
+        }
+    }
+
+    /// <summary>
+    /// Updates the minion data for a cached player and persists it to the database
+    /// </summary>
+    public static void UpdateCachedPlayerMinionsData(ulong contentId, string? lodestoneMinionsData, DateTime? lastMinionsDataUpdate)
+    {
+        Plugin.Log.Information($"[Cache Debug] UpdateCachedPlayerMinionsData called for {contentId}, data length: {lodestoneMinionsData?.Length ?? 0}");
+        
+        if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
+        {
+            Plugin.Log.Information($"[Cache Debug] Found cached player {cachedPlayer.Name}, updating minion data");
+            
+            // Create new cached player instance with updated minion data
+            var newCachedPlayer = new CachedPlayer
+            {
+                AccountId = cachedPlayer.AccountId,
+                Name = cachedPlayer.Name,
+                AvatarLink = cachedPlayer.AvatarLink,
+                HomeWorldId = cachedPlayer.HomeWorldId,
+                CurrentWorldId = cachedPlayer.CurrentWorldId,
+                LastScannedAt = cachedPlayer.LastScannedAt,
+                LodestoneJobData = cachedPlayer.LodestoneJobData,
+                MainJobId = cachedPlayer.MainJobId,
+                MainJobLevel = cachedPlayer.MainJobLevel,
+                LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
+                LodestoneMinionsData = lodestoneMinionsData,
+                LastMinionsDataUpdate = lastMinionsDataUpdate,
+            };
+            
+            _playerCache[contentId] = newCachedPlayer;
+            
+            Plugin.Log.Information($"[Cache Debug] Successfully updated cached player minion data for {cachedPlayer.Name}");
+            Plugin.Log.Information($"[Cache Debug] New cached player minion data length: {newCachedPlayer.LodestoneMinionsData?.Length ?? 0}");
+            
+            // Verify the cache update worked
+            if (_playerCache.TryGetValue(contentId, out var verifyPlayer))
+            {
+                Plugin.Log.Information($"[Cache Debug] Verification: Cache now contains minion data length: {verifyPlayer.LodestoneMinionsData?.Length ?? 0}");
+            }
+            else
+            {
+                Plugin.Log.Warning($"[Cache Debug] Verification failed: Could not retrieve updated player from cache");
+            }
+            
+            
+            // Persist to database
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+                
+                var player = dbContext.Players.Find(contentId);
+                if (player != null)
+                {
+                    player.LodestoneMinionsData = lodestoneMinionsData;
+                    player.LastMinionsDataUpdate = lastMinionsDataUpdate;
+                    var changes = dbContext.SaveChanges();
+                    Plugin.Log.Information($"[Cache Debug] Persisted minion data to database for {player.Name}, {changes} rows affected");
+                }
+                else
+                {
+                    Plugin.Log.Warning($"[Cache Debug] Could not find player {contentId} in database to persist minion data");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Failed to persist minion data for player {cachedPlayer.Name}");
+            }
+        }
+        else
+        {
+            _logger?.LogWarning($"Could not find player in cache to update minion data - ContentId: {contentId}");
         }
     }
 

@@ -128,6 +128,11 @@ public sealed class Plugin : IDalamudPlugin
     public static AvatarCacheManager AvatarCacheManager = null!;
     
     /// <summary>
+    /// Manager for caching and retrieving minion icons from Lodestone
+    /// </summary>
+    public static MinionCacheManager MinionCacheManager = null!;
+    
+    /// <summary>
     /// Background service for continuously refreshing character data from Lodestone
     /// </summary>
     private LodestoneRefreshService? _lodestoneRefreshService;
@@ -253,6 +258,9 @@ public sealed class Plugin : IDalamudPlugin
         
         // Initialize avatar caching system
         AvatarCacheManager = new AvatarCacheManager();
+        
+        // Initialize minion icon caching system
+        MinionCacheManager = new MinionCacheManager();
 
         // Register UI drawing and event handlers
         pluginInterface.UiBuilder.Draw += ws.Draw;
@@ -371,7 +379,9 @@ public sealed class Plugin : IDalamudPlugin
                         LodestoneJobData TEXT NULL,
                         MainJobId INTEGER NULL,
                         MainJobLevel INTEGER NULL,
-                        LastJobDataUpdate TEXT NULL
+                        LastJobDataUpdate TEXT NULL,
+                        LodestoneMinionsData TEXT NULL,
+                        LastMinionsDataUpdate TEXT NULL
                     );
                 ";
                 command.ExecuteNonQuery();
@@ -407,6 +417,8 @@ public sealed class Plugin : IDalamudPlugin
                 bool hasMainJobId = false;
                 bool hasMainJobLevel = false;
                 bool hasLastJobDataUpdate = false;
+                bool hasLodestoneMinionsData = false;
+                bool hasLastMinionsDataUpdate = false;
                 while (playerReader.Read())
                 {
                     var columnName = playerReader.GetString(1); // name column
@@ -420,6 +432,8 @@ public sealed class Plugin : IDalamudPlugin
                     if (columnName == "MainJobId") hasMainJobId = true;
                     if (columnName == "MainJobLevel") hasMainJobLevel = true;
                     if (columnName == "LastJobDataUpdate") hasLastJobDataUpdate = true;
+                    if (columnName == "LodestoneMinionsData") hasLodestoneMinionsData = true;
+                    if (columnName == "LastMinionsDataUpdate") hasLastMinionsDataUpdate = true;
                 }
                 playerReader.Close();
                 
@@ -485,6 +499,19 @@ public sealed class Plugin : IDalamudPlugin
                 if (!hasLastJobDataUpdate)
                 {
                     command.CommandText = "ALTER TABLE Players ADD COLUMN LastJobDataUpdate TEXT NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                // Add minion data columns if they don't exist (for minion collection tracking)
+                if (!hasLodestoneMinionsData)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN LodestoneMinionsData TEXT NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                if (!hasLastMinionsDataUpdate)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastMinionsDataUpdate TEXT NULL;";
                     command.ExecuteNonQuery();
                 }
             }
@@ -559,6 +586,7 @@ public sealed class Plugin : IDalamudPlugin
         Handlers.ContextMenu.Disable();
         PersistenceContext.StopUploads();
         AvatarCacheManager.Dispose();
+        MinionCacheManager.Dispose();
 
         // Unregister command handler
         _commandManager.RemoveHandler("/alpha");

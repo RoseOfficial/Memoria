@@ -97,4 +97,18 @@ public class Player
     /// Used to track freshness of job information separately from general profile scans.
     /// </summary>
     public DateTime? LastJobDataUpdate { get; set; }
+
+    /// <summary>
+    /// JSON string containing complete minion collection data from Lodestone.
+    /// Stores all owned minions as a serialized array for comprehensive minion tracking.
+    /// Example: [{"id": 1, "name": "Goobbue Sproutling", "acquired": "2024-01-01"}]
+    /// </summary>
+    [MaxLength(10000)]
+    public string? LodestoneMinionsData { get; set; }
+
+    /// <summary>
+    /// Timestamp of when minion data was last updated from Lodestone.
+    /// Used to track freshness of minion information separately from general profile scans.
+    /// </summary>
+    public DateTime? LastMinionsDataUpdate { get; set; }
 }

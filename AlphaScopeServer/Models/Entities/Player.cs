@@ -36,6 +36,10 @@ namespace AlphaScopeServer.Models.Entities
         public short? MainJobLevel { get; set; }
         public DateTime? LastJobDataUpdate { get; set; }
         
+        [MaxLength(10000)]
+        public string? LodestoneMinionsData { get; set; }
+        public DateTime? LastMinionsDataUpdate { get; set; }
+        
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -13,6 +14,17 @@ using AlphaScope.Database;
 using AlphaScope.Handlers;
 
 namespace AlphaScope.Services;
+
+/// <summary>
+/// Represents a minion entry from Lodestone
+/// </summary>
+public class MinionInfo
+{
+    public int? MinionId { get; set; }
+    public string? Name { get; set; }
+    public string? IconUrl { get; set; }
+    public DateTime? AcquiredDate { get; set; }
+}
 
 /// <summary>
 /// Background service that continuously refreshes character data from Lodestone.
@@ -381,7 +393,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                 return true;
             }
             
-            var (avatarUrl, jobLevels, mainJobId, mainJobLevel) = await FetchLodestonePlayerData(player.Name, player.LocalContentId);
+            var (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData) = await FetchLodestonePlayerData(player.Name, player.LocalContentId);
             
             var hasUpdates = false;
             
@@ -433,6 +445,33 @@ internal sealed class LodestoneRefreshService : IDisposable
                 _logger.LogWarning($"Could not extract job data for player {player.Name}");
             }
             
+            // Handle minion data updates
+            if (minionsData != null && minionsData.Count > 0)
+            {
+                var minionsDataJson = JsonSerializer.Serialize(minionsData);
+                _logger.LogInformation($"Serialized minion data for {player.Name}: {minionsDataJson.Length} chars, first minion: {minionsData.FirstOrDefault()?.Name}");
+                
+                if (minionsDataJson != player.LodestoneMinionsData)
+                {
+                    var minionsDataUpdateTime = DateTime.UtcNow;
+                    player.LodestoneMinionsData = minionsDataJson;
+                    player.LastMinionsDataUpdate = minionsDataUpdateTime;
+                    hasUpdates = true;
+                    _logger.LogInformation($"Updated minion data for {player.Name} in database with {minionsData.Count} minions");
+                    
+                    // Update cached player data so UI reflects changes immediately
+                    PersistenceContext.UpdateCachedPlayerMinionsData(player.LocalContentId, minionsDataJson, minionsDataUpdateTime);
+                    
+                }
+                else
+                {
+                }
+            }
+            else
+            {
+                _logger.LogDebug($"Could not extract minion data for player {player.Name}");
+            }
+            
             // Always update LastScannedAt to track when we attempted refresh
             var now = DateTime.UtcNow;
             player.LastScannedAt = now;
@@ -459,9 +498,9 @@ internal sealed class LodestoneRefreshService : IDisposable
     }
 
     /// <summary>
-    /// Fetches comprehensive player data from Lodestone including avatar and job information
+    /// Fetches comprehensive player data from Lodestone including avatar, job, and minion information
     /// </summary>
-    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel)> FetchLodestonePlayerData(string characterName, ulong contentId)
+    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel, List<MinionInfo>? MinionsData)> FetchLodestonePlayerData(string characterName, ulong contentId)
     {
         try
         {
@@ -479,7 +518,7 @@ internal sealed class LodestoneRefreshService : IDisposable
             if (string.IsNullOrEmpty(lodestoneId))
             {
                 _logger.LogWarning($"Could not find Lodestone ID for character {characterName}");
-                return (null, null, null, null);
+                return (null, null, null, null, null);
             }
             
             // Fetch character profile page
@@ -501,6 +540,26 @@ internal sealed class LodestoneRefreshService : IDisposable
             // Extract job data from class/job page
             var (jobLevels, mainJobId, mainJobLevel) = ExtractJobDataFromProfile(classJobResponse);
             
+            // Fetch minion page with error handling
+            var minionUrl = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/minion/";
+            string? minionResponse = null;
+            
+            try
+            {
+                minionResponse = await httpClient.GetStringAsync(minionUrl);
+            }
+            catch (HttpRequestException httpEx) when (httpEx.Message.Contains("404"))
+            {
+                _logger.LogDebug($"Minion page not found for {characterName} (404) - player may not have public minion data");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Failed to fetch minion page for {characterName}");
+            }
+            
+            // Extract minion data from minion page (only if we got a response)
+            var minionsData = !string.IsNullOrEmpty(minionResponse) ? ExtractMinionDataFromProfile(minionResponse) : null;
+            
             if (!string.IsNullOrEmpty(avatarUrl))
             {
             }
@@ -517,12 +576,20 @@ internal sealed class LodestoneRefreshService : IDisposable
                 _logger.LogWarning($"Could not extract job data from profile for {characterName}");
             }
             
-            return (avatarUrl, jobLevels, mainJobId, mainJobLevel);
+            if (minionsData != null && minionsData.Count > 0)
+            {
+            }
+            else
+            {
+                _logger.LogDebug($"Could not extract minion data from profile for {characterName}");
+            }
+            
+            return (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Error fetching Lodestone data for {characterName}");
-            return (null, null, null, null);
+            return (null, null, null, null, null);
         }
     }
 
@@ -835,6 +902,145 @@ internal sealed class LodestoneRefreshService : IDisposable
         {
             _logger.LogError(ex, "Error extracting job data from profile");
             return (null, null, null);
+        }
+    }
+
+    /// <summary>
+    /// Extracts minion collection data from character minion page HTML
+    /// </summary>
+    private List<MinionInfo>? ExtractMinionDataFromProfile(string html)
+    {
+        try
+        {
+            var minions = new List<MinionInfo>();
+            
+            // Updated patterns to match current Lodestone minion page structure
+            // Try multiple patterns to handle different HTML structures
+            var minionItemPattern = @"<li[^>]*class=""[^""]*minion__list_item[^""]*""[^>]*>.*?<img[^>]+src=""(https://lds-img\.finalfantasyxiv\.com/itemicon/[^""]+\.png[^""]*)""[^>]*alt=""([^""]+)""[^>]*>.*?</li>";
+            // Alternative pattern for minion names (currently unused but available for future enhancement)
+            // var minionNamePattern = @"<div[^>]*class=""[^""]*minion__name[^""]*""[^>]*>([^<]+)</div>";
+            var minionTooltipPattern = @"data-tooltip=""([^""]+)""[^>]*><img[^>]+src=""(https://lds-img\.finalfantasyxiv\.com/itemicon/[^""]+\.png[^""]*)""";
+            
+            var itemMatches = Regex.Matches(html, minionItemPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            
+            if (itemMatches.Count > 0)
+            {
+                _logger.LogInformation($"Found {itemMatches.Count} minion matches using primary pattern");
+                foreach (Match match in itemMatches)
+                {
+                    if (match.Groups.Count >= 3)
+                    {
+                        var iconUrl = match.Groups[1].Value.Trim();
+                        var minionName = match.Groups[2].Value.Trim();
+                        
+                        if (!string.IsNullOrEmpty(iconUrl))
+                        {
+                            var minion = new MinionInfo
+                            {
+                                Name = !string.IsNullOrEmpty(minionName) ? minionName : "Unknown Minion",
+                                MinionId = null, // Would need game data mapping to get actual ID
+                                AcquiredDate = null, // Not available from current Lodestone format
+                                IconUrl = iconUrl
+                            };
+                            
+                            minions.Add(minion);
+                            _logger.LogDebug($"Added minion: {minionName} with icon: {iconUrl}");
+                        }
+                    }
+                }
+            }
+            // Try tooltip pattern if primary pattern didn't work
+            else
+            {
+                _logger.LogInformation("Primary pattern failed, trying tooltip pattern");
+                var tooltipMatches = Regex.Matches(html, minionTooltipPattern, RegexOptions.IgnoreCase);
+                
+                if (tooltipMatches.Count > 0)
+                {
+                    _logger.LogInformation($"Found {tooltipMatches.Count} minion matches using tooltip pattern");
+                    foreach (Match match in tooltipMatches)
+                    {
+                        if (match.Groups.Count >= 3)
+                        {
+                            var minionName = match.Groups[1].Value.Trim();
+                            var iconUrl = match.Groups[2].Value.Trim();
+                            
+                            if (!string.IsNullOrEmpty(iconUrl))
+                            {
+                                var minion = new MinionInfo
+                                {
+                                    Name = !string.IsNullOrEmpty(minionName) ? minionName : "Unknown Minion",
+                                    MinionId = null,
+                                    AcquiredDate = null,
+                                    IconUrl = iconUrl
+                                };
+                                
+                                minions.Add(minion);
+                                _logger.LogDebug($"Added minion from tooltip: {minionName} with icon: {iconUrl}");
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Final fallback: just look for any minion icons if structured approaches fail
+            if (minions.Count == 0)
+            {
+                _logger.LogWarning("All structured patterns failed, using fallback icon pattern");
+                var minionIconPattern = @"<img[^>]+src=""(https://lds-img\.finalfantasyxiv\.com/itemicon/[^""]+\.png[^""]*)""[^>]*(?:alt=""([^""]*)""|title=""([^""]*)""|data-tooltip=""([^""]*)""|[^>]*)>";
+                
+                var iconMatches = Regex.Matches(html, minionIconPattern, RegexOptions.IgnoreCase);
+                _logger.LogInformation($"Found {iconMatches.Count} minion icons using fallback pattern");
+                
+                foreach (Match match in iconMatches)
+                {
+                    if (match.Groups.Count >= 2)
+                    {
+                        var iconUrl = match.Groups[1].Value.Trim();
+                        
+                        // Try to get name from various attributes
+                        var minionName = "";
+                        for (int i = 2; i < match.Groups.Count; i++)
+                        {
+                            if (!string.IsNullOrEmpty(match.Groups[i].Value.Trim()))
+                            {
+                                minionName = match.Groups[i].Value.Trim();
+                                break;
+                            }
+                        }
+                        
+                        if (!string.IsNullOrEmpty(iconUrl))
+                        {
+                            // If we still don't have a name, create a placeholder based on hash
+                            if (string.IsNullOrEmpty(minionName))
+                            {
+                                var urlParts = iconUrl.Split('/');
+                                var filename = urlParts.LastOrDefault()?.Split('?').FirstOrDefault()?.Replace(".png", "");
+                                minionName = $"Minion #{filename?.Substring(0, Math.Min(8, filename?.Length ?? 0))}";
+                            }
+                            
+                            var minion = new MinionInfo
+                            {
+                                Name = minionName,
+                                MinionId = null,
+                                AcquiredDate = null,
+                                IconUrl = iconUrl
+                            };
+                            
+                            minions.Add(minion);
+                            _logger.LogDebug($"Added fallback minion: {minionName} with icon: {iconUrl}");
+                        }
+                    }
+                }
+            }
+            
+            _logger.LogInformation($"Extracted {minions.Count} minions from Lodestone profile");
+            return minions.Count > 0 ? minions : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error extracting minion data from profile");
+            return null;
         }
     }
 

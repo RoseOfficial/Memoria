@@ -11,6 +11,7 @@ using Lumina.Excel.Sheets;
 using AlphaScope.API.Models;
 using AlphaScope.Properties;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -898,6 +899,152 @@ namespace AlphaScope
             var url = $"{AvatarBaseUrl}{avatarLink}{sizeSuffix}";
             
             return url;
+        }
+
+        /// <summary>
+        /// Static mapping of minion names to their acquisition methods
+        /// </summary>
+        private static readonly Dictionary<string, string> MinionAcquisitionData = new()
+        {
+            // Common quest reward minions
+            {"Goobbue Sproutling", "Quest Reward"},
+            {"Wind-up Airship", "Quest Reward"},
+            {"Mammet #001", "Quest Reward"},
+            {"Baby Opo-opo", "Quest Reward"},
+            {"Wayward Hatchling", "Quest Reward"},
+            {"Wind-up Cursor", "Quest Reward"},
+            {"Black Chocobo Chick", "Pre-order Bonus"},
+            {"Cait Sith Doll", "Pre-order Bonus"},
+            
+            // Dungeon drops
+            {"Dust Bunny", "Dungeon Drop"},
+            {"Wind-up Goblin", "Dungeon Drop"},
+            {"Wind-up Titan", "Dungeon Drop"},
+            {"Wind-up Succubus", "Dungeon Drop"},
+            {"Fledgling Dodo", "Dungeon Drop"},
+            {"Wind-up Qiqirn", "Dungeon Drop"},
+            {"Slime Puddle", "Dungeon Drop"},
+            {"Poro Roggo", "Dungeon Drop"},
+            
+            // Achievement rewards
+            {"Fat Cat", "Achievement"},
+            {"Wind-up Leader", "Achievement"},
+            {"Midgardsormr", "Achievement"},
+            {"Achievement Certificate", "Achievement"},
+            {"Wind-up Warrior of Light", "Achievement"},
+            {"Clockwork Barrow", "Achievement"},
+            
+            // Market Board / Crafted
+            {"Wind-up Gentleman", "Market Board"},
+            {"Wind-up Lalafell", "Market Board"},
+            {"Wind-up Moogle", "Market Board"},
+            {"Wind-up Delivery Moogle", "Market Board"},
+            {"Wind-up Tonberry", "Market Board"},
+            {"Wind-up Odin", "Market Board"},
+            {"Wind-up Bahamut", "Market Board"},
+            {"Model Vanguard", "Market Board"},
+            
+            // Raid drops
+            {"Onion Prince", "Raid Drop"},
+            {"Calca", "Raid Drop"},
+            {"Brina", "Raid Drop"},
+            {"Wind-up Ragnarok", "Raid Drop"},
+            {"Alpha", "Raid Drop"},
+            {"Omega-M", "Raid Drop"},
+            {"Omega-F", "Raid Drop"},
+            
+            // PvP rewards
+            {"Flame Hatchling", "PvP Reward"},
+            {"Storm Hatchling", "PvP Reward"},
+            {"Serpent Hatchling", "PvP Reward"},
+            {"Behemoth Heir", "PvP Reward"},
+            
+            // Event/Seasonal
+            {"Wind-up Sun", "Seasonal Event"},
+            {"Tight-beaked Parrot", "Seasonal Event"},
+            {"Wind-up Brickman", "Seasonal Event"},
+            {"Wind-up Scathach", "Seasonal Event"},
+            {"Wind-up Firion", "Seasonal Event"},
+            {"Wind-up Minfillia", "Seasonal Event"},
+            
+            // Retainer ventures
+            {"Baby Brachiosaur", "Retainer Venture"},
+            {"Bitty Bigfoot", "Retainer Venture"},
+            {"Lesser Panda", "Retainer Venture"},
+            {"Penguin Prince", "Retainer Venture"},
+            
+            // Gold Saucer
+            {"Fenrir Pup", "Gold Saucer"},
+            {"Sabotender Emperador", "Gold Saucer"},
+            {"Lord of Verminion", "Gold Saucer"},
+            {"Miniature Minecart", "Gold Saucer"},
+            
+            // Deep Dungeon
+            {"Paissa Brat", "Deep Dungeon"},
+            {"Wind-up Paissa", "Deep Dungeon"},
+            {"Pomfritz", "Deep Dungeon"},
+            
+            // Special/Rare
+            {"Wind-up Namazu", "Special Quest"},
+            {"Copycat Bullfrog", "Special Quest"},
+            {"Wind-up Cirina", "Special Quest"},
+            {"Wind-up Estinien", "Special Quest"},
+            {"Wind-up Alphinaud", "Special Quest"},
+            {"Wind-up Alisaie", "Special Quest"},
+            
+            // Treasure hunts
+            {"Treasure Box", "Treasure Hunt"},
+            {"Wind-up Founder", "Treasure Hunt"},
+            
+            // Default fallbacks for common patterns
+            {"Wind-up", "Unknown"},
+            {"Baby", "Unknown"},
+            {"Hatchling", "Unknown"},
+            {"Cub", "Unknown"},
+            {"Pup", "Unknown"},
+            {"Chick", "Unknown"}
+        };
+
+        /// <summary>
+        /// Gets the acquisition method for a minion based on its name
+        /// </summary>
+        /// <param name="minionName">The name of the minion</param>
+        /// <returns>The acquisition method or "Unknown" if not found</returns>
+        public static string GetMinionAcquisitionMethod(string? minionName)
+        {
+            if (string.IsNullOrEmpty(minionName))
+                return "Unknown";
+
+            // Handle hash-based names (fallback from failed Lodestone parsing)
+            if (minionName.StartsWith("Minion #") || minionName.Contains(".png") || 
+                (minionName.Length > 20 && minionName.All(c => char.IsLetterOrDigit(c))))
+            {
+                return "Check Lodestone";
+            }
+
+            // Direct name match first
+            if (MinionAcquisitionData.TryGetValue(minionName, out var method))
+                return method;
+
+            // Check for partial matches based on common prefixes/suffixes
+            foreach (var kvp in MinionAcquisitionData)
+            {
+                if (minionName.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                    return kvp.Value;
+            }
+
+            // Check for common minion naming patterns
+            if (minionName.StartsWith("Wind-up", StringComparison.OrdinalIgnoreCase))
+                return "Market Board / Quest";
+            if (minionName.EndsWith("Hatchling", StringComparison.OrdinalIgnoreCase) ||
+                minionName.EndsWith("Chick", StringComparison.OrdinalIgnoreCase))
+                return "PvP / Event";
+            if (minionName.StartsWith("Baby", StringComparison.OrdinalIgnoreCase) ||
+                minionName.EndsWith("Cub", StringComparison.OrdinalIgnoreCase) ||
+                minionName.EndsWith("Pup", StringComparison.OrdinalIgnoreCase))
+                return "Retainer Venture";
+
+            return "Unknown";
         }
 
     }
