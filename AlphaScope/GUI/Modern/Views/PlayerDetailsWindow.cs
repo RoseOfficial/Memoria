@@ -510,57 +510,95 @@ public class PlayerDetailsWindow : BaseModernWindow
 
                 ImGuiHelpers.ScaledDummy(10f);
 
-                // Job Levels Table
+                // Job Levels by Role
                 ImGui.Text("All Job Levels:");
                 ImGuiHelpers.ScaledDummy(5f);
 
-                if (ImGui.BeginTable("JobLevelsTable", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable))
-                {
-                    ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 120f * ImGuiHelpers.GlobalScale);
-                    ImGui.TableSetupColumn("Level", ImGuiTableColumnFlags.WidthFixed, 60f * ImGuiHelpers.GlobalScale);
-                    ImGui.TableSetupColumn("Abbreviation", ImGuiTableColumnFlags.WidthFixed, 80f * ImGuiHelpers.GlobalScale);
-                    ImGui.TableHeadersRow();
-
-                    // Sort jobs by level (highest first), then by name
-                    var sortedJobs = jobLevels.OrderByDescending(j => j.Value).ThenBy(j => Utils.GetJobName(j.Key));
-
-                    foreach (var job in sortedJobs)
+                // Group jobs by role
+                var jobsByRole = jobLevels.GroupBy(j => Utils.GetJobRole(j.Key))
+                    .OrderBy(g => g.Key switch
                     {
-                        ImGui.TableNextRow();
-                        
-                        ImGui.TableSetColumnIndex(0);
-                        var jobName = Utils.GetJobName(job.Key);
-                        
-                        // Highlight main job
-                        if (job.Key == mainJobId)
+                        Utils.JobRole.Tank => 0,
+                        Utils.JobRole.Healer => 1,
+                        Utils.JobRole.MeleeDPS => 2,
+                        Utils.JobRole.PhysicalRangedDPS => 3,
+                        Utils.JobRole.MagicalRangedDPS => 4,
+                        Utils.JobRole.Crafter => 5,
+                        Utils.JobRole.Gatherer => 6,
+                        _ => 7
+                    });
+
+                foreach (var roleGroup in jobsByRole)
+                {
+                    var role = roleGroup.Key;
+                    var roleDisplayName = Utils.GetJobRoleDisplayName(role);
+                    var roleColor = Utils.GetJobRoleColor(role);
+
+                    // Role header with color
+                    using (var headerColor = ThemeManager.PushColor(ImGuiCol.Text, roleColor))
+                    {
+                        if (ImGui.CollapsingHeader(roleDisplayName, ImGuiTreeNodeFlags.DefaultOpen))
                         {
-                            using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+                            if (ImGui.BeginTable($"JobTable_{role}", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable))
                             {
-                                ImGui.Text($"★ {jobName}");
+                                ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed, 32f * ImGuiHelpers.GlobalScale);
+                                ImGui.TableSetupColumn("Job", ImGuiTableColumnFlags.WidthFixed, 120f * ImGuiHelpers.GlobalScale);
+                                ImGui.TableSetupColumn("Level", ImGuiTableColumnFlags.WidthFixed, 60f * ImGuiHelpers.GlobalScale);
+                                ImGui.TableSetupColumn("Abbreviation", ImGuiTableColumnFlags.WidthFixed, 80f * ImGuiHelpers.GlobalScale);
+                                ImGui.TableHeadersRow();
+
+                                // Sort jobs within role by level (highest first), then by name
+                                var sortedJobsInRole = roleGroup.OrderByDescending(j => j.Value).ThenBy(j => Utils.GetJobName(j.Key));
+
+                                foreach (var job in sortedJobsInRole)
+                                {
+                                    ImGui.TableNextRow();
+                                    
+                                    // Icon column
+                                    ImGui.TableSetColumnIndex(0);
+                                    RenderJobIcon(job.Key, ImGuiHelpers.ScaledVector2(20f, 20f));
+
+                                    // Job name column
+                                    ImGui.TableSetColumnIndex(1);
+                                    var jobName = Utils.GetJobName(job.Key);
+                                    
+                                    // Highlight main job
+                                    if (job.Key == mainJobId)
+                                    {
+                                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+                                        {
+                                            ImGui.Text($"★ {jobName}");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ImGui.Text(jobName);
+                                    }
+
+                                    // Level column
+                                    ImGui.TableSetColumnIndex(2);
+                                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, 
+                                        job.Value >= 90 ? ThemeManager.Colors.Success : 
+                                        job.Value >= 50 ? ThemeManager.Colors.Warning : 
+                                        ThemeManager.Colors.TextSecondary))
+                                    {
+                                        ImGui.Text(job.Value.ToString());
+                                    }
+
+                                    // Abbreviation column
+                                    ImGui.TableSetColumnIndex(3);
+                                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+                                    {
+                                        ImGui.Text(Utils.GetJobAbbreviation(job.Key));
+                                    }
+                                }
+
+                                ImGui.EndTable();
                             }
-                        }
-                        else
-                        {
-                            ImGui.Text(jobName);
-                        }
-
-                        ImGui.TableSetColumnIndex(1);
-                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, 
-                            job.Value >= 90 ? ThemeManager.Colors.Success : 
-                            job.Value >= 50 ? ThemeManager.Colors.Warning : 
-                            ThemeManager.Colors.TextSecondary))
-                        {
-                            ImGui.Text(job.Value.ToString());
-                        }
-
-                        ImGui.TableSetColumnIndex(2);
-                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
-                        {
-                            ImGui.Text(Utils.GetJobAbbreviation(job.Key));
                         }
                     }
 
-                    ImGui.EndTable();
+                    ImGuiHelpers.ScaledDummy(5f);
                 }
 
                 ImGuiHelpers.ScaledDummy(10f);
@@ -811,6 +849,29 @@ public class PlayerDetailsWindow : BaseModernWindow
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(string.IsNullOrEmpty(_avatarUrl) ? "Loading avatar..." : "Player Avatar");
+        }
+    }
+
+    private void RenderJobIcon(byte jobId, Vector2 iconSize)
+    {
+        var jobIcon = Utils.GetJobIcon(jobId);
+        if (jobIcon != null && jobIcon.TryGetWrap(out var wrap, out _))
+        {
+            // Display the actual job icon
+            ImGui.Image(wrap.ImGuiHandle, iconSize);
+        }
+        else
+        {
+            // Fall back to placeholder button with job abbreviation
+            var abbreviation = Utils.GetJobAbbreviation(jobId);
+            ImGui.Button(abbreviation, iconSize);
+        }
+        
+        // Add tooltip with full job name
+        if (ImGui.IsItemHovered())
+        {
+            var jobName = Utils.GetJobName(jobId);
+            ImGui.SetTooltip(jobName);
         }
     }
 }

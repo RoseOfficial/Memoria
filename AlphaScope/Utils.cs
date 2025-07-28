@@ -12,6 +12,7 @@ using AlphaScope.API.Models;
 using AlphaScope.Properties;
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -647,6 +648,210 @@ namespace AlphaScope
         /// <param name="iconID">ID of the icon.</param>
         public static ISharedImmediateTexture GetIcon(uint iconID)
             => Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(iconID, false, true));
+
+        /// <summary>
+        /// Job role categories for organizing jobs in UI
+        /// </summary>
+        public enum JobRole
+        {
+            Tank,
+            Healer,
+            MeleeDPS,
+            PhysicalRangedDPS,
+            MagicalRangedDPS,
+            Crafter,
+            Gatherer,
+            Unknown
+        }
+
+        /// <summary>
+        /// Gets the icon ID for a specific job using a static mapping.
+        /// This is needed because the ClassJob.Icon property is not available in the current Lumina version.
+        /// Icon IDs are based on FFXIV's internal icon numbering system.
+        /// </summary>
+        /// <param name="jobId">The job ID</param>
+        /// <returns>The icon ID for the job</returns>
+        private static uint GetJobIconFromMapping(byte jobId)
+        {
+            return jobId switch
+            {
+                // Tank Jobs
+                1 => 62001, // GLA
+                19 => 62019, // PLD
+                3 => 62003, // MRD
+                21 => 62021, // WAR
+                32 => 62032, // DRK
+                37 => 62037, // GNB
+                
+                // Healer Jobs
+                6 => 62006, // CNJ
+                24 => 62024, // WHM
+                26 => 62026, // ACN
+                28 => 62028, // SCH
+                33 => 62033, // AST
+                40 => 62040, // SGE
+                
+                // Melee DPS Jobs
+                2 => 62002, // PGL
+                20 => 62020, // MNK
+                4 => 62004, // LNC
+                22 => 62022, // DRG
+                29 => 62029, // ROG
+                30 => 62030, // NIN
+                34 => 62034, // SAM
+                39 => 62039, // RPR
+                41 => 62041, // VPR
+                
+                // Physical Ranged DPS Jobs
+                5 => 62005, // ARC
+                23 => 62023, // BRD
+                31 => 62031, // MCH
+                38 => 62038, // DNC
+                
+                // Magical Ranged DPS Jobs
+                7 => 62007, // THM
+                25 => 62025, // BLM
+                27 => 62027, // SMN
+                35 => 62035, // RDM
+                36 => 62136, // BLU
+                42 => 62042, // PCT
+                
+                // Crafting Jobs
+                8 => 62008, // CRP
+                9 => 62009, // BSM
+                10 => 62010, // ARM
+                11 => 62011, // GSM
+                12 => 62012, // LTW
+                13 => 62013, // WVR
+                14 => 62014, // ALC
+                15 => 62015, // CUL
+                
+                // Gathering Jobs
+                16 => 62016, // MIN
+                17 => 62017, // BTN
+                18 => 62018, // FSH
+                
+                // Default fallback for unknown jobs
+                _ => 62001 // Default to GLA icon
+            };
+        }
+
+        /// <summary>
+        /// Gets the icon ID for a specific job
+        /// </summary>
+        /// <param name="jobId">The job ID</param>
+        /// <returns>The icon ID for the job, or null if not found</returns>
+        public static uint? GetJobIconId(byte? jobId)
+        {
+            if (!jobId.HasValue || jobId.Value == 0)
+                return null;
+
+            // Validate job ID is within reasonable bounds
+            if (jobId.Value > 100)
+            {
+                Plugin.Log.Warning($"Invalid job ID {jobId.Value} detected for icon - outside valid range (1-100)");
+                return null;
+            }
+
+            var jobSheet = Plugin.DataManager.GetExcelSheet<ClassJob>();
+            if (jobSheet.TryGetRow(jobId.Value, out var job))
+            {
+                // Use static mapping since ClassJob.Icon property is not available in this Lumina version
+                return GetJobIconFromMapping(jobId.Value);
+            }
+
+            Plugin.Log.Warning($"Job ID {jobId.Value} not found in game data sheet for icon");
+            return null;
+        }
+
+        /// <summary>
+        /// Gets the texture for a specific job icon
+        /// </summary>
+        /// <param name="jobId">The job ID</param>
+        /// <returns>The job icon texture, or null if not found</returns>
+        public static ISharedImmediateTexture? GetJobIcon(byte? jobId)
+        {
+            var iconId = GetJobIconId(jobId);
+            if (!iconId.HasValue)
+                return null;
+
+            return Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup(iconId.Value, false, true));
+        }
+
+        /// <summary>
+        /// Gets the role category for a specific job
+        /// </summary>
+        /// <param name="jobId">The job ID</param>
+        /// <returns>The job role category</returns>
+        public static JobRole GetJobRole(byte jobId)
+        {
+            return jobId switch
+            {
+                // Tank Jobs
+                19 or 21 or 32 or 37 => JobRole.Tank, // PLD, WAR, DRK, GNB
+                
+                // Healer Jobs
+                24 or 28 or 33 or 40 => JobRole.Healer, // WHM, SCH, AST, SGE
+                
+                // Melee DPS Jobs
+                20 or 22 or 30 or 34 or 39 or 41 => JobRole.MeleeDPS, // MNK, DRG, NIN, SAM, RPR, VPR
+                
+                // Physical Ranged DPS Jobs
+                23 or 31 or 38 => JobRole.PhysicalRangedDPS, // BRD, MCH, DNC
+                
+                // Magical Ranged DPS Jobs
+                25 or 27 or 35 or 36 or 42 => JobRole.MagicalRangedDPS, // BLM, SMN, RDM, BLU, PCT
+                
+                // Crafting Jobs (Disciples of the Hand)
+                8 or 9 or 10 or 11 or 12 or 13 or 14 or 15 => JobRole.Crafter, // CRP, BSM, ARM, GSM, LTW, WVR, ALC, CUL
+                
+                // Gathering Jobs (Disciples of the Land)
+                16 or 17 or 18 => JobRole.Gatherer, // MIN, BTN, FSH
+                
+                // Default for unknown or base classes
+                _ => JobRole.Unknown
+            };
+        }
+
+        /// <summary>
+        /// Gets the display name for a job role
+        /// </summary>
+        /// <param name="role">The job role</param>
+        /// <returns>The display name for the role</returns>
+        public static string GetJobRoleDisplayName(JobRole role)
+        {
+            return role switch
+            {
+                JobRole.Tank => "🛡️ Tank",
+                JobRole.Healer => "💚 Healer", 
+                JobRole.MeleeDPS => "⚔️ Melee DPS",
+                JobRole.PhysicalRangedDPS => "🏹 Physical Ranged DPS",
+                JobRole.MagicalRangedDPS => "🔮 Magical Ranged DPS",
+                JobRole.Crafter => "🔨 Disciples of the Hand",
+                JobRole.Gatherer => "⛏️ Disciples of the Land",
+                _ => "❓ Other"
+            };
+        }
+
+        /// <summary>
+        /// Gets the color for a job role
+        /// </summary>
+        /// <param name="role">The job role</param>
+        /// <returns>The color vector for the role</returns>
+        public static Vector4 GetJobRoleColor(JobRole role)
+        {
+            return role switch
+            {
+                JobRole.Tank => new Vector4(0.2f, 0.6f, 1.0f, 1.0f), // Blue
+                JobRole.Healer => new Vector4(0.0f, 0.8f, 0.0f, 1.0f), // Green
+                JobRole.MeleeDPS => new Vector4(1.0f, 0.4f, 0.4f, 1.0f), // Red
+                JobRole.PhysicalRangedDPS => new Vector4(1.0f, 0.6f, 0.2f, 1.0f), // Orange
+                JobRole.MagicalRangedDPS => new Vector4(0.8f, 0.4f, 1.0f, 1.0f), // Purple
+                JobRole.Crafter => new Vector4(0.8f, 0.8f, 0.2f, 1.0f), // Yellow
+                JobRole.Gatherer => new Vector4(0.6f, 0.8f, 0.4f, 1.0f), // Light Green
+                _ => new Vector4(0.7f, 0.7f, 0.7f, 1.0f) // Gray
+            };
+        }
 
         /// <summary>
         /// Returns a ISharedImmediateTexture for the appropriate status.
