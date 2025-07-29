@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using static AlphaScope.API.Models.User;
 
-namespace AlphaScope.API.Models
+namespace AlphaScope.API.Models.User
 {
     public class UserUpdateDto
     {
-        public required List<UserCharacterDto?> Characters { get; set; }
+        public required List<User.UserCharacterDto?> Characters { get; set; }
     }
 }

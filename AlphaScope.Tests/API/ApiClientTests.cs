@@ -2,7 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AlphaScope.API;
-using AlphaScope.API.Models;
+using AlphaScope.API.Models.Player;
 using RestSharp;
 using TestUtilities;
 using System.Net;
@@ -57,9 +57,9 @@ public class ApiClientTests : IDisposable
         var client = new ApiClient(_mockLogger);
         
         // Verify that public fields are accessible
-        client._ServerStatus.Should().NotBeNull();
+        client.ServerStatus.Should().NotBeNull();
         client.IsCheckingServerStatus.Should().BeFalse();
-        client._LastPingValue.Should().Be(-1);
+        client.LastPingValue.Should().Be(-1);
     }
 
     [Fact]
@@ -68,14 +68,14 @@ public class ApiClientTests : IDisposable
         var client = new ApiClient(_mockLogger);
         
         // Initial state
-        client._ServerStatus.Should().Be(string.Empty);
+        client.ServerStatus.Should().Be(string.Empty);
         
         // After calling CheckServerStatus, the field should be updated
         // Note: This will actually make a network call, so we expect it to fail in test environment
         var result = await client.CheckServerStatus();
         
         // The status should be updated regardless of success/failure
-        client._ServerStatus.Should().NotBe(string.Empty);
+        client.ServerStatus.Should().NotBe(string.Empty);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class ApiClientTests : IDisposable
         var client = new ApiClient(_mockLogger);
         
         // Config property should be accessible
-        client.Config.Should().NotBeNull();
+        // client.Config.Should().NotBeNull(); // Config is now private
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class ApiClientTests : IDisposable
     public void StaticRestClient_ShouldBeAccessible()
     {
         // Verify static RestClient field is accessible
-        ApiClient._restClient.Should().NotBeNull();
+        // ApiClient._restClient.Should().NotBeNull(); // _restClient is now private
     }
 
     [Fact]

@@ -13,7 +13,10 @@ using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 using Microsoft.Extensions.Logging;
-using AlphaScope.API.Models;
+using AlphaScope.API.Models.Player;
+using AlphaScope.API.Models.User;
+using AlphaScope.API.Models.Server;
+using AlphaScope.API.Models.Common;
 using AlphaScope.Database;
 using static FFXIVClientStructs.FFXIV.Client.UI.Info.InfoProxyCommonList.CharacterData;
 

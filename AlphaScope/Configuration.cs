@@ -14,7 +14,10 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 // AlphaScope internal dependencies
 using AlphaScope.GUI;
-using AlphaScope.API.Models;
+using AlphaScope.API.Models.Player;
+using AlphaScope.API.Models.User;
+using AlphaScope.API.Models.Server;
+using AlphaScope.API.Models.Common;
 using static AlphaScope.Handlers.PersistenceContext;
 
 namespace AlphaScope

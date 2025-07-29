@@ -34,7 +34,7 @@ using Newtonsoft.Json;
 
 // AlphaScope internal dependencies
 using AlphaScope.API;
-using AlphaScope.API.Models;
+using AlphaScope.API.Models.Player;
 using AlphaScope.Database;
 using AlphaScope.GUI;
 using AlphaScope.Services;

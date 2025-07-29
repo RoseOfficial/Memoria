@@ -1,5 +1,5 @@
 using FluentAssertions;
-using AlphaScope.API.Query;
+using AlphaScope.API.Query.Player;
 using System.Text.Json;
 
 namespace AlphaScope.Tests.API.Query;
@@ -18,7 +18,7 @@ public class QueryObjectTests
         query.LocalContentId.Should().BeNull();
         query.Name.Should().BeNull();
         query.Cursor.Should().Be(0);
-        query.IsFetching.Should().BeFalse();
+        query.IsFetching.Should().BeNull();
         query.F_WorldIds.Should().NotBeNull().And.BeEmpty();
         query.F_MatchAnyPartOfName.Should().BeFalse();
     }
@@ -62,7 +62,7 @@ public class QueryObjectTests
 
         var isFetchingProperty = playerQueryType.GetProperty("IsFetching");
         isFetchingProperty.Should().NotBeNull();
-        isFetchingProperty!.PropertyType.Should().Be(typeof(bool));
+        isFetchingProperty!.PropertyType.Should().Be(typeof(bool?));
         isFetchingProperty.CanRead.Should().BeTrue();
         isFetchingProperty.CanWrite.Should().BeTrue();
 

@@ -3,25 +3,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace AlphaScope.API.Models
+namespace AlphaScope.API.Models.Player
 {
-    public class PlayerSearchDto
+    public class PlayerDto
     {
         [JsonProperty("L")]
         public long LocalContentId { get; set; }
         [JsonProperty("N")]
         public string Name { get; set; } = string.Empty;
-        [JsonProperty("W")]
-        public short? WorldId { get; set; }
         [JsonProperty("A")]
         public int? AccountId { get; set; }
         [JsonProperty("B")]
         public string? AvatarLink { get; set; }
-        [JsonProperty("J")]
-        public byte? CurrentJobId { get; set; }
-        [JsonProperty("K")]
-        public short? CurrentJobLevel { get; set; }
     }
 }

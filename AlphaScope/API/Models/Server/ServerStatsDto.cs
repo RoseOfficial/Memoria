@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace AlphaScope.API.Models
+namespace AlphaScope.API.Models.Server
 {
     public class ServerStatsDto
     {
