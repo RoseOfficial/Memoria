@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace AlphaScope.API.Models.Player
+namespace AlphaScope.API.Models.Responses.Player
 {
     public class PlayerSearchDto
     {

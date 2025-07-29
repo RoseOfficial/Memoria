@@ -2,7 +2,8 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AlphaScope.API;
-using AlphaScope.API.Models.Player;
+using AlphaScope.API.Models.Responses.Player;
+using AlphaScope.API.Models.Requests.Player;
 using RestSharp;
 using TestUtilities;
 using System.Net;
@@ -26,18 +27,19 @@ public class ApiClientTests : IDisposable
     [Fact]
     public void Constructor_ShouldInitializeWithLogger()
     {
-        var act = () => new ApiClient(_mockLogger);
+        var act = () => new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         
         act.Should().NotThrow();
     }
 
     [Fact]
-    public void Constructor_ShouldSetInstanceProperty()
+    public void Constructor_ShouldCreateClientWithoutSingleton()
     {
-        var client = new ApiClient(_mockLogger);
+        var client = new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         
-        ApiClient.Instance.Should().NotBeNull();
-        ApiClient.Instance.Should().BeSameAs(client);
+        // ApiClient no longer uses singleton pattern - each instance is independent
+        client.Should().NotBeNull();
+        client.ServerStatus.Should().NotBeNull();
     }
 
     [Theory]
@@ -54,7 +56,7 @@ public class ApiClientTests : IDisposable
     [Fact]
     public void ApiClient_ShouldHavePublicFields()
     {
-        var client = new ApiClient(_mockLogger);
+        var client = new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         
         // Verify that public fields are accessible
         client.ServerStatus.Should().NotBeNull();
@@ -65,7 +67,7 @@ public class ApiClientTests : IDisposable
     [Fact]
     public async Task CheckServerStatus_ShouldUpdateServerStatusField()
     {
-        var client = new ApiClient(_mockLogger);
+        var client = new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         
         // Initial state
         client.ServerStatus.Should().Be(string.Empty);
@@ -81,7 +83,7 @@ public class ApiClientTests : IDisposable
     [Fact]
     public async Task CheckServerStatus_ShouldUpdateCheckingFlag()
     {
-        var client = new ApiClient(_mockLogger);
+        var client = new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         
         // Initial state
         client.IsCheckingServerStatus.Should().BeFalse();
@@ -97,7 +99,7 @@ public class ApiClientTests : IDisposable
     [Fact]
     public async Task PostPlayers_ShouldHandleEmptyList()
     {
-        var client = new ApiClient(_mockLogger);
+        var client = new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         var emptyList = new List<PostPlayerRequest>();
         
         var result = await client.PostPlayers(emptyList);
@@ -109,7 +111,7 @@ public class ApiClientTests : IDisposable
     [Fact]
     public async Task PostPlayers_ShouldHandleNullList()
     {
-        var client = new ApiClient(_mockLogger);
+        var client = new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         
         var act = async () => await client.PostPlayers(null!);
         
@@ -121,7 +123,7 @@ public class ApiClientTests : IDisposable
     [Fact]
     public void Config_ShouldBeAccessible()
     {
-        var client = new ApiClient(_mockLogger);
+        var client = new ApiClient(_mockLogger, null, new AlphaScope.Configuration());
         
         // Config property should be accessible
         // client.Config.Should().NotBeNull(); // Config is now private
@@ -162,13 +164,16 @@ public class ApiClientTests : IDisposable
     }
 
     [Fact]
-    public Task Instance_ShouldBeSingleton()
+    public Task Constructor_ShouldCreateIndependentInstances()
     {
-        var client1 = new ApiClient(_mockLogger);
-        var client2 = new ApiClient(_mockLogger);
+        var config1 = new AlphaScope.Configuration();
+        var config2 = new AlphaScope.Configuration();
+        var client1 = new ApiClient(_mockLogger, null, config1);
+        var client2 = new ApiClient(_mockLogger, null, config2);
 
-        // The second instance should replace the first in the static Instance property
-        ApiClient.Instance.Should().BeSameAs(client2);
+        // Each instance should be independent - no singleton pattern
+        client1.Should().NotBeSameAs(client2);
+        client1.Should().NotBe(client2);
         
         return Task.CompletedTask;
     }

@@ -8,7 +8,7 @@ using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Common.Math;
 using ImGuiNET;
 using Lumina.Excel.Sheets;
-using AlphaScope.API.Models.Player;
+using AlphaScope.API.Models.Responses.Player;
 using AlphaScope.Properties;
 using System;
 using System.Collections.Generic;

@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace AlphaScope.API.Models.Common
+namespace AlphaScope.API.Models.Responses.Common
 {
     public class PaginationBase<T>
     {

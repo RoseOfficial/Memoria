@@ -19,6 +19,9 @@ using Microsoft.Extensions.Logging;
 
 // AlphaScope internal components
 using AlphaScope.API;
+using AlphaScope.API.Client.Configuration;
+using AlphaScope.API.Extensions;
+using Microsoft.Extensions.Options;
 using AlphaScope.Database;
 using AlphaScope.GUI;
 using AlphaScope.Handlers;
@@ -202,22 +205,28 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton(marketBoard);
         serviceCollection.AddSingleton(textureProvider);
 
-        // Register AlphaScope-specific services
+        // Load plugin configuration from Dalamud config system
+        Configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        
+        // Register AlphaScope API services using extension method
+        serviceCollection.AddAlphaScopeApi(Configuration, options =>
+        {
+            options.EnableLogging = true;
+            options.EnableDetailedErrorLogging = true;
+            options.TimeoutSeconds = 30;
+            options.MaxRetryAttempts = 3;
+            options.RetryDelayMilliseconds = 1000;
+        });
+
+        // Register AlphaScope-specific game services
         serviceCollection.AddSingleton<PersistenceContext>();           // Handles data persistence and API uploads
         serviceCollection.AddSingleton<CWLSHandler>();                  // Handles Cross-World Linkshell data
         serviceCollection.AddSingleton<ObjectTableHandler>();           // Scans nearby players and objects
         serviceCollection.AddSingleton<GameHooks>();                    // Low-level game event hooks
-        serviceCollection.AddSingleton<ApiClient>();                    // HTTP client for server communication
         serviceCollection.AddSingleton<LodestoneRefreshService>();       // Background Lodestone data refresh service
-        
-        // Load plugin configuration from Dalamud config system
-        Configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         
         // Migrate configuration to newer versions
         MigrateConfiguration(pluginInterface);
-        
-        // Register configuration as a service
-        serviceCollection.AddSingleton(Configuration);
 
         // Initialize localization based on user preference or system culture
         if (string.IsNullOrWhiteSpace(Configuration.Language.ToString()))

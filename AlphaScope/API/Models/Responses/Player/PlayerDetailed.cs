@@ -15,7 +15,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace AlphaScope.API.Models.Player
+namespace AlphaScope.API.Models.Responses.Player
 {
     public class PlayerDetailed
     {

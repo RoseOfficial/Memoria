@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace AlphaScope.API.Models.User
+namespace AlphaScope.API.Models.Requests.User
 {
     public class UserLoginModel
     {

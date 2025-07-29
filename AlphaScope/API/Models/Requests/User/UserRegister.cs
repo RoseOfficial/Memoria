@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace AlphaScope.API.Models.User
+namespace AlphaScope.API.Models.Requests.User
 {
     public class UserRegister
     {

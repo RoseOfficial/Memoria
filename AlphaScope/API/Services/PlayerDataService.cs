@@ -5,10 +5,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
-using AlphaScope.API.Models.Common;
-using AlphaScope.API.Models.Player;
+using AlphaScope.API.Abstractions.Services;
+using AlphaScope.API.Abstractions.Cache;
+using AlphaScope.API.Models.Responses.Common;
+using AlphaScope.API.Models.Responses.Player;
+using AlphaScope.API.Models.Requests.Player;
+using AlphaScope.API.Models.Shared;
 using AlphaScope.API.Query.Player;
+using AlphaScope.API.Constants;
+using AlphaScope.API.Services.Cache;
 using AlphaScope.Properties;
 
 namespace AlphaScope.API.Services
@@ -16,17 +23,14 @@ namespace AlphaScope.API.Services
     /// <summary>
     /// Service for managing player data operations
     /// </summary>
-    public class PlayerDataService : IApiClientBase
+    public class PlayerDataService : BaseApiService, IPlayerDataService
     {
-        public IRestClient RestClient { get; }
-        public Configuration Config { get; }
-        public ILogger Logger { get; }
+        private readonly IApiCacheService? _cacheService;
 
-        public PlayerDataService(IRestClient restClient, Configuration config, ILogger logger)
+        public PlayerDataService(IRestClient restClient, Configuration config, ILogger logger, IApiCacheService? cacheService = null)
+            : base(restClient, config, logger)
         {
-            RestClient = restClient;
-            Config = config;
-            Logger = logger;
+            _cacheService = cacheService;
         }
 
         /// <summary>
@@ -34,33 +38,71 @@ namespace AlphaScope.API.Services
         /// </summary>
         public async Task<(PaginationBase<T>? Page, string Message)> GetPlayersAsync<T>(PlayerQueryObject query)
         {
+            var result = await GetPlayersAsync<T>(query, CancellationToken.None);
+            if (result.Success)
+            {
+                var message = result.Data != null ? $"- {Loc.ApiTotalFound} {result.Data.NextCount}" : "No results found";
+                return (result.Data, message);
+            }
+            return (null, result.Error ?? "Unknown error occurred");
+        }
+
+        /// <summary>
+        /// Searches for players using the provided query parameters with cancellation support
+        /// </summary>
+        public async Task<ApiResponse<PaginationBase<T>>> GetPlayersAsync<T>(PlayerQueryObject query, CancellationToken cancellationToken = default)
+        {
             try
             {
-                var request = new RestRequest("players")
-                    .AddHeader("V", Utils.clientVer)
-                    .AddHeader("L", Config.Language);
+                // Generate cache key for player search
+                var worldIds = query.F_WorldIds != null && query.F_WorldIds.Any() 
+                    ? string.Join(",", query.F_WorldIds) 
+                    : string.Empty;
+                var cacheKey = ApiCacheService.GeneratePlayerSearchCacheKey(query.Name, query.Cursor, worldIds);
+                
+                // Try to get from cache first if caching is available
+                if (_cacheService != null)
+                {
+                    var cachedResult = await _cacheService.GetAsync<PaginationBase<T>>(cacheKey, cancellationToken);
+                    
+                    if (cachedResult.Success && cachedResult.Data != null)
+                    {
+                        Logger.LogDebug("Player search results retrieved from cache for key: {CacheKey}", cacheKey);
+                        return ApiResponse<PaginationBase<T>>.Ok(cachedResult.Data, 200);
+                    }
+                }
+
+                var request = new RestRequest(ApiEndpoints.PLAYERS)
+                    .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
+                    .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
 
                 AddQueryParameters(request, query);
 
-                var response = await RestClient.ExecuteGetAsync(request).ConfigureAwait(false);
+                var response = await RestClient.ExecuteGetAsync(request, cancellationToken).ConfigureAwait(false);
 
                 if (response.IsSuccessful)
                 {
                     var jsonResponse = JsonConvert.DeserializeObject<PaginationBase<T>>(response.Content!);
                     if (jsonResponse != null)
                     {
-                        var message = $"- {Loc.ApiTotalFound} {jsonResponse.NextCount}";
-                        return (jsonResponse, message);
+                        // Cache the search results if caching is available
+                        if (_cacheService != null)
+                        {
+                            var cacheExpiry = DateTime.UtcNow.AddMinutes(10); // Cache search results for 10 minutes
+                            await _cacheService.SetAsync(cacheKey, jsonResponse, cacheExpiry, TimeSpan.FromMinutes(5), cancellationToken);
+                            Logger.LogDebug("Player search results cached for key: {CacheKey}", cacheKey);
+                        }
+                        
+                        return ApiResponse<PaginationBase<T>>.Ok(jsonResponse, (int)response.StatusCode);
                     }
                 }
 
                 var errorMessage = GetErrorMessage(response);
-                return (null, errorMessage);
+                return ApiResponse<PaginationBase<T>>.Fail(errorMessage, (int)response.StatusCode);
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error while searching players");
-                return (null, $"{Loc.ApiError} {ex.Message}");
+                return HandleCommonException<PaginationBase<T>>(ex, "searching players");
             }
         }
 
@@ -69,27 +111,65 @@ namespace AlphaScope.API.Services
         /// </summary>
         public async Task<(PlayerDetailed? Player, string Message)> GetPlayerByIdAsync(long id)
         {
+            var result = await GetPlayerByIdAsync(id, CancellationToken.None);
+            if (result.Success)
+            {
+                return (result.Data, "Player found.");
+            }
+            return (null, result.Error ?? "Player not found");
+        }
+
+        /// <summary>
+        /// Retrieves detailed information for a specific player by their Content ID with cancellation support
+        /// </summary>
+        public async Task<ApiResponse<PlayerDetailed>> GetPlayerByIdAsync(long contentId, CancellationToken cancellationToken = default)
+        {
             try
             {
-                var request = new RestRequest($"players/{id}")
-                    .AddHeader("V", Utils.clientVer)
-                    .AddHeader("L", Config.Language);
+                // Try to get from cache first if caching is available
+                if (_cacheService != null)
+                {
+                    var cacheKey = ApiCacheService.GeneratePlayerCacheKey(contentId);
+                    var cachedResult = await _cacheService.GetAsync<PlayerDetailed>(cacheKey, cancellationToken);
                     
-                var response = await RestClient.ExecuteGetAsync(request).ConfigureAwait(false);
+                    if (cachedResult.Success && cachedResult.Data != null)
+                    {
+                        Logger.LogDebug("Player details retrieved from cache for ID: {ContentId}", contentId);
+                        return ApiResponse<PlayerDetailed>.Ok(cachedResult.Data, 200);
+                    }
+                }
+
+                var request = new RestRequest(ApiEndpoints.GetPlayerById(contentId))
+                    .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
+                    .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
+                    
+                var response = await RestClient.ExecuteGetAsync(request, cancellationToken).ConfigureAwait(false);
 
                 if (response.IsSuccessful)
                 {
                     var player = JsonConvert.DeserializeObject<PlayerDetailed>(response.Content!);
-                    return (player, "Player found.");
+                    if (player != null)
+                    {
+                        // Cache the player details if caching is available
+                        if (_cacheService != null)
+                        {
+                            var cacheKey = ApiCacheService.GeneratePlayerCacheKey(contentId);
+                            var cacheExpiry = DateTime.UtcNow.AddMinutes(30); // Cache player details for 30 minutes
+                            await _cacheService.SetAsync(cacheKey, player, cacheExpiry, TimeSpan.FromMinutes(15), cancellationToken);
+                            Logger.LogDebug("Player details cached for ID: {ContentId}", contentId);
+                        }
+                        
+                        return ApiResponse<PlayerDetailed>.Ok(player, (int)response.StatusCode);
+                    }
                 }
 
                 var errorMessage = GetErrorMessage(response);
-                return (null, errorMessage);
+                return ApiResponse<PlayerDetailed>.Fail(errorMessage, (int)response.StatusCode);
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex, "Error while retrieving player by ID: {PlayerId}", id);
-                return (null, $"{Loc.ApiError} {ex.Message}");
+                Logger.LogError(ex, "Error while retrieving player by ID: {PlayerId}", contentId);
+                return HandleCommonException<PlayerDetailed>(ex, "retrieving player by ID");
             }
         }
 
@@ -98,8 +178,17 @@ namespace AlphaScope.API.Services
         /// </summary>
         public async Task<bool> PostPlayersAsync(List<PostPlayerRequest> players)
         {
-            var result = await PostPlayersWithDetailsAsync(players);
+            var result = await PostPlayersAsync((IEnumerable<PostPlayerRequest>)players, CancellationToken.None);
             return result.Success;
+        }
+
+        /// <summary>
+        /// Uploads a batch of player data to the server with cancellation support
+        /// </summary>
+        public async Task<ApiResponse> PostPlayersAsync(IEnumerable<PostPlayerRequest> players, CancellationToken cancellationToken = default)
+        {
+            var result = await PostPlayersWithDetailsAsync(players, cancellationToken);
+            return result.Success ? ApiResponse.Ok() : ApiResponse.Fail(result.Error ?? "Upload failed", result.StatusCode);
         }
 
         /// <summary>
@@ -107,29 +196,48 @@ namespace AlphaScope.API.Services
         /// </summary>
         public async Task<(bool Success, bool AuthenticationFailure)> PostPlayersWithDetailsAsync(List<PostPlayerRequest> players)
         {
+            var result = await PostPlayersWithDetailsAsync((IEnumerable<PostPlayerRequest>)players, CancellationToken.None);
+            return result.Success ? result.Data : (false, false);
+        }
+
+        /// <summary>
+        /// Uploads a batch of player data to the server with detailed error information and cancellation support
+        /// </summary>
+        public async Task<ApiResponse<(bool Success, bool AuthenticationFailure)>> PostPlayersWithDetailsAsync(IEnumerable<PostPlayerRequest> players, CancellationToken cancellationToken = default)
+        {
             try
             {
-                var request = new RestRequest("players")
-                    .AddHeader("V", Utils.clientVer)
-                    .AddHeader("L", Config.Language);
+                if (players == null)
+                    return ApiResponse<(bool Success, bool AuthenticationFailure)>.Fail(ErrorCodes.PARAMETER_CANNOT_BE_NULL_MESSAGE, ErrorCodes.BAD_REQUEST);
+
+                var playersList = players.ToList();
+                if (!playersList.Any())
+                    return ApiResponse<(bool Success, bool AuthenticationFailure)>.Fail(ErrorCodes.COLLECTION_CANNOT_BE_EMPTY_MESSAGE, ErrorCodes.BAD_REQUEST);
+
+                var request = new RestRequest(ApiEndpoints.PLAYERS)
+                    .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
+                    .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
                     
-                request.AddJsonBody(players);
-                var response = await RestClient.ExecutePostAsync(request).ConfigureAwait(false);
+                request.AddJsonBody(playersList);
+                var response = await RestClient.ExecutePostAsync(request, cancellationToken).ConfigureAwait(false);
                 
                 if (response.StatusCode == HttpStatusCode.OK)
                 {
-                    return (true, false);
+                    return ApiResponse<(bool Success, bool AuthenticationFailure)>.Ok((true, false), (int)response.StatusCode);
                 }
                 
+                var isAuthFailure = response.StatusCode == HttpStatusCode.Unauthorized;
                 Logger.LogWarning("Failed to post players data. Status: {StatusCode}", response.StatusCode);
-                return (false, false);
+                return ApiResponse<(bool Success, bool AuthenticationFailure)>.Ok((false, isAuthFailure), (int)response.StatusCode);
             }
             catch (Exception ex)
             {
                 Logger.LogError(ex, "Error while posting players data");
-                return (false, false);
+                return HandleCommonException<(bool Success, bool AuthenticationFailure)>(ex, "posting players data");
             }
         }
+
+        // IApiClientBase implementation is inherited from BaseApiService
 
         private static void AddQueryParameters(RestRequest request, PlayerQueryObject query)
         {
@@ -155,13 +263,6 @@ namespace AlphaScope.API.Services
                 request.AddQueryParameter("F_MatchAnyPartOfName", query.F_MatchAnyPartOfName.ToString(), true);
         }
 
-        private static string GetErrorMessage(RestResponse response)
-        {
-            if (!string.IsNullOrWhiteSpace(response.Content))
-                return $"{Loc.ApiError} {response.Content}";
-            if (response.StatusCode == 0)
-                return $"{Loc.ApiError} {Loc.ApiServiceUnavailable}";
-            return $"{Loc.ApiError} {response.StatusCode}";
-        }
+        // GetErrorMessage method is inherited from BaseApiService
     }
 }

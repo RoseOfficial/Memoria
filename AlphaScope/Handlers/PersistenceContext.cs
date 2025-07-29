@@ -34,7 +34,7 @@ using Newtonsoft.Json;
 
 // AlphaScope internal dependencies
 using AlphaScope.API;
-using AlphaScope.API.Models.Player;
+using AlphaScope.API.Models.Requests.Player;
 using AlphaScope.Database;
 using AlphaScope.GUI;
 using AlphaScope.Services;
@@ -417,7 +417,8 @@ internal sealed class PersistenceContext
 
         while (!_cancellationTokenSource.IsCancellationRequested && !_UploadPlayers.IsEmpty && !uploadSuccess && retryCount < maxRetries)
         {
-            var uploadResult = await ApiClient.Instance.PostPlayersWithDetails(itemsToUpload).ConfigureAwait(false);
+            var apiClient = _serviceProvider.GetRequiredService<ApiClient>();
+            var uploadResult = await apiClient.PostPlayersWithDetails(itemsToUpload).ConfigureAwait(false);
             
             if (uploadResult.Success)
             {
