@@ -480,22 +480,12 @@ public class PlayerDetailsWindow : BaseModernWindow
                         ImGui.TableSetColumnIndex(1);
                         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
                         
-                        var displayName = minion.Name ?? "Unknown Minion";
+                        var displayName = GetMinionDisplayName(minion);
+                        var isPlaceholderName = displayName.StartsWith("[Unknown") || displayName.StartsWith("Minion #") || displayName.Contains(".png");
                         
-                        // Handle hash-based names with better display
-                        if (displayName.StartsWith("Minion #") || displayName.Contains(".png"))
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, isPlaceholderName ? ThemeManager.Colors.TextMuted : ThemeManager.Colors.TextPrimary))
                         {
-                            using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
-                            {
-                                ImGui.Text("[Name not loaded]");
-                            }
-                        }
-                        else
-                        {
-                            using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
-                            {
-                                ImGui.Text(displayName);
-                            }
+                            ImGui.Text(displayName);
                         }
 
                         // How to Get column with improved styling
@@ -1243,5 +1233,80 @@ public class PlayerDetailsWindow : BaseModernWindow
             "Check Lodestone" => "Name failed to load - check Lodestone for details",
             _ => "Acquisition method unknown"
         };
+    }
+
+    /// <summary>
+    /// Gets a display-friendly name for a minion, attempting to resolve actual names from icon URLs when possible
+    /// </summary>
+    private string GetMinionDisplayName(MinionInfo minion)
+    {
+        var name = minion.Name ?? "Unknown Minion";
+        
+        // If we already have a good name, use it
+        if (!string.IsNullOrEmpty(name) && 
+            !name.StartsWith("Minion #") && 
+            !name.Contains(".png") &&
+            name != "Unknown Minion")
+        {
+            return name;
+        }
+        
+        // Try to derive a name from the icon URL
+        if (!string.IsNullOrEmpty(minion.IconUrl))
+        {
+            // Extract filename from URL and try to match common patterns
+            try
+            {
+                var uri = new Uri(minion.IconUrl);
+                var filename = System.IO.Path.GetFileNameWithoutExtension(uri.AbsolutePath);
+                
+                // Common FFXIV minion icon patterns - map icon IDs to names
+                var resolvedName = TryResolveMinionNameFromIconId(filename);
+                if (!string.IsNullOrEmpty(resolvedName))
+                {
+                    return resolvedName;
+                }
+            }
+            catch
+            {
+                // If URL parsing fails, continue with fallback
+            }
+        }
+        
+        // Return a better placeholder
+        return "[Unknown Minion]";
+    }
+    
+    /// <summary>
+    /// Attempts to resolve minion names from icon IDs using known patterns
+    /// This is a simplified mapping - a full implementation would use game data sheets
+    /// </summary>
+    private string? TryResolveMinionNameFromIconId(string iconId)
+    {
+        // Try to parse icon ID as a number and look it up in game data
+        try
+        {
+            if (uint.TryParse(iconId, out var iconIdNum))
+            {
+                // Try to find the minion by icon ID using Lumina game data
+                var companionSheet = Plugin.DataManager.GetExcelSheet<Lumina.Excel.Sheets.Companion>();
+                if (companionSheet != null)
+                {
+                    foreach (var companion in companionSheet)
+                    {
+                        if (companion.Icon == iconIdNum && !string.IsNullOrEmpty(companion.Singular.ToString()))
+                        {
+                            return companion.Singular.ToString();
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Debug($"Failed to resolve minion name from icon ID {iconId}: {ex.Message}");
+        }
+        
+        return null;
     }
 }
