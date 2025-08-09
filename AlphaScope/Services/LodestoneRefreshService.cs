@@ -670,8 +670,6 @@ internal sealed class LodestoneRefreshService : IDisposable
                 var minionsCollectable = await profile.GetMinions();
                 if (minionsCollectable != null)
                 {
-                    _logger.LogDebug($"GetMinions returned: {minionsCollectable.GetType().Name}");
-                    
                     // Use reflection to inspect the structure since API is unclear
                     var collectablesProperty = minionsCollectable.GetType().GetProperty("Collectables");
                     if (collectablesProperty != null)
@@ -695,7 +693,6 @@ internal sealed class LodestoneRefreshService : IDisposable
                                     if (iconValue != null)
                                     {
                                         iconUrl = iconValue.ToString();
-                                        _logger.LogDebug($"Found icon URL for minion {name}: {iconUrl}");
                                     }
                                 }
                                 
@@ -718,20 +715,32 @@ internal sealed class LodestoneRefreshService : IDisposable
                                     if (mappedId.HasValue)
                                     {
                                         minionId = (int)mappedId.Value;
-                                        _logger.LogDebug($"Found minion ID {minionId} for {name} using MinionDataService");
                                     }
                                     else
                                     {
-                                        _logger.LogDebug($"No minion ID found for '{name}' in MinionDataService - this minion may not be available in game data");
+                                        _logger.LogWarning($"Minion '{name}' not found in MinionDataService - no icon available");
                                     }
                                 }
                                 
-                                // If we have an ID but no icon URL, use XIVAPI
+                                // If we have an ID but no icon URL, use XIVAPI with actual icon ID from Lumina
                                 if (string.IsNullOrEmpty(iconUrl) && minionId.HasValue)
                                 {
-                                    // Use XIVAPI icon URL format - 40x40 for standard display
-                                    iconUrl = GetXivapiMinionIconUrl(minionId.Value, 40);
-                                    _logger.LogDebug($"Using XIVAPI icon URL for minion {name} (ID: {minionId}): {iconUrl}");
+                                    // Get the actual icon ID from MinionDataService
+                                    var actualIconId = _minionDataService.GetMinionIconId((uint)minionId.Value);
+                                    if (actualIconId.HasValue)
+                                    {
+                                        iconUrl = GetXivapiIconUrl(actualIconId.Value);
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning($"No icon ID found in MinionDataService for minion '{name}' (ID: {minionId})");
+                                    }
+                                }
+                                
+                                // Log when we can't get an icon for debugging the remaining 10%
+                                if (string.IsNullOrEmpty(iconUrl))
+                                {
+                                    _logger.LogWarning($"No icon available for minion '{name}' - NetStone icon: {iconProperty?.GetValue(minion)}, MinionDataService ID: {(minionId.HasValue ? minionId.ToString() : "not found")}");
                                 }
                                 
                                 var minionInfo = new MinionInfo
@@ -744,18 +753,8 @@ internal sealed class LodestoneRefreshService : IDisposable
                                 
                                 minionsData.Add(minionInfo);
                             }
-                            
-                            _logger.LogDebug($"Extracted {minionsData.Count} minions for {player.Name}");
                         }
                     }
-                    else
-                    {
-                        _logger.LogDebug($"No Collectables property found on {minionsCollectable.GetType().Name}");
-                    }
-                }
-                else
-                {
-                    _logger.LogDebug($"GetMinions returned null for {player.Name} - may not have public minion data");
                 }
             }
             catch (Exception ex)
@@ -781,18 +780,15 @@ internal sealed class LodestoneRefreshService : IDisposable
     private const byte MAX_JOB_ID = 100; // Expanded range to capture all possible job IDs
     
     /// <summary>
-    /// Constructs an XIVAPI icon URL for a minion
+    /// Constructs an XIVAPI icon URL using the actual icon ID from Lumina data
     /// </summary>
-    /// <param name="minionId">The minion ID from game data</param>
-    /// <param name="size">Icon size (32, 40, 48, 64, 80, 96)</param>
+    /// <param name="iconId">The actual icon ID from the Companion sheet</param>
     /// <returns>XIVAPI icon URL</returns>
-    private static string GetXivapiMinionIconUrl(int minionId, int size = 40)
+    private static string GetXivapiIconUrl(uint iconId)
     {
-        // XIVAPI uses a specific folder structure for icons
+        // Use the actual icon ID from Lumina data to construct the XIVAPI URL
         // Format: https://xivapi.com/i/{folder}/{iconId}.png
-        // Minion icons are typically in the 004000 range
-        // The icon ID is usually 4000 + minionId
-        var iconId = 4000 + minionId;
+        // where folder is calculated as (iconId / 1000) * 1000
         var folder = (iconId / 1000) * 1000;
         return $"https://xivapi.com/i/{folder:D6}/{iconId:D6}.png";
     }

@@ -28,6 +28,11 @@ public sealed class MinionDataService : IDisposable
     private readonly Dictionary<uint, string> _idToNameMapping;
     
     /// <summary>
+    /// Dictionary mapping minion IDs to their icon IDs for direct icon access
+    /// </summary>
+    private readonly Dictionary<uint, uint> _idToIconMapping;
+    
+    /// <summary>
     /// Total number of minions successfully mapped
     /// </summary>
     public int MinionCount => _nameToIdMapping.Count;
@@ -43,6 +48,7 @@ public sealed class MinionDataService : IDisposable
         _dataManager = dataManager;
         _nameToIdMapping = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
         _idToNameMapping = new Dictionary<uint, string>();
+        _idToIconMapping = new Dictionary<uint, uint>();
         
         BuildMinionMapping();
     }
@@ -107,9 +113,13 @@ public sealed class MinionDataService : IDisposable
                         continue;
                     }
                     
-                    // Add to both mappings
+                    // Get the icon ID from the Companion sheet
+                    var iconId = companion.Icon;
+                    
+                    // Add to all mappings
                     _nameToIdMapping[name] = minionId;
                     _idToNameMapping[minionId] = name;
+                    _idToIconMapping[minionId] = iconId;
                     processedCount++;
                     
                     // Log a few examples for verification during development
@@ -196,6 +206,16 @@ public sealed class MinionDataService : IDisposable
     public string? GetMinionName(uint minionId)
     {
         return _idToNameMapping.TryGetValue(minionId, out var name) ? name : null;
+    }
+    
+    /// <summary>
+    /// Gets the icon ID for a given minion ID
+    /// </summary>
+    /// <param name="minionId">The ID of the minion to look up</param>
+    /// <returns>The icon ID if found, null if not found</returns>
+    public uint? GetMinionIconId(uint minionId)
+    {
+        return _idToIconMapping.TryGetValue(minionId, out var iconId) ? iconId : null;
     }
     
     /// <summary>
