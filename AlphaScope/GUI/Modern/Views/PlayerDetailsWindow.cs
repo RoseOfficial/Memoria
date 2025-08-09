@@ -15,6 +15,7 @@ using AlphaScope.GUI;
 using AlphaScope.Database;
 using AlphaScope.Services;
 using Microsoft.Extensions.DependencyInjection;
+using static AlphaScope.Services.LodestoneRefreshService;
 
 namespace AlphaScope.GUI.Modern.Views;
 
@@ -95,9 +96,9 @@ public class PlayerDetailsWindow : BaseModernWindow
                 ImGui.EndTabItem();
             }
             
-            if (ImGui.BeginTabItem("Minions"))
+            if (ImGui.BeginTabItem("Collections"))
             {
-                DrawMinionsTab();
+                DrawCollectionsTab();
                 ImGui.EndTabItem();
             }
             
@@ -374,235 +375,390 @@ public class PlayerDetailsWindow : BaseModernWindow
         }
     }
 
-    private void DrawMinionsTab()
+    private void DrawCollectionsTab()
     {
         // Get minion data from the cached player or fresh data
         List<MinionInfo>? minions = null;
         DateTime? lastMinionsDataUpdate = null;
+        
+        // Get mount data from the cached player or fresh data
+        List<MountInfo>? mounts = null;
+        DateTime? lastMountsDataUpdate = null;
 
         // Try to get fresh player data from cache first
         if (PersistenceContext._playerCache.TryGetValue(_contentId, out var freshPlayerData))
         {
-            Plugin.Log.Information($"[MinionTab Debug] Found cached player data for {_contentId}, LodestoneMinionsData length: {freshPlayerData.LodestoneMinionsData?.Length ?? 0}");
+            Plugin.Log.Information($"[CollectionsTab Debug] Found cached player data for {_contentId}");
+            
+            // Parse minion data
             if (!string.IsNullOrEmpty(freshPlayerData.LodestoneMinionsData))
             {
                 try
                 {
                     minions = JsonSerializer.Deserialize<List<MinionInfo>>(freshPlayerData.LodestoneMinionsData);
                     lastMinionsDataUpdate = freshPlayerData.LastMinionsDataUpdate;
-                    Plugin.Log.Information($"[MinionTab Debug] Successfully deserialized {minions?.Count ?? 0} minions for player {_contentId}");
+                    Plugin.Log.Information($"[CollectionsTab Debug] Successfully deserialized {minions?.Count ?? 0} minions for player {_contentId}");
                 }
                 catch (JsonException ex)
                 {
                     Plugin.Log.Warning($"Failed to parse minion data for player {_contentId}: {ex.Message}");
                 }
             }
-            else
+            
+            // Parse mount data
+            if (!string.IsNullOrEmpty(freshPlayerData.LodestoneMountsData))
             {
-                Plugin.Log.Information($"[MinionTab Debug] No minion data found for cached player {_contentId}");
+                try
+                {
+                    mounts = JsonSerializer.Deserialize<List<MountInfo>>(freshPlayerData.LodestoneMountsData);
+                    lastMountsDataUpdate = freshPlayerData.LastMountsDataUpdate;
+                    Plugin.Log.Information($"[CollectionsTab Debug] Successfully deserialized {mounts?.Count ?? 0} mounts for player {_contentId}");
+                }
+                catch (JsonException ex)
+                {
+                    Plugin.Log.Warning($"Failed to parse mount data for player {_contentId}: {ex.Message}");
+                }
+            }
+        }
+
+        // Minion Collection Section
+        if (ImGui.CollapsingHeader("🐾 Minion Collection", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            DrawMinionCollection(minions, lastMinionsDataUpdate);
+        }
+
+        ImGuiHelpers.ScaledDummy(15f);
+
+        // Mount Collection Section
+        if (ImGui.CollapsingHeader("🏇 Mount Collection", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            DrawMountCollection(mounts, lastMountsDataUpdate);
+        }
+    }
+
+    private void DrawMinionCollection(List<MinionInfo>? minions, DateTime? lastMinionsDataUpdate)
+    {
+        if (minions != null && minions.Count > 0)
+        {
+            // Collection Statistics
+            ImGui.Text("Collection Overview:");
+            ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
+            using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+            {
+                ImGui.Text($"{minions.Count} minions collected");
+            }
+
+            ImGuiHelpers.ScaledDummy(5f);
+            
+            // Last Updated
+            if (lastMinionsDataUpdate.HasValue)
+            {
+                ImGui.Text("Last Updated:");
+                ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
+                using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+                {
+                    var timeAgo = DateTime.UtcNow - lastMinionsDataUpdate.Value;
+                    ImGui.Text(FormatTimeAgo(timeAgo));
+                }
+            }
+
+            ImGuiHelpers.ScaledDummy(10f);
+
+            // Minion List with improved formatting
+            using (var headerColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+            {
+                ImGui.Text("Collected Minions:");
+            }
+            ImGuiHelpers.ScaledDummy(8f);
+
+            // Enhanced table with better styling
+            var tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
+                            ImGuiTableFlags.Sortable | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
+            
+            if (ImGui.BeginTable("MinionsTable", 3, tableFlags, new Vector2(0, Math.Min(400f, minions.Count * 40f + 60f))))
+            {
+                ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 48f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 0f);
+                ImGui.TableSetupColumn("How to Get", ImGuiTableColumnFlags.WidthFixed, 160f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupScrollFreeze(0, 1);
+                
+                // Custom header styling
+                using (var headerBg = ThemeManager.PushColor(ImGuiCol.TableHeaderBg, ThemeManager.Colors.Surface))
+                using (var headerText = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+                {
+                    ImGui.TableHeadersRow();
+                }
+
+                // Sort minions alphabetically by name
+                var sortedMinions = minions.OrderBy(m => m.Name ?? "Unknown").ToList();
+
+                foreach (var minion in sortedMinions)
+                {
+                    ImGui.TableNextRow();
+                    var rowHeight = 40f * ImGuiHelpers.GlobalScale;
+                    
+                    // Icon column with better centering
+                    ImGui.TableSetColumnIndex(0);
+                    var iconSize = ImGuiHelpers.ScaledVector2(36f, 36f);
+                    var cursorPos = ImGui.GetCursorPos();
+                    ImGui.SetCursorPosY(cursorPos.Y + (rowHeight - iconSize.Y) / 2);
+                    RenderMinionIcon(minion.IconUrl, iconSize);
+
+                    // Name column with better formatting
+                    ImGui.TableSetColumnIndex(1);
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
+                    
+                    var displayName = GetMinionDisplayName(minion);
+                    var isPlaceholderName = displayName.StartsWith("[Unknown") || displayName.StartsWith("Minion #") || displayName.Contains(".png");
+                    
+                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, isPlaceholderName ? ThemeManager.Colors.TextMuted : ThemeManager.Colors.TextPrimary))
+                    {
+                        ImGui.Text(displayName);
+                    }
+
+                    // How to Get column with improved styling
+                    ImGui.TableSetColumnIndex(2);
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
+                    
+                    var acquisitionMethod = Utils.GetMinionAcquisitionMethod(minion.Name);
+                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(acquisitionMethod)))
+                    {
+                        ImGui.Text(acquisitionMethod);
+                        
+                        // Add tooltip for more information
+                        if (ImGui.IsItemHovered())
+                        {
+                            ImGui.SetTooltip(GetAcquisitionTooltip(acquisitionMethod));
+                        }
+                    }
+                }
+
+                ImGui.EndTable();
+            }
+
+            ImGuiHelpers.ScaledDummy(10f);
+
+            // Collection Statistics
+            if (ImGui.CollapsingHeader("Minion Statistics"))
+            {
+                var totalMinions = minions.Count;
+                var minionsWithIcons = minions.Count(m => !string.IsNullOrEmpty(m.IconUrl));
+
+                DrawInfoRow("Total Collected", totalMinions.ToString());
+                DrawInfoRow("With Icon Data", minionsWithIcons.ToString());
+                
+                if (totalMinions > 0)
+                {
+                    var completionRate = (float)minionsWithIcons / totalMinions * 100f;
+                    DrawInfoRow("Icon Coverage", $"{completionRate:F1}%");
+                }
             }
         }
         else
         {
-            Plugin.Log.Information($"[MinionTab Debug] No cached player data found for {_contentId}");
+            DrawEmptyCollectionState("Minion", "🐾", "minion");
+        }
+    }
+
+    private void DrawMountCollection(List<MountInfo>? mounts, DateTime? lastMountsDataUpdate)
+    {
+        if (mounts != null && mounts.Count > 0)
+        {
+            // Collection Statistics
+            ImGui.Text("Collection Overview:");
+            ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
+            using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+            {
+                ImGui.Text($"{mounts.Count} mounts collected");
+            }
+
+            ImGuiHelpers.ScaledDummy(5f);
+            
+            // Last Updated
+            if (lastMountsDataUpdate.HasValue)
+            {
+                ImGui.Text("Last Updated:");
+                ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
+                using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+                {
+                    var timeAgo = DateTime.UtcNow - lastMountsDataUpdate.Value;
+                    ImGui.Text(FormatTimeAgo(timeAgo));
+                }
+            }
+
+            ImGuiHelpers.ScaledDummy(10f);
+
+            // Mount List with improved formatting
+            using (var headerColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+            {
+                ImGui.Text("Collected Mounts:");
+            }
+            ImGuiHelpers.ScaledDummy(8f);
+
+            // Enhanced table with better styling
+            var tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
+                            ImGuiTableFlags.Sortable | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
+            
+            if (ImGui.BeginTable("MountsTable", 3, tableFlags, new Vector2(0, Math.Min(400f, mounts.Count * 40f + 60f))))
+            {
+                ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 48f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 0f);
+                ImGui.TableSetupColumn("How to Get", ImGuiTableColumnFlags.WidthFixed, 160f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupScrollFreeze(0, 1);
+                
+                // Custom header styling
+                using (var headerBg = ThemeManager.PushColor(ImGuiCol.TableHeaderBg, ThemeManager.Colors.Surface))
+                using (var headerText = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+                {
+                    ImGui.TableHeadersRow();
+                }
+
+                // Sort mounts alphabetically by name
+                var sortedMounts = mounts.OrderBy(m => m.Name ?? "Unknown").ToList();
+
+                foreach (var mount in sortedMounts)
+                {
+                    ImGui.TableNextRow();
+                    var rowHeight = 40f * ImGuiHelpers.GlobalScale;
+                    
+                    // Icon column with better centering
+                    ImGui.TableSetColumnIndex(0);
+                    var iconSize = ImGuiHelpers.ScaledVector2(36f, 36f);
+                    var cursorPos = ImGui.GetCursorPos();
+                    ImGui.SetCursorPosY(cursorPos.Y + (rowHeight - iconSize.Y) / 2);
+                    RenderMountIcon(mount.IconUrl, iconSize);
+
+                    // Name column with better formatting
+                    ImGui.TableSetColumnIndex(1);
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
+                    
+                    var displayName = GetMountDisplayName(mount);
+                    var isPlaceholderName = displayName.StartsWith("[Unknown") || displayName.StartsWith("Mount #") || displayName.Contains(".png");
+                    
+                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, isPlaceholderName ? ThemeManager.Colors.TextMuted : ThemeManager.Colors.TextPrimary))
+                    {
+                        ImGui.Text(displayName);
+                    }
+
+                    // How to Get column with improved styling
+                    ImGui.TableSetColumnIndex(2);
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
+                    
+                    var acquisitionMethod = Utils.GetMountAcquisitionMethod(mount.Name);
+                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(acquisitionMethod)))
+                    {
+                        ImGui.Text(acquisitionMethod);
+                        
+                        // Add tooltip for more information
+                        if (ImGui.IsItemHovered())
+                        {
+                            ImGui.SetTooltip(GetAcquisitionTooltip(acquisitionMethod));
+                        }
+                    }
+                }
+
+                ImGui.EndTable();
+            }
+
+            ImGuiHelpers.ScaledDummy(10f);
+
+            // Collection Statistics
+            if (ImGui.CollapsingHeader("Mount Statistics"))
+            {
+                var totalMounts = mounts.Count;
+                var mountsWithIcons = mounts.Count(m => !string.IsNullOrEmpty(m.IconUrl));
+
+                DrawInfoRow("Total Collected", totalMounts.ToString());
+                DrawInfoRow("With Icon Data", mountsWithIcons.ToString());
+                
+                if (totalMounts > 0)
+                {
+                    var completionRate = (float)mountsWithIcons / totalMounts * 100f;
+                    DrawInfoRow("Icon Coverage", $"{completionRate:F1}%");
+                }
+            }
+        }
+        else
+        {
+            DrawEmptyCollectionState("Mount", "🏇", "mount");
+        }
+    }
+
+    private void DrawEmptyCollectionState(string collectionType, string emoji, string dataType)
+    {
+        // Enhanced empty state with better visual feedback
+        ImGuiHelpers.ScaledDummy(20f);
+        
+        // Center the empty state content
+        var windowWidth = ImGui.GetContentRegionAvail().X;
+        var emptyStateWidth = 300f * ImGuiHelpers.GlobalScale;
+        var centerX = (windowWidth - emptyStateWidth) / 2;
+        
+        if (centerX > 0)
+        {
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + centerX);
+        }
+        
+        ImGui.BeginGroup();
+        
+        // Large emoji as visual indicator
+        using (var iconColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+        {
+            var emojiSize = ImGui.CalcTextSize(emoji);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - emojiSize.X) / 2);
+            ImGui.Text(emoji);
+        }
+        
+        ImGuiHelpers.ScaledDummy(10f);
+        
+        // Primary message
+        using (var titleColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
+        {
+            var titleText = $"No {collectionType} Data Available";
+            var titleSize = ImGui.CalcTextSize(titleText);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - titleSize.X) / 2);
+            ImGui.Text(titleText);
+        }
+        
+        ImGuiHelpers.ScaledDummy(5f);
+        
+        // Secondary message
+        using (var descColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+        {
+            var descText1 = $"{collectionType} data will be collected when this";
+            var descText2 = "player's Lodestone profile is refreshed.";
+            
+            var desc1Size = ImGui.CalcTextSize(descText1);
+            var desc2Size = ImGui.CalcTextSize(descText2);
+            
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - desc1Size.X) / 2);
+            ImGui.Text(descText1);
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - desc2Size.X) / 2);
+            ImGui.Text(descText2);
+        }
+        
+        ImGui.EndGroup();
+        
+        ImGuiHelpers.ScaledDummy(20f);
+
+        if (ImGui.Button("Refresh Lodestone Data"))
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await PersistenceContext.RefreshPlayerImmediately(_contentId);
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Log.Error($"Failed to refresh player data: {ex}");
+                }
+            });
         }
 
-        // Minion Data Header
-        if (ImGui.CollapsingHeader("Minion Collection", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.IsItemHovered())
         {
-            if (minions != null && minions.Count > 0)
-            {
-                // Collection Statistics
-                ImGui.Text("Collection Overview:");
-                ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
-                using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
-                {
-                    ImGui.Text($"{minions.Count} minions collected");
-                }
-
-                ImGuiHelpers.ScaledDummy(5f);
-                
-                // Last Updated
-                if (lastMinionsDataUpdate.HasValue)
-                {
-                    ImGui.Text("Last Updated:");
-                    ImGui.SameLine(150f * ImGuiHelpers.GlobalScale);
-                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
-                    {
-                        var timeAgo = DateTime.UtcNow - lastMinionsDataUpdate.Value;
-                        ImGui.Text(FormatTimeAgo(timeAgo));
-                    }
-                }
-
-                ImGuiHelpers.ScaledDummy(10f);
-
-                // Minion List with improved formatting
-                using (var headerColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
-                {
-                    ImGui.Text("Collected Minions:");
-                }
-                ImGuiHelpers.ScaledDummy(8f);
-
-                // Enhanced table with better styling
-                var tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
-                                ImGuiTableFlags.Sortable | ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.ScrollY;
-                
-                if (ImGui.BeginTable("MinionsTable", 3, tableFlags, new Vector2(0, Math.Min(400f, minions.Count * 40f + 60f))))
-                {
-                    ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 48f * ImGuiHelpers.GlobalScale);
-                    ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 0f);
-                    ImGui.TableSetupColumn("How to Get", ImGuiTableColumnFlags.WidthFixed, 160f * ImGuiHelpers.GlobalScale);
-                    ImGui.TableSetupScrollFreeze(0, 1);
-                    
-                    // Custom header styling
-                    using (var headerBg = ThemeManager.PushColor(ImGuiCol.TableHeaderBg, ThemeManager.Colors.Surface))
-                    using (var headerText = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
-                    {
-                        ImGui.TableHeadersRow();
-                    }
-
-                    // Sort minions alphabetically by name
-                    var sortedMinions = minions.OrderBy(m => m.Name ?? "Unknown").ToList();
-
-                    foreach (var minion in sortedMinions)
-                    {
-                        ImGui.TableNextRow();
-                        var rowHeight = 40f * ImGuiHelpers.GlobalScale;
-                        
-                        // Icon column with better centering
-                        ImGui.TableSetColumnIndex(0);
-                        var iconSize = ImGuiHelpers.ScaledVector2(36f, 36f);
-                        var cursorPos = ImGui.GetCursorPos();
-                        ImGui.SetCursorPosY(cursorPos.Y + (rowHeight - iconSize.Y) / 2);
-                        RenderMinionIcon(minion.IconUrl, iconSize);
-
-                        // Name column with better formatting
-                        ImGui.TableSetColumnIndex(1);
-                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
-                        
-                        var displayName = GetMinionDisplayName(minion);
-                        var isPlaceholderName = displayName.StartsWith("[Unknown") || displayName.StartsWith("Minion #") || displayName.Contains(".png");
-                        
-                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, isPlaceholderName ? ThemeManager.Colors.TextMuted : ThemeManager.Colors.TextPrimary))
-                        {
-                            ImGui.Text(displayName);
-                        }
-
-                        // How to Get column with improved styling
-                        ImGui.TableSetColumnIndex(2);
-                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
-                        
-                        var acquisitionMethod = Utils.GetMinionAcquisitionMethod(minion.Name);
-                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(acquisitionMethod)))
-                        {
-                            ImGui.Text(acquisitionMethod);
-                            
-                            // Add tooltip for more information
-                            if (ImGui.IsItemHovered())
-                            {
-                                ImGui.SetTooltip(GetAcquisitionTooltip(acquisitionMethod));
-                            }
-                        }
-                    }
-
-                    ImGui.EndTable();
-                }
-
-                ImGuiHelpers.ScaledDummy(10f);
-
-                // Collection Statistics
-                if (ImGui.CollapsingHeader("Collection Statistics"))
-                {
-                    var totalMinions = minions.Count;
-                    var minionsWithIcons = minions.Count(m => !string.IsNullOrEmpty(m.IconUrl));
-
-                    DrawInfoRow("Total Collected", totalMinions.ToString());
-                    DrawInfoRow("With Icon Data", minionsWithIcons.ToString());
-                    
-                    if (totalMinions > 0)
-                    {
-                        var completionRate = (float)minionsWithIcons / totalMinions * 100f;
-                        DrawInfoRow("Icon Coverage", $"{completionRate:F1}%");
-                    }
-                }
-            }
-            else
-            {
-                // Enhanced empty state with better visual feedback
-                ImGuiHelpers.ScaledDummy(20f);
-                
-                // Center the empty state content
-                var windowWidth = ImGui.GetContentRegionAvail().X;
-                var emptyStateWidth = 300f * ImGuiHelpers.GlobalScale;
-                var centerX = (windowWidth - emptyStateWidth) / 2;
-                
-                if (centerX > 0)
-                {
-                    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + centerX);
-                }
-                
-                ImGui.BeginGroup();
-                
-                // Large minion emoji as visual indicator
-                using (var iconColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
-                {
-                    var emojiSize = ImGui.CalcTextSize("🐾");
-                    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - emojiSize.X) / 2);
-                    ImGui.Text("🐾");
-                }
-                
-                ImGuiHelpers.ScaledDummy(10f);
-                
-                // Primary message
-                using (var titleColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
-                {
-                    var titleText = "No Minion Data Available";
-                    var titleSize = ImGui.CalcTextSize(titleText);
-                    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - titleSize.X) / 2);
-                    ImGui.Text(titleText);
-                }
-                
-                ImGuiHelpers.ScaledDummy(5f);
-                
-                // Secondary message
-                using (var descColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
-                {
-                    var descText1 = "Minion data will be collected when this";
-                    var descText2 = "player's Lodestone profile is refreshed.";
-                    
-                    var desc1Size = ImGui.CalcTextSize(descText1);
-                    var desc2Size = ImGui.CalcTextSize(descText2);
-                    
-                    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - desc1Size.X) / 2);
-                    ImGui.Text(descText1);
-                    ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (emptyStateWidth - desc2Size.X) / 2);
-                    ImGui.Text(descText2);
-                }
-                
-                ImGui.EndGroup();
-                
-                ImGuiHelpers.ScaledDummy(20f);
-
-                if (ImGui.Button("Refresh Lodestone Data"))
-                {
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await PersistenceContext.RefreshPlayerImmediately(_contentId);
-                        }
-                        catch (Exception ex)
-                        {
-                            Plugin.Log.Error($"Failed to refresh player data: {ex}");
-                        }
-                    });
-                }
-
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.SetTooltip("Fetch minion data from Lodestone immediately");
-                }
-            }
+            ImGui.SetTooltip($"Fetch {dataType} data from Lodestone immediately");
         }
     }
 
@@ -1188,6 +1344,84 @@ public class PlayerDetailsWindow : BaseModernWindow
         }
     }
 
+    private void RenderMountIcon(string? iconUrl, Vector2 iconSize)
+    {
+        if (string.IsNullOrEmpty(iconUrl))
+        {
+            // Enhanced placeholder for missing URL
+            var drawList = ImGui.GetWindowDrawList();
+            var cursorPos = ImGui.GetCursorScreenPos();
+            var rectMin = cursorPos;
+            var rectMax = new Vector2(cursorPos.X + iconSize.X, cursorPos.Y + iconSize.Y);
+            
+            // Draw placeholder background with subtle gradient
+            drawList.AddRectFilled(rectMin, rectMax, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.Surface));
+            drawList.AddRect(rectMin, rectMax, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.Border));
+            
+            // Draw mount placeholder icon
+            var textSize = ImGui.CalcTextSize("🏇");
+            var textPos = new Vector2(
+                cursorPos.X + (iconSize.X - textSize.X) / 2,
+                cursorPos.Y + (iconSize.Y - textSize.Y) / 2
+            );
+            
+            drawList.AddText(textPos, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.TextMuted), "🏇");
+            
+            // Advance cursor
+            ImGui.SetCursorScreenPos(new Vector2(cursorPos.X + iconSize.X, cursorPos.Y));
+            return;
+        }
+
+        var iconHandle = Plugin.MountCacheManager.GetMountIconHandle(iconUrl);
+        if (iconHandle != 0)
+        {
+            // Display the actual mount icon with subtle border
+            var cursorPos = ImGui.GetCursorScreenPos();
+            ImGui.Image(new ImTextureID(iconHandle), iconSize);
+            
+            // Add subtle border around loaded icons
+            var drawList = ImGui.GetWindowDrawList();
+            var rectMin = cursorPos;
+            var rectMax = new Vector2(cursorPos.X + iconSize.X, cursorPos.Y + iconSize.Y);
+            drawList.AddRect(rectMin, rectMax, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.Border * 0.3f));
+        }
+        else
+        {
+            // Enhanced loading indicator
+            var drawList = ImGui.GetWindowDrawList();
+            var cursorPos = ImGui.GetCursorScreenPos();
+            var rectMin = cursorPos;
+            var rectMax = new Vector2(cursorPos.X + iconSize.X, cursorPos.Y + iconSize.Y);
+            
+            // Animated loading background
+            var time = (float)ImGui.GetTime();
+            var alpha = (Math.Sin(time * 2) + 1) / 4 + 0.1f; // Gentle pulsing
+            var loadingColor = ThemeManager.Colors.Info * new Vector4(1, 1, 1, (float)alpha);
+            
+            drawList.AddRectFilled(rectMin, rectMax, ImGui.ColorConvertFloat4ToU32(loadingColor));
+            drawList.AddRect(rectMin, rectMax, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.Border));
+            
+            // Loading spinner or hourglass
+            var loadingText = time % 2 < 1 ? "⏳" : "⌛";
+            var textSize = ImGui.CalcTextSize(loadingText);
+            var textPos = new Vector2(
+                cursorPos.X + (iconSize.X - textSize.X) / 2,
+                cursorPos.Y + (iconSize.Y - textSize.Y) / 2
+            );
+            
+            drawList.AddText(textPos, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.TextPrimary), loadingText);
+            
+            // Advance cursor
+            ImGui.SetCursorScreenPos(new Vector2(cursorPos.X + iconSize.X, cursorPos.Y));
+        }
+        
+        // Add hover tooltip
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(iconHandle != 0 ? "Mount Icon" : "Loading icon...");
+        }
+    }
+
     private Vector4 GetAcquisitionMethodColor(string acquisitionMethod)
     {
         return acquisitionMethod switch
@@ -1195,6 +1429,7 @@ public class PlayerDetailsWindow : BaseModernWindow
             "Quest Reward" => ThemeManager.Colors.Success,
             "Achievement" => new Vector4(1.0f, 0.84f, 0.0f, 1.0f), // Gold
             "Dungeon Drop" => new Vector4(0.5f, 0.8f, 1.0f, 1.0f), // Light blue
+            "Trial Drop" => new Vector4(0.7f, 0.9f, 1.0f, 1.0f), // Lighter blue
             "Raid Drop" => new Vector4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
             "Market Board" => new Vector4(0.8f, 0.8f, 0.8f, 1.0f), // Silver
             "Market Board / Quest" => new Vector4(0.8f, 0.8f, 0.8f, 1.0f), // Silver
@@ -1208,6 +1443,8 @@ public class PlayerDetailsWindow : BaseModernWindow
             "Treasure Hunt" => new Vector4(1.0f, 0.6f, 0.2f, 1.0f), // Amber
             "Pre-order Bonus" => new Vector4(0.8f, 0.2f, 1.0f, 1.0f), // Magenta
             "Check Lodestone" => new Vector4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
+            "Eureka" => new Vector4(0.2f, 0.8f, 0.4f, 1.0f), // Green
+            "Bozja" => new Vector4(0.4f, 0.6f, 1.0f, 1.0f), // Blue-purple
             _ => ThemeManager.Colors.TextMuted // Unknown or other
         };
     }
@@ -1216,22 +1453,31 @@ public class PlayerDetailsWindow : BaseModernWindow
     {
         return method switch
         {
+            // Common methods for both minions and mounts
             "Quest Reward" => "Obtained by completing specific quests",
-            "Dungeon Drop" => "Random drop from dungeon bosses",
             "Achievement" => "Earned through specific achievements",
             "Market Board" => "Can be purchased from other players",
             "Market Board / Quest" => "Available through market board or quest rewards",
-            "Raid Drop" => "Rare drop from raid encounters",
             "PvP Reward" => "Earned through PvP activities",
             "PvP / Event" => "Available through PvP or seasonal events",
             "Seasonal Event" => "Limited-time seasonal event reward",
-            "Retainer Venture" => "Found through retainer ventures",
             "Gold Saucer" => "Purchased with MGP at the Gold Saucer",
             "Deep Dungeon" => "Reward from Palace of the Dead or Heaven-on-High",
             "Special Quest" => "Obtained through special questlines",
             "Treasure Hunt" => "Found in treasure coffers",
             "Pre-order Bonus" => "Exclusive pre-order or collector's edition bonus",
             "Check Lodestone" => "Name failed to load - check Lodestone for details",
+            
+            // Minion-specific methods
+            "Dungeon Drop" => "Random drop from dungeon bosses",
+            "Retainer Venture" => "Found through retainer ventures",
+            
+            // Mount-specific methods
+            "Trial Drop" => "Rare drop from trial encounters with primals",
+            "Raid Drop" => "Rare drop from raid encounters",
+            "Eureka" => "Obtained through Eureka content",
+            "Bozja" => "Obtained through Bozja content",
+            
             _ => "Acquisition method unknown"
         };
     }
@@ -1306,6 +1552,81 @@ public class PlayerDetailsWindow : BaseModernWindow
         catch (Exception ex)
         {
             Plugin.Log.Debug($"Failed to resolve minion name from icon ID {iconId}: {ex.Message}");
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Gets a display-friendly name for a mount, attempting to resolve actual names from icon URLs when possible
+    /// </summary>
+    private string GetMountDisplayName(MountInfo mount)
+    {
+        var name = mount.Name ?? "Unknown Mount";
+        
+        // If we already have a good name, use it
+        if (!string.IsNullOrEmpty(name) && 
+            !name.StartsWith("Mount #") && 
+            !name.Contains(".png") &&
+            name != "Unknown Mount")
+        {
+            return name;
+        }
+        
+        // Try to derive a name from the icon URL
+        if (!string.IsNullOrEmpty(mount.IconUrl))
+        {
+            // Extract filename from URL and try to match common patterns
+            try
+            {
+                var uri = new Uri(mount.IconUrl);
+                var filename = System.IO.Path.GetFileNameWithoutExtension(uri.AbsolutePath);
+                
+                // Common FFXIV mount icon patterns - map icon IDs to names
+                var resolvedName = TryResolveMountNameFromIconId(filename);
+                if (!string.IsNullOrEmpty(resolvedName))
+                {
+                    return resolvedName;
+                }
+            }
+            catch
+            {
+                // If URL parsing fails, continue with fallback
+            }
+        }
+        
+        // Return a better placeholder
+        return "[Unknown Mount]";
+    }
+    
+    /// <summary>
+    /// Attempts to resolve mount names from icon IDs using known patterns
+    /// This is a simplified mapping - a full implementation would use game data sheets
+    /// </summary>
+    private string? TryResolveMountNameFromIconId(string iconId)
+    {
+        // Try to parse icon ID as a number and look it up in game data
+        try
+        {
+            if (uint.TryParse(iconId, out var iconIdNum))
+            {
+                // Try to find the mount by icon ID using Lumina game data
+                var mountSheet = Plugin.DataManager.GetExcelSheet<Lumina.Excel.Sheets.Mount>();
+                if (mountSheet != null)
+                {
+                    foreach (var mount in mountSheet)
+                    {
+                        if (mount.Icon == iconIdNum && !string.IsNullOrEmpty(mount.Singular.ToString()))
+                        {
+                            return mount.Singular.ToString();
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Debug($"Failed to resolve mount name from icon ID {iconId}: {ex.Message}");
         }
         
         return null;

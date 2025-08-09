@@ -275,7 +275,15 @@ namespace AlphaScopeServer.Controllers
                             CurrentJobId = playerRequest.CurrentJobId,
                             CurrentJobLevel = playerRequest.CurrentJobLevel,
                             PlayerPos = playerRequest.PlayerPos,
-                            CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime
+                            CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime,
+                            LodestoneJobData = playerRequest.LodestoneJobData,
+                            MainJobId = playerRequest.MainJobId,
+                            MainJobLevel = playerRequest.MainJobLevel,
+                            LastJobDataUpdate = playerRequest.LastJobDataUpdate,
+                            LodestoneMinionsData = playerRequest.LodestoneMinionsData,
+                            LastMinionsDataUpdate = playerRequest.LastMinionsDataUpdate,
+                            LodestoneMountsData = playerRequest.LodestoneMountsData,
+                            LastMountsDataUpdate = playerRequest.LastMountsDataUpdate
                         };
 
                         _context.Players.Add(newPlayer);
@@ -356,6 +364,37 @@ namespace AlphaScopeServer.Controllers
                                 territoryHistory.LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime;
                                 territoryHistory.PlayerPos = playerRequest.PlayerPos;
                             }
+                        }
+
+                        // Handle Lodestone job data updates
+                        if (existingPlayer.LodestoneJobData != playerRequest.LodestoneJobData ||
+                            existingPlayer.MainJobId != playerRequest.MainJobId ||
+                            existingPlayer.MainJobLevel != playerRequest.MainJobLevel ||
+                            existingPlayer.LastJobDataUpdate != playerRequest.LastJobDataUpdate)
+                        {
+                            existingPlayer.LodestoneJobData = playerRequest.LodestoneJobData;
+                            existingPlayer.MainJobId = playerRequest.MainJobId;
+                            existingPlayer.MainJobLevel = playerRequest.MainJobLevel;
+                            existingPlayer.LastJobDataUpdate = playerRequest.LastJobDataUpdate;
+                            hasChanges = true;
+                        }
+
+                        // Handle Lodestone minions data updates
+                        if (existingPlayer.LodestoneMinionsData != playerRequest.LodestoneMinionsData ||
+                            existingPlayer.LastMinionsDataUpdate != playerRequest.LastMinionsDataUpdate)
+                        {
+                            existingPlayer.LodestoneMinionsData = playerRequest.LodestoneMinionsData;
+                            existingPlayer.LastMinionsDataUpdate = playerRequest.LastMinionsDataUpdate;
+                            hasChanges = true;
+                        }
+
+                        // Handle Lodestone mounts data updates
+                        if (existingPlayer.LodestoneMountsData != playerRequest.LodestoneMountsData ||
+                            existingPlayer.LastMountsDataUpdate != playerRequest.LastMountsDataUpdate)
+                        {
+                            existingPlayer.LodestoneMountsData = playerRequest.LodestoneMountsData;
+                            existingPlayer.LastMountsDataUpdate = playerRequest.LastMountsDataUpdate;
+                            hasChanges = true;
                         }
 
                         if (hasChanges)

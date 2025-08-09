@@ -264,6 +264,10 @@ internal sealed class PersistenceContext
                         MainJobId = player.MainJobId,
                         MainJobLevel = player.MainJobLevel,
                         LastJobDataUpdate = player.LastJobDataUpdate,
+                        LodestoneMinionsData = player.LodestoneMinionsData,
+                        LastMinionsDataUpdate = player.LastMinionsDataUpdate,
+                        LodestoneMountsData = player.LodestoneMountsData,
+                        LastMountsDataUpdate = player.LastMountsDataUpdate,
                     };
                     playerCount++;
                     if (!string.IsNullOrEmpty(player.AvatarLink))
@@ -410,7 +414,16 @@ internal sealed class PersistenceContext
             return;
 
         var itemsToUpload = _UploadPlayers.Take(batchSize).Select(kvp => kvp.Value).ToList();
-        //_logger.LogInformation($"Uploading {itemsToUpload.Count} Player items. TotalCount: {_UploadPlayers.Count}");
+        
+        // Enrich PostPlayerRequest objects with cached Lodestone data before upload
+        var enrichedItemsToUpload = new List<PostPlayerRequest>();
+        foreach (var item in itemsToUpload)
+        {
+            var enrichedItem = EnrichWithLodestoneCacheData(item);
+            enrichedItemsToUpload.Add(enrichedItem);
+        }
+        
+        //_logger.LogInformation($"Uploading {enrichedItemsToUpload.Count} Player items. TotalCount: {_UploadPlayers.Count}");
 
         int retryCount = 0;
         bool uploadSuccess = false;
@@ -418,7 +431,7 @@ internal sealed class PersistenceContext
         while (!_cancellationTokenSource.IsCancellationRequested && !_UploadPlayers.IsEmpty && !uploadSuccess && retryCount < maxRetries)
         {
             var apiClient = _serviceProvider.GetRequiredService<ApiClient>();
-            var uploadResult = await apiClient.PostPlayersWithDetails(itemsToUpload).ConfigureAwait(false);
+            var uploadResult = await apiClient.PostPlayersWithDetails(enrichedItemsToUpload).ConfigureAwait(false);
             
             if (uploadResult.Success)
             {
@@ -578,6 +591,10 @@ internal sealed class PersistenceContext
                     MainJobId = null,
                     MainJobLevel = null,
                     LastJobDataUpdate = null,
+                    LodestoneMinionsData = null,
+                    LastMinionsDataUpdate = null,
+                    LodestoneMountsData = null,
+                    LastMountsDataUpdate = null,
                 };
                 _playerCache[mapping.ContentId] = newCachedPlayer;
                 
@@ -694,6 +711,10 @@ internal sealed class PersistenceContext
                     MainJobId = null,
                     MainJobLevel = null,
                     LastJobDataUpdate = null,
+                    LodestoneMinionsData = null,
+                    LastMinionsDataUpdate = null,
+                    LodestoneMountsData = null,
+                    LastMountsDataUpdate = null,
                 };
                 _playerCache[player.ContentId] = cachedPlayer;
                 
@@ -742,6 +763,8 @@ internal sealed class PersistenceContext
         public DateTime? LastJobDataUpdate { get; init; }
         public string? LodestoneMinionsData { get; init; }
         public DateTime? LastMinionsDataUpdate { get; init; }
+        public string? LodestoneMountsData { get; init; }
+        public DateTime? LastMountsDataUpdate { get; init; }
     }
 
     /// <summary>
@@ -766,6 +789,8 @@ internal sealed class PersistenceContext
                 LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
                 LodestoneMinionsData = cachedPlayer.LodestoneMinionsData,
                 LastMinionsDataUpdate = cachedPlayer.LastMinionsDataUpdate,
+                LodestoneMountsData = cachedPlayer.LodestoneMountsData,
+                LastMountsDataUpdate = cachedPlayer.LastMountsDataUpdate,
             };
             
         }
@@ -832,6 +857,8 @@ internal sealed class PersistenceContext
                 LastJobDataUpdate = lastJobDataUpdate,
                 LodestoneMinionsData = cachedPlayer.LodestoneMinionsData,
                 LastMinionsDataUpdate = cachedPlayer.LastMinionsDataUpdate,
+                LodestoneMountsData = cachedPlayer.LodestoneMountsData,
+                LastMountsDataUpdate = cachedPlayer.LastMountsDataUpdate,
             };
             
             
@@ -941,6 +968,82 @@ internal sealed class PersistenceContext
     }
 
     /// <summary>
+    /// Updates the mount data for a cached player and persists it to the database
+    /// </summary>
+    public static void UpdateCachedPlayerMountsData(ulong contentId, string? lodestoneMountsData, DateTime? lastMountsDataUpdate)
+    {
+        Plugin.Log.Information($"[Cache Debug] UpdateCachedPlayerMountsData called for {contentId}, data length: {lodestoneMountsData?.Length ?? 0}");
+        
+        if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
+        {
+            Plugin.Log.Information($"[Cache Debug] Found cached player {cachedPlayer.Name}, updating mount data");
+            
+            // Create new cached player instance with updated mount data
+            var newCachedPlayer = new CachedPlayer
+            {
+                AccountId = cachedPlayer.AccountId,
+                Name = cachedPlayer.Name,
+                AvatarLink = cachedPlayer.AvatarLink,
+                HomeWorldId = cachedPlayer.HomeWorldId,
+                CurrentWorldId = cachedPlayer.CurrentWorldId,
+                LastScannedAt = cachedPlayer.LastScannedAt,
+                LodestoneJobData = cachedPlayer.LodestoneJobData,
+                MainJobId = cachedPlayer.MainJobId,
+                MainJobLevel = cachedPlayer.MainJobLevel,
+                LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
+                LodestoneMinionsData = cachedPlayer.LodestoneMinionsData,
+                LastMinionsDataUpdate = cachedPlayer.LastMinionsDataUpdate,
+                LodestoneMountsData = lodestoneMountsData,
+                LastMountsDataUpdate = lastMountsDataUpdate,
+            };
+            
+            _playerCache[contentId] = newCachedPlayer;
+            
+            Plugin.Log.Information($"[Cache Debug] Successfully updated cached player mount data for {cachedPlayer.Name}");
+            Plugin.Log.Information($"[Cache Debug] New cached player mount data length: {newCachedPlayer.LodestoneMountsData?.Length ?? 0}");
+            
+            // Verify the cache update worked
+            if (_playerCache.TryGetValue(contentId, out var verifyPlayer))
+            {
+                Plugin.Log.Information($"[Cache Debug] Verification: Cache now contains mount data length: {verifyPlayer.LodestoneMountsData?.Length ?? 0}");
+            }
+            else
+            {
+                Plugin.Log.Warning($"[Cache Debug] Verification failed: Could not retrieve updated player from cache");
+            }
+            
+            
+            // Persist to database
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
+                
+                var player = dbContext.Players.Find(contentId);
+                if (player != null)
+                {
+                    player.LodestoneMountsData = lodestoneMountsData;
+                    player.LastMountsDataUpdate = lastMountsDataUpdate;
+                    var changes = dbContext.SaveChanges();
+                    Plugin.Log.Information($"[Cache Debug] Persisted mount data to database for {player.Name}, {changes} rows affected");
+                }
+                else
+                {
+                    Plugin.Log.Warning($"[Cache Debug] Could not find player {contentId} in database to persist mount data");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"Failed to persist mount data for player {cachedPlayer.Name}");
+            }
+        }
+        else
+        {
+            _logger?.LogWarning($"Could not find player in cache to update mount data - ContentId: {contentId}");
+        }
+    }
+
+    /// <summary>
     /// Checks if a player is already cached locally
     /// </summary>
     public static bool IsPlayerCached(ulong contentId)
@@ -1027,6 +1130,43 @@ internal sealed class PersistenceContext
         {
             _logger?.LogError(ex, "Error during cleanup of players with null homeworld data");
         }
+    }
+    
+    /// <summary>
+    /// Enriches a PostPlayerRequest with cached Lodestone data (minions, mounts, job data) if available
+    /// </summary>
+    private static PostPlayerRequest EnrichWithLodestoneCacheData(PostPlayerRequest originalRequest)
+    {
+        if (_playerCache.TryGetValue(originalRequest.LocalContentId, out var cachedPlayer) && cachedPlayer != null)
+        {
+            // Create a new PostPlayerRequest with the original data plus cached Lodestone data
+            return new PostPlayerRequest
+            {
+                LocalContentId = originalRequest.LocalContentId,
+                Name = originalRequest.Name,
+                AccountId = originalRequest.AccountId,
+                HomeWorldId = originalRequest.HomeWorldId,
+                CurrentWorldId = originalRequest.CurrentWorldId,
+                TerritoryId = originalRequest.TerritoryId,
+                CurrentJobId = originalRequest.CurrentJobId,
+                CurrentJobLevel = originalRequest.CurrentJobLevel,
+                PlayerPos = originalRequest.PlayerPos,
+                Customization = originalRequest.Customization,
+                CreatedAt = originalRequest.CreatedAt,
+                // Enrich with cached Lodestone data
+                LodestoneJobData = cachedPlayer.LodestoneJobData,
+                MainJobId = cachedPlayer.MainJobId,
+                MainJobLevel = cachedPlayer.MainJobLevel,
+                LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
+                LodestoneMinionsData = cachedPlayer.LodestoneMinionsData,
+                LastMinionsDataUpdate = cachedPlayer.LastMinionsDataUpdate,
+                LodestoneMountsData = cachedPlayer.LodestoneMountsData,
+                LastMountsDataUpdate = cachedPlayer.LastMountsDataUpdate
+            };
+        }
+        
+        // If no cached data is available, return the original request
+        return originalRequest;
     }
 
 }

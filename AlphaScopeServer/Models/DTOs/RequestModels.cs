@@ -21,6 +21,10 @@ namespace AlphaScopeServer.Models.DTOs
         [JsonProperty("13")] public byte? MainJobId { get; set; }
         [JsonProperty("14")] public short? MainJobLevel { get; set; }
         [JsonProperty("15")] public DateTime? LastJobDataUpdate { get; set; }
+        [JsonProperty("16")] public string? LodestoneMinionsData { get; set; }
+        [JsonProperty("17")] public DateTime? LastMinionsDataUpdate { get; set; }
+        [JsonProperty("18")] public string? LodestoneMountsData { get; set; }
+        [JsonProperty("19")] public DateTime? LastMountsDataUpdate { get; set; }
     }
 
     public class PostRetainerRequest

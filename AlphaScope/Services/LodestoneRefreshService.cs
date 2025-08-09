@@ -27,6 +27,17 @@ public class MinionInfo
 }
 
 /// <summary>
+/// Represents a mount entry from Lodestone
+/// </summary>
+public class MountInfo
+{
+    public int? MountId { get; set; }
+    public string? Name { get; set; }
+    public string? IconUrl { get; set; }
+    public DateTime? AcquiredDate { get; set; }
+}
+
+/// <summary>
 /// Background service that continuously refreshes character data from Lodestone.
 /// Maintains a priority queue of players needing refresh and processes them with rate limiting.
 /// Provides fresh avatar data, job information, and other Lodestone profile data.
@@ -37,6 +48,7 @@ internal sealed class LodestoneRefreshService : IDisposable
     private readonly IServiceProvider _serviceProvider;
     private readonly Configuration _configuration;
     private readonly MinionDataService _minionDataService;
+    private readonly MountDataService _mountDataService;
     private LodestoneClient? _lodestoneClient;
     
     /// <summary>
@@ -69,15 +81,17 @@ internal sealed class LodestoneRefreshService : IDisposable
     /// </summary>
     private Configuration Config => _configuration;
 
-    public LodestoneRefreshService(ILogger<LodestoneRefreshService> logger, IServiceProvider serviceProvider, Configuration configuration, MinionDataService minionDataService)
+    public LodestoneRefreshService(ILogger<LodestoneRefreshService> logger, IServiceProvider serviceProvider, Configuration configuration, MinionDataService minionDataService, MountDataService mountDataService)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         _minionDataService = minionDataService;
+        _mountDataService = mountDataService;
         
         _logger.LogInformation("LodestoneRefreshService initialized - NetStone client will be created on first use");
         _logger.LogInformation("MinionDataService initialized with {MinionCount} minions mapped", _minionDataService.MinionCount);
+        _logger.LogInformation("MountDataService initialized with {MountCount} mounts mapped", _mountDataService.MountCount);
     }
     
     /// <summary>
@@ -410,7 +424,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                 return true;
             }
             
-            var (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData) = await FetchLodestonePlayerData(player);
+            var (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData, mountsData) = await FetchLodestonePlayerData(player);
             
             var hasUpdates = false;
             
@@ -489,6 +503,33 @@ internal sealed class LodestoneRefreshService : IDisposable
                 _logger.LogDebug($"Could not extract minion data for player {player.Name}");
             }
             
+            // Handle mount data updates
+            if (mountsData != null && mountsData.Count > 0)
+            {
+                var mountsDataJson = JsonSerializer.Serialize(mountsData);
+                _logger.LogInformation($"Serialized mount data for {player.Name}: {mountsDataJson.Length} chars, first mount: {mountsData.FirstOrDefault()?.Name}");
+                
+                if (mountsDataJson != player.LodestoneMountsData)
+                {
+                    var mountsDataUpdateTime = DateTime.UtcNow;
+                    player.LodestoneMountsData = mountsDataJson;
+                    player.LastMountsDataUpdate = mountsDataUpdateTime;
+                    hasUpdates = true;
+                    _logger.LogInformation($"Updated mount data for {player.Name} in database with {mountsData.Count} mounts");
+                    
+                    // Update cached player data so UI reflects changes immediately
+                    PersistenceContext.UpdateCachedPlayerMountsData(player.LocalContentId, mountsDataJson, mountsDataUpdateTime);
+                    
+                }
+                else
+                {
+                }
+            }
+            else
+            {
+                _logger.LogDebug($"Could not extract mount data for player {player.Name}");
+            }
+            
             // Always update LastScannedAt to track when we attempted refresh
             var now = DateTime.UtcNow;
             player.LastScannedAt = now;
@@ -517,14 +558,14 @@ internal sealed class LodestoneRefreshService : IDisposable
     /// <summary>
     /// Fetches comprehensive player data from Lodestone using NetStone library
     /// </summary>
-    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel, List<MinionInfo>? MinionsData)> FetchLodestonePlayerData(Player player)
+    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel, List<MinionInfo>? MinionsData, List<MountInfo>? MountsData)> FetchLodestonePlayerData(Player player)
     {
         try
         {
             if (string.IsNullOrEmpty(player.Name))
             {
                 _logger.LogWarning($"Player {player.LocalContentId} has no name, cannot search Lodestone");
-                return (null, null, null, null, null);
+                return (null, null, null, null, null, null);
             }
 
             // Get the NetStone client (lazy initialization)
@@ -594,7 +635,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                 {
                     var worldInfo = !string.IsNullOrEmpty(worldName) ? $" (searched {worldName} and all worlds)" : " (searched all worlds)";
                     _logger.LogWarning($"Could not find character {player.Name} in Lodestone search{worldInfo}");
-                    return (null, null, null, null, null);
+                    return (null, null, null, null, null, null);
                 }
                 else
                 {
@@ -612,7 +653,7 @@ internal sealed class LodestoneRefreshService : IDisposable
             if (profile == null)
             {
                 _logger.LogWarning($"Could not fetch profile for character {player.Name}");
-                return (null, null, null, null, null);
+                return (null, null, null, null, null, null);
             }
             
             // Extract avatar URL
@@ -762,14 +803,113 @@ internal sealed class LodestoneRefreshService : IDisposable
                 _logger.LogWarning(ex, $"Could not fetch minion data for {player.Name}");
             }
             
-            _logger.LogDebug($"Successfully fetched Lodestone data for {player.Name}: Avatar={!string.IsNullOrEmpty(avatarUrl)}, Jobs={jobLevels?.Count ?? 0}, Minions={minionsData?.Count ?? 0}");
+            // Extract mount data using NetStone's GetMounts() method  
+            List<MountInfo>? mountsData = null;
+            try
+            {
+                var mountsCollectable = await profile.GetMounts();
+                if (mountsCollectable != null)
+                {
+                    // Use reflection to inspect the structure since API is unclear
+                    var collectablesProperty = mountsCollectable.GetType().GetProperty("Collectables");
+                    if (collectablesProperty != null)
+                    {
+                        var collectables = collectablesProperty.GetValue(mountsCollectable);
+                        if (collectables is System.Collections.IEnumerable enumerable)
+                        {
+                            mountsData = new List<MountInfo>();
+                            
+                            foreach (var mount in enumerable.Cast<object>())
+                            {
+                                var nameProperty = mount.GetType().GetProperty("Name");
+                                var name = nameProperty?.GetValue(mount)?.ToString() ?? "Unknown";
+                                
+                                // Try to extract icon URL from NetStone
+                                string? iconUrl = null;
+                                var iconProperty = mount.GetType().GetProperty("Icon");
+                                if (iconProperty != null)
+                                {
+                                    var iconValue = iconProperty.GetValue(mount);
+                                    if (iconValue != null)
+                                    {
+                                        iconUrl = iconValue.ToString();
+                                    }
+                                }
+                                
+                                // If no icon URL from NetStone, try to get mount ID and construct XIVAPI URL
+                                int? mountId = null;
+                                var idProperty = mount.GetType().GetProperty("Id");
+                                if (idProperty != null)
+                                {
+                                    var idValue = idProperty.GetValue(mount);
+                                    if (idValue != null && int.TryParse(idValue.ToString(), out var id))
+                                    {
+                                        mountId = id;
+                                    }
+                                }
+                                
+                                // If we don't have a mount ID, try to look it up by name using comprehensive service
+                                if (!mountId.HasValue && !string.IsNullOrEmpty(name))
+                                {
+                                    var mappedId = _mountDataService.GetMountId(name);
+                                    if (mappedId.HasValue)
+                                    {
+                                        mountId = (int)mappedId.Value;
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning($"Mount '{name}' not found in MountDataService - no icon available");
+                                    }
+                                }
+                                
+                                // If we have an ID but no icon URL, use XIVAPI with actual icon ID from Lumina
+                                if (string.IsNullOrEmpty(iconUrl) && mountId.HasValue)
+                                {
+                                    // Get the actual icon ID from MountDataService
+                                    var actualIconId = _mountDataService.GetMountIconId((uint)mountId.Value);
+                                    if (actualIconId.HasValue)
+                                    {
+                                        iconUrl = GetXivapiIconUrl(actualIconId.Value);
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning($"No icon ID found in MountDataService for mount '{name}' (ID: {mountId})");
+                                    }
+                                }
+                                
+                                // Log when we can't get an icon for debugging the remaining cases
+                                if (string.IsNullOrEmpty(iconUrl))
+                                {
+                                    _logger.LogWarning($"No icon available for mount '{name}' - NetStone icon: {iconProperty?.GetValue(mount)}, MountDataService ID: {(mountId.HasValue ? mountId.ToString() : "not found")}");
+                                }
+                                
+                                var mountInfo = new MountInfo
+                                {
+                                    Name = name,
+                                    IconUrl = iconUrl,
+                                    MountId = mountId,
+                                    AcquiredDate = null // Check if available in mount properties
+                                };
+                                
+                                mountsData.Add(mountInfo);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Could not fetch mount data for {player.Name}");
+            }
             
-            return (avatarUrl, jobLevels?.Count > 0 ? jobLevels : null, mainJobId, mainJobLevel, minionsData);
+            _logger.LogDebug($"Successfully fetched Lodestone data for {player.Name}: Avatar={!string.IsNullOrEmpty(avatarUrl)}, Jobs={jobLevels?.Count ?? 0}, Minions={minionsData?.Count ?? 0}, Mounts={mountsData?.Count ?? 0}");
+            
+            return (avatarUrl, jobLevels?.Count > 0 ? jobLevels : null, mainJobId, mainJobLevel, minionsData, mountsData);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Error fetching Lodestone data for {player.Name} using NetStone");
-            return (null, null, null, null, null);
+            return (null, null, null, null, null, null);
         }
     }
 

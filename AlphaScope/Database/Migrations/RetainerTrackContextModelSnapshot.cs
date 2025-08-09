@@ -47,6 +47,9 @@ namespace AlphaScope.Database.Migrations
                     b.Property<DateTime?>("LastMinionsDataUpdate")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LastMountsDataUpdate")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("LastScannedAt")
                         .HasColumnType("TEXT");
 
@@ -55,6 +58,10 @@ namespace AlphaScope.Database.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("LodestoneMinionsData")
+                        .HasMaxLength(10000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LodestoneMountsData")
                         .HasMaxLength(10000)
                         .HasColumnType("TEXT");
 

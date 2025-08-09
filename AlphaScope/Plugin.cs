@@ -136,6 +136,11 @@ public sealed class Plugin : IDalamudPlugin
     public static MinionCacheManager MinionCacheManager = null!;
     
     /// <summary>
+    /// Manager for caching and retrieving mount icons from Lodestone
+    /// </summary>
+    public static MountCacheManager MountCacheManager = null!;
+    
+    /// <summary>
     /// Background service for continuously refreshing character data from Lodestone
     /// </summary>
     private LodestoneRefreshService? _lodestoneRefreshService;
@@ -224,6 +229,7 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton<ObjectTableHandler>();           // Scans nearby players and objects
         serviceCollection.AddSingleton<GameHooks>();                    // Low-level game event hooks
         serviceCollection.AddSingleton<MinionDataService>();            // Comprehensive minion name-to-ID mapping service
+        serviceCollection.AddSingleton<MountDataService>();             // Comprehensive mount name-to-ID mapping service
         serviceCollection.AddSingleton<LodestoneRefreshService>();       // Background Lodestone data refresh service
         
         // Migrate configuration to newer versions
@@ -271,6 +277,9 @@ public sealed class Plugin : IDalamudPlugin
         
         // Initialize minion icon caching system
         MinionCacheManager = new MinionCacheManager();
+        
+        // Initialize mount icon caching system
+        MountCacheManager = new MountCacheManager();
 
         // Register UI drawing and event handlers
         pluginInterface.UiBuilder.Draw += ws.Draw;
@@ -391,7 +400,9 @@ public sealed class Plugin : IDalamudPlugin
                         MainJobLevel INTEGER NULL,
                         LastJobDataUpdate TEXT NULL,
                         LodestoneMinionsData TEXT NULL,
-                        LastMinionsDataUpdate TEXT NULL
+                        LastMinionsDataUpdate TEXT NULL,
+                        LodestoneMountsData TEXT NULL,
+                        LastMountsDataUpdate TEXT NULL
                     );
                 ";
                 command.ExecuteNonQuery();
@@ -429,6 +440,8 @@ public sealed class Plugin : IDalamudPlugin
                 bool hasLastJobDataUpdate = false;
                 bool hasLodestoneMinionsData = false;
                 bool hasLastMinionsDataUpdate = false;
+                bool hasLodestoneMountsData = false;
+                bool hasLastMountsDataUpdate = false;
                 while (playerReader.Read())
                 {
                     var columnName = playerReader.GetString(1); // name column
@@ -444,6 +457,8 @@ public sealed class Plugin : IDalamudPlugin
                     if (columnName == "LastJobDataUpdate") hasLastJobDataUpdate = true;
                     if (columnName == "LodestoneMinionsData") hasLodestoneMinionsData = true;
                     if (columnName == "LastMinionsDataUpdate") hasLastMinionsDataUpdate = true;
+                    if (columnName == "LodestoneMountsData") hasLodestoneMountsData = true;
+                    if (columnName == "LastMountsDataUpdate") hasLastMountsDataUpdate = true;
                 }
                 playerReader.Close();
                 
@@ -524,6 +539,19 @@ public sealed class Plugin : IDalamudPlugin
                     command.CommandText = "ALTER TABLE Players ADD COLUMN LastMinionsDataUpdate TEXT NULL;";
                     command.ExecuteNonQuery();
                 }
+                
+                // Add mount data columns if they don't exist (for mount collection tracking)
+                if (!hasLodestoneMountsData)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN LodestoneMountsData TEXT NULL;";
+                    command.ExecuteNonQuery();
+                }
+                
+                if (!hasLastMountsDataUpdate)
+                {
+                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastMountsDataUpdate TEXT NULL;";
+                    command.ExecuteNonQuery();
+                }
             }
             
             connection.Close();
@@ -597,6 +625,7 @@ public sealed class Plugin : IDalamudPlugin
         PersistenceContext.StopUploads();
         AvatarCacheManager.Dispose();
         MinionCacheManager.Dispose();
+        MountCacheManager.Dispose();
 
         // Unregister command handler
         _commandManager.RemoveHandler("/alpha");

@@ -1047,5 +1047,186 @@ namespace AlphaScope
             return "Unknown";
         }
 
+        /// <summary>
+        /// Static mapping of mount names to their acquisition methods
+        /// </summary>
+        private static readonly Dictionary<string, string> MountAcquisitionData = new()
+        {
+            // Starter/Company mounts
+            {"Company Chocobo", "Quest Reward"},
+            {"Chocobo", "Quest Reward"},
+            {"Black Chocobo", "Pre-order Bonus"},
+            {"Legacy Chocobo", "Pre-order Bonus"},
+            
+            // Story quest mounts
+            {"Magitek Armor", "Quest Reward"},
+            {"Manacutter", "Quest Reward"},
+            {"Enterprise", "Quest Reward"},
+            {"Regalia", "Special Quest"},
+            
+            // Trial/Primal mounts
+            {"Nightmare", "Trial Drop"},
+            {"Aithon", "Trial Drop"},
+            {"Xanthos", "Trial Drop"},
+            {"Gullfaxi", "Trial Drop"},
+            {"Enbarr", "Trial Drop"},
+            {"Markab", "Trial Drop"},
+            {"Boreas", "Trial Drop"},
+            {"Firebird", "Achievement"},
+            {"Landerwaffe", "Trial Drop"},
+            {"Kamuy of the Nine Tails", "Trial Drop"},
+            {"Howl", "Trial Drop"},
+            {"Reveling Kamuy", "Trial Drop"},
+            {"Lunar Kamuy", "Trial Drop"},
+            {"Peacock", "Trial Drop"},
+            {"Blissful Kamuy", "Trial Drop"},
+            
+            // Raid mounts
+            {"Twintania", "Raid Drop"},
+            {"Demi-Bahamut", "Raid Drop"},
+            {"Phoenix", "Raid Drop"},
+            {"Dark Lanner", "Raid Drop"},
+            {"Warring Lanner", "Raid Drop"},
+            {"Round Lanner", "Raid Drop"},
+            {"Sophic Lanner", "Raid Drop"},
+            {"Demonic Lanner", "Raid Drop"},
+            {"Zurvan's Whistle", "Raid Drop"},
+            {"Alpha", "Raid Drop"},
+            {"Omega", "Raid Drop"},
+            {"Air Force", "Raid Drop"},
+            {"Innocent Gwiber", "Raid Drop"},
+            {"Shadow Gwiber", "Raid Drop"},
+            {"Fae Gwiber", "Raid Drop"},
+            {"Ruby Gwiber", "Raid Drop"},
+            {"Emerald Gwiber", "Raid Drop"},
+            {"Light Gwiber", "Raid Drop"},
+            {"Dark Gwiber", "Raid Drop"},
+            
+            // Achievement mounts
+            {"War Tiger", "Achievement"},
+            {"Laurel Goobbue", "Achievement"},
+            {"Behemoth", "Achievement"},
+            {"Ceremony Chocobo", "Achievement"},
+            {"Parade Chocobo", "Achievement"},
+            {"Armored Chocobo", "Achievement"},
+            {"Flying Cumulus", "Achievement"},
+            {"Kirin", "Achievement"},
+            {"Magitek Death Claw", "Achievement"},
+            {"Amaro", "Achievement"},
+            
+            // PvP mounts
+            {"Flame Warsteed", "PvP Reward"},
+            {"Serpent Warsteed", "PvP Reward"},
+            {"Storm Warsteed", "PvP Reward"},
+            {"Ginga", "PvP Reward"},
+            {"Raigo", "PvP Reward"},
+            {"Gloria", "PvP Reward"},
+            {"Bellona", "PvP Reward"},
+            
+            // Gold Saucer mounts
+            {"Fenrir", "Gold Saucer"},
+            {"Archon Throne", "Gold Saucer"},
+            {"Regalia Type-G", "Gold Saucer"},
+            {"SDS Fenrir", "Gold Saucer"},
+            {"Gabriel mk-III", "Gold Saucer"},
+            
+            // Crafted/Market Board mounts
+            {"Cavalry Drake", "Market Board"},
+            {"Cavalry Elbst", "Market Board"},
+            {"Battle Bear", "Market Board"},
+            {"Battle Tiger", "Market Board"},
+            {"War Panther", "Market Board"},
+            {"Adamantoise", "Market Board"},
+            {"Morbol", "Market Board"},
+            {"Zu", "Market Board"},
+            {"Falcon", "Market Board"},
+            {"Coeurl", "Market Board"},
+            {"Flying Chair", "Market Board"},
+            {"Magitek Sky Armor", "Market Board"},
+            {"Unicorn", "Market Board"},
+            
+            // Seasonal/Event mounts
+            {"Fat Moogle", "Seasonal Event"},
+            {"Snowman", "Seasonal Event"},
+            {"Polar Bear", "Seasonal Event"},
+            {"Sleipnir", "Seasonal Event"},
+            {"Starlight Bear", "Seasonal Event"},
+            
+            // Deep Dungeon mounts
+            {"Dodo", "Deep Dungeon"},
+            {"Pegasus", "Deep Dungeon"},
+            {"Night Pegasus", "Deep Dungeon"},
+            
+            // Eureka/Bozja mounts
+            {"Cerberus", "Eureka"},
+            {"Ozma", "Eureka"},
+            {"Tyrannosaur", "Bozja"},
+            {"Lone Hero", "Bozja"},
+            {"Gabriel Alpha", "Bozja"},
+            
+            // Treasure hunt mounts
+            {"Capricorn", "Treasure Hunt"},
+            {"Korpokkur Kolossus", "Treasure Hunt"},
+            {"True Griffin", "Treasure Hunt"},
+            
+            // Special/Rare
+            {"Garlond GL-II", "Special Quest"},
+            {"Garlond GL-I", "Special Quest"},
+            {"Whisper-go", "Special Quest"},
+            {"Magitek Predator", "Special Quest"},
+            {"Pod 602", "Raid Drop"},
+            
+            // Default fallbacks for common patterns
+            {"Magitek", "Market Board"},
+            {"Gwiber", "Raid Drop"},
+            {"Lanner", "Raid Drop"},
+            {"Kamuy", "Trial Drop"}
+        };
+
+        /// <summary>
+        /// Gets the acquisition method for a mount based on its name
+        /// </summary>
+        /// <param name="mountName">The name of the mount</param>
+        /// <returns>The acquisition method or "Unknown" if not found</returns>
+        public static string GetMountAcquisitionMethod(string? mountName)
+        {
+            if (string.IsNullOrEmpty(mountName))
+                return "Unknown";
+
+            // Handle hash-based names (fallback from failed Lodestone parsing)
+            if (mountName.StartsWith("Mount #") || mountName.Contains(".png") || 
+                (mountName.Length > 20 && mountName.All(c => char.IsLetterOrDigit(c))))
+            {
+                return "Check Lodestone";
+            }
+
+            // Direct name match first
+            if (MountAcquisitionData.TryGetValue(mountName, out var method))
+                return method;
+
+            // Check for partial matches based on common prefixes/suffixes
+            foreach (var kvp in MountAcquisitionData)
+            {
+                if (mountName.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                    return kvp.Value;
+            }
+
+            // Check for common mount naming patterns
+            if (mountName.Contains("Chocobo", StringComparison.OrdinalIgnoreCase))
+                return "Quest Reward";
+            if (mountName.Contains("Magitek", StringComparison.OrdinalIgnoreCase))
+                return "Market Board";
+            if (mountName.EndsWith("Gwiber", StringComparison.OrdinalIgnoreCase) ||
+                mountName.EndsWith("Lanner", StringComparison.OrdinalIgnoreCase))
+                return "Raid Drop";
+            if (mountName.EndsWith("Kamuy", StringComparison.OrdinalIgnoreCase))
+                return "Trial Drop";
+            if (mountName.Contains("War", StringComparison.OrdinalIgnoreCase) ||
+                mountName.Contains("Battle", StringComparison.OrdinalIgnoreCase))
+                return "Market Board";
+
+            return "Unknown";
+        }
+
     }
 }

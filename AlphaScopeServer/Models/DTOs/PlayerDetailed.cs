@@ -23,6 +23,8 @@ namespace AlphaScopeServer.Models.DTOs
         [JsonProperty("LU")] public DateTime? LastJobDataUpdate { get; set; }
         [JsonProperty("LM")] public string? LodestoneMinionsData { get; set; }
         [JsonProperty("LMU")] public DateTime? LastMinionsDataUpdate { get; set; }
+        [JsonProperty("LMT")] public string? LodestoneMountsData { get; set; }
+        [JsonProperty("LMTU")] public DateTime? LastMountsDataUpdate { get; set; }
     }
 
     public class PlayerProfileVisitInfoDto
@@ -111,6 +113,14 @@ namespace AlphaScopeServer.Models.DTOs
     public class MinionDto
     {
         [JsonProperty("1")] public int? MinionId { get; set; }
+        [JsonProperty("2")] public string? Name { get; set; }
+        [JsonProperty("3")] public string? IconUrl { get; set; }
+        [JsonProperty("4")] public DateTime? AcquiredDate { get; set; }
+    }
+
+    public class MountDto
+    {
+        [JsonProperty("1")] public int? MountId { get; set; }
         [JsonProperty("2")] public string? Name { get; set; }
         [JsonProperty("3")] public string? IconUrl { get; set; }
         [JsonProperty("4")] public DateTime? AcquiredDate { get; set; }

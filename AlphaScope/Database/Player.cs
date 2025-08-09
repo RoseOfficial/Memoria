@@ -111,4 +111,18 @@ public class Player
     /// Used to track freshness of minion information separately from general profile scans.
     /// </summary>
     public DateTime? LastMinionsDataUpdate { get; set; }
+
+    /// <summary>
+    /// JSON string containing complete mount collection data from Lodestone.
+    /// Stores all owned mounts as a serialized array for comprehensive mount tracking.
+    /// Example: [{"id": 1, "name": "Company Chocobo", "acquired": "2024-01-01"}]
+    /// </summary>
+    [MaxLength(10000)]
+    public string? LodestoneMountsData { get; set; }
+
+    /// <summary>
+    /// Timestamp of when mount data was last updated from Lodestone.
+    /// Used to track freshness of mount information separately from general profile scans.
+    /// </summary>
+    public DateTime? LastMountsDataUpdate { get; set; }
 }

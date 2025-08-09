@@ -39,6 +39,10 @@ namespace AlphaScopeServer.Models.Entities
         [MaxLength(10000)]
         public string? LodestoneMinionsData { get; set; }
         public DateTime? LastMinionsDataUpdate { get; set; }
+
+        [MaxLength(10000)]
+        public string? LodestoneMountsData { get; set; }
+        public DateTime? LastMountsDataUpdate { get; set; }
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
