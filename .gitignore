@@ -439,6 +439,22 @@ DalamudPackager.targets
 config.json
 settings.json
 
+# Claude Code settings
+.claude/settings.local.json
+
+# AI-assisted development files
+CLAUDE.md
+.cursor/
+.windsurf/
+.aider*
+.gpteng/
+.continue/
+.copilot/
+ai-instructions.md
+AI_INSTRUCTIONS.md
+prompt.md
+PROMPT.md
+
 # Temporary backup files
 *.bak
 *.backup

@@ -2,14 +2,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NetStone;
+using NetStone.Search.Character;
 using AlphaScope.Database;
 using AlphaScope.Handlers;
 
@@ -36,6 +36,7 @@ internal sealed class LodestoneRefreshService : IDisposable
     private readonly ILogger<LodestoneRefreshService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly Configuration _configuration;
+    private LodestoneClient? _lodestoneClient;
     
     /// <summary>
     /// Priority queue for high-priority players (new to database)
@@ -73,7 +74,20 @@ internal sealed class LodestoneRefreshService : IDisposable
         _serviceProvider = serviceProvider;
         _configuration = configuration;
         
-        _logger.LogInformation("LodestoneRefreshService initialized");
+        _logger.LogInformation("LodestoneRefreshService initialized - NetStone client will be created on first use");
+    }
+    
+    /// <summary>
+    /// Initializes the NetStone client lazily when first needed
+    /// </summary>
+    private async Task<LodestoneClient> GetLodestoneClientAsync()
+    {
+        if (_lodestoneClient == null)
+        {
+            _lodestoneClient = await LodestoneClient.GetClientAsync();
+            _logger.LogInformation("NetStone client initialized successfully");
+        }
+        return _lodestoneClient;
     }
 
     /// <summary>
@@ -393,7 +407,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                 return true;
             }
             
-            var (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData) = await FetchLodestonePlayerData(player.Name, player.LocalContentId);
+            var (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData) = await FetchLodestonePlayerData(player);
             
             var hasUpdates = false;
             
@@ -498,238 +512,312 @@ internal sealed class LodestoneRefreshService : IDisposable
     }
 
     /// <summary>
-    /// Fetches comprehensive player data from Lodestone including avatar, job, and minion information
+    /// Fetches comprehensive player data from Lodestone using NetStone library
     /// </summary>
-    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel, List<MinionInfo>? MinionsData)> FetchLodestonePlayerData(string characterName, ulong contentId)
+    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel, List<MinionInfo>? MinionsData)> FetchLodestonePlayerData(Player player)
     {
         try
         {
-            using var httpClient = new System.Net.Http.HttpClient();
-            httpClient.DefaultRequestHeaders.Add("User-Agent", "AlphaScope/1.0");
-            
-            // Search for character on Lodestone
-            var searchUrl = $"https://na.finalfantasyxiv.com/lodestone/character/?q={Uri.EscapeDataString(characterName)}&worldname=";
-            
-            var searchResponse = await httpClient.GetStringAsync(searchUrl);
-            
-            // Parse search results to find the character's Lodestone ID
-            var lodestoneId = ExtractLodestoneIdFromSearch(searchResponse, characterName);
-            
-            if (string.IsNullOrEmpty(lodestoneId))
+            if (string.IsNullOrEmpty(player.Name))
             {
-                _logger.LogWarning($"Could not find Lodestone ID for character {characterName}");
+                _logger.LogWarning($"Player {player.LocalContentId} has no name, cannot search Lodestone");
+                return (null, null, null, null, null);
+            }
+
+            // Get the NetStone client (lazy initialization)
+            var client = await GetLodestoneClientAsync();
+            
+            // Try to get world name for more reliable search
+            string? worldName = null;
+            uint? worldIdToUse = null;
+            
+            // Try HomeWorldId first, fall back to CurrentWorldId
+            if (player.HomeWorldId.HasValue)
+            {
+                worldIdToUse = player.HomeWorldId.Value;
+                worldName = Utils.GetWorldName(worldIdToUse.Value);
+                _logger.LogDebug($"Using HomeWorldId {worldIdToUse} ({worldName}) for character search: {player.Name}");
+            }
+            else if (player.CurrentWorldId.HasValue)
+            {
+                worldIdToUse = player.CurrentWorldId.Value;
+                worldName = Utils.GetWorldName(worldIdToUse.Value);
+                _logger.LogDebug($"Using CurrentWorldId {worldIdToUse} ({worldName}) for character search: {player.Name}");
+            }
+            else
+            {
+                _logger.LogWarning($"Player {player.Name} has no world information, searching all worlds");
+            }
+
+            // Validate world name if we have one
+            if (!string.IsNullOrEmpty(worldName) && worldName == "Unknown")
+            {
+                _logger.LogWarning($"World ID {worldIdToUse} resolved to 'Unknown', falling back to search all worlds for {player.Name}");
+                worldName = null;
+            }
+
+            // Build search query with world filter if available
+            var query = new CharacterSearchQuery()
+            {
+                CharacterName = player.Name
+            };
+
+            // Add world filter if we have a valid world name
+            if (!string.IsNullOrEmpty(worldName))
+            {
+                query.World = worldName;
+                _logger.LogDebug($"Searching for character {player.Name} on world {worldName}");
+            }
+            else
+            {
+                _logger.LogDebug($"Searching for character {player.Name} across all worlds");
+            }
+
+            var searchResult = await client.SearchCharacter(query);
+            var character = searchResult?.Results?.FirstOrDefault();
+            
+            if (character == null)
+            {
+                if (!string.IsNullOrEmpty(worldName))
+                {
+                    // If world-specific search failed, try without world filter as fallback
+                    _logger.LogWarning($"Character {player.Name} not found on world {worldName}, trying search across all worlds");
+                    query = new CharacterSearchQuery() { CharacterName = player.Name };
+                    searchResult = await client.SearchCharacter(query);
+                    character = searchResult?.Results?.FirstOrDefault();
+                }
+                
+                if (character == null)
+                {
+                    var worldInfo = !string.IsNullOrEmpty(worldName) ? $" (searched {worldName} and all worlds)" : " (searched all worlds)";
+                    _logger.LogWarning($"Could not find character {player.Name} in Lodestone search{worldInfo}");
+                    return (null, null, null, null, null);
+                }
+                else
+                {
+                    _logger.LogInformation($"Found character {player.Name} via fallback search across all worlds");
+                }
+            }
+            else
+            {
+                var searchInfo = !string.IsNullOrEmpty(worldName) ? $" on world {worldName}" : " via all-worlds search";
+                _logger.LogDebug($"Successfully found character {player.Name}{searchInfo}");
+            }
+            
+            // Get character profile
+            var profile = await client.GetCharacter(character.Id!);
+            if (profile == null)
+            {
+                _logger.LogWarning($"Could not fetch profile for character {player.Name}");
                 return (null, null, null, null, null);
             }
             
-            // Fetch character profile page
-            var profileUrl = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/";
+            // Extract avatar URL
+            var avatarUrl = profile.Avatar?.ToString();
             
-            var profileResponse = await httpClient.GetStringAsync(profileUrl);
-            
-            // Log a snippet of the HTML to check if we're getting valid content
-            var htmlSnippet = profileResponse.Length > 500 ? profileResponse.Substring(0, 500) : profileResponse;
-            
-            // Extract avatar URL from profile page
-            var avatarUrl = ExtractAvatarUrlFromProfile(profileResponse);
-            
-            // Fetch separate Class/Job page for job data
-            var classJobUrl = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/class_job/";
-            
-            var classJobResponse = await httpClient.GetStringAsync(classJobUrl);
-            
-            // Extract job data from class/job page
-            var (jobLevels, mainJobId, mainJobLevel) = ExtractJobDataFromProfile(classJobResponse);
-            
-            // Fetch minion page with error handling
-            var minionUrl = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/minion/";
-            string? minionResponse = null;
+            // Extract job data using NetStone's GetClassJobInfo() method
+            var jobLevels = new Dictionary<byte, short>();
+            byte? mainJobId = null;
+            short? mainJobLevel = null;
             
             try
             {
-                minionResponse = await httpClient.GetStringAsync(minionUrl);
-            }
-            catch (HttpRequestException httpEx) when (httpEx.Message.Contains("404"))
-            {
-                _logger.LogDebug($"Minion page not found for {characterName} (404) - player may not have public minion data");
+                var classJobInfo = await profile.GetClassJobInfo();
+                if (classJobInfo != null)
+                {
+                    // Iterate through all jobs using ClassJobDict
+                    foreach (var (staticJob, jobEntry) in classJobInfo.ClassJobDict)
+                    {
+                        if (jobEntry.IsUnlocked && jobEntry.Level > 0)
+                        {
+                            var jobId = (byte)(int)staticJob; // Convert enum to byte
+                            var level = (short)jobEntry.Level;
+                            
+                            // Validate job data
+                            if (IsValidJobId(jobId) && IsValidJobLevel(level))
+                            {
+                                jobLevels[jobId] = level;
+                                
+                                // Track highest level job as main job
+                                if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
+                                {
+                                    mainJobId = jobId;
+                                    mainJobLevel = level;
+                                }
+                            }
+                        }
+                    }
+                    
+                    _logger.LogDebug($"Extracted {jobLevels.Count} job levels for {player.Name}");
+                }
+                else
+                {
+                    _logger.LogWarning($"GetClassJobInfo returned null for {player.Name}");
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, $"Failed to fetch minion page for {characterName}");
+                _logger.LogWarning(ex, $"Could not extract job data for {player.Name}");
             }
             
-            // Extract minion data from minion page (only if we got a response)
-            var minionsData = !string.IsNullOrEmpty(minionResponse) ? ExtractMinionDataFromProfile(minionResponse) : null;
+            // Extract minion data using NetStone's GetMinions() method  
+            List<MinionInfo>? minionsData = null;
+            try
+            {
+                var minionsCollectable = await profile.GetMinions();
+                if (minionsCollectable != null)
+                {
+                    _logger.LogDebug($"GetMinions returned: {minionsCollectable.GetType().Name}");
+                    
+                    // Use reflection to inspect the structure since API is unclear
+                    var collectablesProperty = minionsCollectable.GetType().GetProperty("Collectables");
+                    if (collectablesProperty != null)
+                    {
+                        var collectables = collectablesProperty.GetValue(minionsCollectable);
+                        if (collectables is System.Collections.IEnumerable enumerable)
+                        {
+                            minionsData = new List<MinionInfo>();
+                            
+                            foreach (var minion in enumerable.Cast<object>())
+                            {
+                                var nameProperty = minion.GetType().GetProperty("Name");
+                                var name = nameProperty?.GetValue(minion)?.ToString() ?? "Unknown";
+                                
+                                // Try to extract icon URL from NetStone
+                                string? iconUrl = null;
+                                var iconProperty = minion.GetType().GetProperty("Icon");
+                                if (iconProperty != null)
+                                {
+                                    var iconValue = iconProperty.GetValue(minion);
+                                    if (iconValue != null)
+                                    {
+                                        iconUrl = iconValue.ToString();
+                                        _logger.LogDebug($"Found icon URL for minion {name}: {iconUrl}");
+                                    }
+                                }
+                                
+                                // If no icon URL from NetStone, try to get minion ID and construct XIVAPI URL
+                                int? minionId = null;
+                                var idProperty = minion.GetType().GetProperty("Id");
+                                if (idProperty != null)
+                                {
+                                    var idValue = idProperty.GetValue(minion);
+                                    if (idValue != null && int.TryParse(idValue.ToString(), out var id))
+                                    {
+                                        minionId = id;
+                                    }
+                                }
+                                
+                                // If we don't have a minion ID, try to look it up by name
+                                if (!minionId.HasValue && !string.IsNullOrEmpty(name))
+                                {
+                                    if (MinionNameToId.TryGetValue(name, out var mappedId))
+                                    {
+                                        minionId = mappedId;
+                                        _logger.LogDebug($"Found minion ID {minionId} for {name} using name mapping");
+                                    }
+                                }
+                                
+                                // If we have an ID but no icon URL, use XIVAPI
+                                if (string.IsNullOrEmpty(iconUrl) && minionId.HasValue)
+                                {
+                                    // Use XIVAPI icon URL format - 40x40 for standard display
+                                    iconUrl = GetXivapiMinionIconUrl(minionId.Value, 40);
+                                    _logger.LogDebug($"Using XIVAPI icon URL for minion {name} (ID: {minionId}): {iconUrl}");
+                                }
+                                
+                                var minionInfo = new MinionInfo
+                                {
+                                    Name = name,
+                                    IconUrl = iconUrl,
+                                    MinionId = minionId,
+                                    AcquiredDate = null // Check if available in minion properties
+                                };
+                                
+                                minionsData.Add(minionInfo);
+                            }
+                            
+                            _logger.LogDebug($"Extracted {minionsData.Count} minions for {player.Name}");
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogDebug($"No Collectables property found on {minionsCollectable.GetType().Name}");
+                    }
+                }
+                else
+                {
+                    _logger.LogDebug($"GetMinions returned null for {player.Name} - may not have public minion data");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Could not fetch minion data for {player.Name}");
+            }
             
-            if (!string.IsNullOrEmpty(avatarUrl))
-            {
-            }
-            else
-            {
-                _logger.LogWarning($"Could not extract avatar URL from profile for {characterName}");
-            }
+            _logger.LogDebug($"Successfully fetched Lodestone data for {player.Name}: Avatar={!string.IsNullOrEmpty(avatarUrl)}, Jobs={jobLevels?.Count ?? 0}, Minions={minionsData?.Count ?? 0}");
             
-            if (jobLevels != null && jobLevels.Count > 0)
-            {
-            }
-            else
-            {
-                _logger.LogWarning($"Could not extract job data from profile for {characterName}");
-            }
-            
-            if (minionsData != null && minionsData.Count > 0)
-            {
-            }
-            else
-            {
-                _logger.LogDebug($"Could not extract minion data from profile for {characterName}");
-            }
-            
-            return (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData);
+            return (avatarUrl, jobLevels?.Count > 0 ? jobLevels : null, mainJobId, mainJobLevel, minionsData);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error fetching Lodestone data for {characterName}");
+            _logger.LogError(ex, $"Error fetching Lodestone data for {player.Name} using NetStone");
             return (null, null, null, null, null);
         }
     }
 
-    /// <summary>
-    /// Extracts Lodestone character ID from search results HTML
-    /// </summary>
-    private string? ExtractLodestoneIdFromSearch(string html, string characterName)
-    {
-        try
-        {
-            // Look for character entry links in search results
-            var pattern = @"<a\s+href=""/lodestone/character/(\d+)/""[^>]*>" + Regex.Escape(characterName);
-            var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-            
-            if (match.Success)
-            {
-                return match.Groups[1].Value;
-            }
-            
-            // Fallback: look for any character link and extract the first one
-            var fallbackPattern = @"/lodestone/character/(\d+)/";
-            var fallbackMatch = Regex.Match(html, fallbackPattern);
-            
-            if (fallbackMatch.Success)
-            {
-                return fallbackMatch.Groups[1].Value;
-            }
-            
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error extracting Lodestone ID for {characterName}");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Extracts avatar URL from character profile HTML
-    /// </summary>
-    private string? ExtractAvatarUrlFromProfile(string html)
-    {
-        try
-        {
-            
-            var allImgMatches = Regex.Matches(html, @"<img[^>]+src=""([^""]*)""\s*[^>]*>", RegexOptions.IgnoreCase);
-            
-            foreach (Match imgMatch in allImgMatches)
-            {
-                var imgUrl = imgMatch.Groups[1].Value;
-                
-                // Skip obvious non-avatar images
-                if (imgUrl.Contains("banner/") || imgUrl.Contains("mogmog") || imgUrl.Contains("logo") || 
-                    imgUrl.Contains("icon/") || imgUrl.Contains("ui/") || imgUrl.Contains("item/") ||
-                    imgUrl.Contains("job/") || imgUrl.Contains("class/"))
-                    continue;
-                    
-                // Look for character portrait patterns - these are the actual character avatars
-                if ((imgUrl.Contains("img2.finalfantasyxiv.com/f/") && imgUrl.Contains("fc0.jpg")) ||
-                    imgUrl.Contains("character") || imgUrl.Contains("avatar"))
-                {
-                    // Ensure URL is absolute
-                    if (imgUrl.StartsWith("//"))
-                        imgUrl = "https:" + imgUrl;
-                    else if (imgUrl.StartsWith("/"))
-                        imgUrl = "https://img.finalfantasyxiv.com" + imgUrl;
-                    
-                    return imgUrl;
-                }
-            }
-            
-            // If we didn't find a proper avatar, try more generic patterns
-            var fallbackPatterns = new[]
-            {
-                @"character__detail__image[^>]*>.*?<img[^>]+src=""([^""]*\.jpg)""",
-                @"frame__chara__face[^>]*>.*?<img[^>]+src=""([^""]*\.jpg)""",
-                @"<div[^>]*class=""[^""]*character[^""]*""[^>]*>.*?<img[^>]+src=""([^""]*\.jpg)""",
-                @"<img[^>]+src=""([^""]*\.jpg)""\s+alt=""[^""]*""[^>]*class=""[^""]*character[^""]*"""
-            };
-            
-            foreach (var pattern in fallbackPatterns)
-            {
-                var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                if (match.Success)
-                {
-                    var url = match.Groups[1].Value;
-                    
-                    // Skip banner images and other non-avatar images
-                    if (url.Contains("banner/") || url.Contains("mogmog") || url.Contains("logo") ||
-                        url.Contains("icon/") || url.Contains("ui/") || url.Contains("item/"))
-                        continue;
-                        
-                    // Ensure URL is absolute
-                    if (url.StartsWith("//"))
-                        url = "https:" + url;
-                    else if (url.StartsWith("/"))
-                        url = "https://img.finalfantasyxiv.com" + url;
-                    
-                    _logger.LogInformation($"Found fallback avatar URL: {url}");
-                    return url;
-                }
-            }
-            
-            _logger.LogWarning("No valid character avatar found in profile HTML");
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error extracting avatar URL from profile");
-            return null;
-        }
-    }
-
-    // FFXIV job validation constants
+    // FFXIV job validation constants - kept for NetStone validation
     private const short MAX_JOB_LEVEL = 100;
     private const short MIN_JOB_LEVEL = 1;
     private const byte MIN_JOB_ID = 1;
     private const byte MAX_JOB_ID = 100; // Expanded range to capture all possible job IDs
-
-    // Job name to ID mapping for text-based parsing
-    private static readonly Dictionary<string, byte> JobNameToId = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase)
+    
+    /// <summary>
+    /// Constructs an XIVAPI icon URL for a minion
+    /// </summary>
+    /// <param name="minionId">The minion ID from game data</param>
+    /// <param name="size">Icon size (32, 40, 48, 64, 80, 96)</param>
+    /// <returns>XIVAPI icon URL</returns>
+    private static string GetXivapiMinionIconUrl(int minionId, int size = 40)
     {
-        // Tank Jobs
-        {"Paladin", 19}, {"Warrior", 21}, {"Dark Knight", 32}, {"Gunbreaker", 37},
-        // Healer Jobs  
-        {"White Mage", 24}, {"Scholar", 28}, {"Astrologian", 33}, {"Sage", 40},
-        // Melee DPS Jobs
-        {"Monk", 20}, {"Dragoon", 22}, {"Ninja", 30}, {"Samurai", 34}, {"Reaper", 39}, {"Viper", 41},
-        // Physical Ranged DPS
-        {"Bard", 23}, {"Machinist", 31}, {"Dancer", 38},
-        // Magical Ranged DPS
-        {"Black Mage", 25}, {"Summoner", 27}, {"Red Mage", 35}, {"Blue Mage", 36}, {"Pictomancer", 42},
-        // Base Classes
-        {"Gladiator", 1}, {"Pugilist", 2}, {"Marauder", 3}, {"Lancer", 4}, {"Archer", 5},
-        {"Conjurer", 6}, {"Thaumaturge", 7}, {"Arcanist", 26}, {"Rogue", 29},
-        // Crafters
-        {"Carpenter", 8}, {"Blacksmith", 9}, {"Armorer", 10}, {"Goldsmith", 11},
-        {"Leatherworker", 12}, {"Weaver", 13}, {"Alchemist", 14}, {"Culinarian", 15},
-        // Gatherers
-        {"Miner", 16}, {"Botanist", 17}, {"Fisher", 18}
+        // XIVAPI uses a specific folder structure for icons
+        // Format: https://xivapi.com/i/{folder}/{iconId}.png
+        // Minion icons are typically in the 004000 range
+        // The icon ID is usually 4000 + minionId
+        var iconId = 4000 + minionId;
+        var folder = (iconId / 1000) * 1000;
+        return $"https://xivapi.com/i/{folder:D6}/{iconId:D6}.png";
+    }
+    
+    /// <summary>
+    /// Dictionary mapping common minion names to their IDs for fallback icon resolution
+    /// This is a subset - can be expanded as needed
+    /// </summary>
+    private static readonly Dictionary<string, int> MinionNameToId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+    {
+        // Starter minions
+        {"Wind-up Airship", 1},
+        {"Cactuar Cutting", 2},
+        {"Mammet #001", 3},
+        {"Buffalo Calf", 4},
+        {"Infant Imp", 5},
+        {"Wayward Hatchling", 6},
+        {"Chigoe Larva", 7},
+        {"Coeurl Kitten", 8},
+        {"Goobbue Sproutling", 9},
+        {"Wolf Pup", 10},
+        // Popular minions (can be expanded)
+        {"Fat Cat", 45},
+        {"Black Coeurl", 47},
+        {"Minion of Light", 49},
+        {"Wind-up Cursor", 50},
+        {"Wind-up Moogle", 52},
+        {"Baby Behemoth", 54},
+        {"Baby Bun", 56},
+        {"Midgardsormr", 67},
+        {"Wind-up Alphinaud", 78},
+        {"Wind-up Alisaie", 115},
+        // Add more as needed
     };
 
     /// <summary>
@@ -749,302 +837,6 @@ internal sealed class LodestoneRefreshService : IDisposable
     }
 
     /// <summary>
-    /// Extracts complete job level data from character profile HTML
-    /// </summary>
-    private (Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel) ExtractJobDataFromProfile(string html)
-    {
-        try
-        {
-            
-            
-            var jobLevels = new Dictionary<byte, short>();
-            byte? mainJobId = null;
-            short? mainJobLevel = null;
-            
-            // Look for job data in the character profile
-            // FFXIV Lodestone displays job levels in specific HTML patterns
-            
-            // Pattern 1: Look for job level data in class/job sections
-            // Patterns removed - using text-based parsing only since ID patterns are unreliable
-            var jobPatterns = new string[0]; // Empty array to skip ID-based parsing
-            
-            foreach (var pattern in jobPatterns)
-            {
-                var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                
-                foreach (Match match in matches)
-                {
-                    if (match.Groups.Count >= 3 && 
-                        byte.TryParse(match.Groups[1].Value, out var jobId) && 
-                        short.TryParse(match.Groups[2].Value, out var level))
-                    {
-                        // Validate job ID and level ranges
-                        if (!IsValidJobId(jobId))
-                        {
-                            _logger.LogWarning($"Invalid job ID {jobId} found in Lodestone data (valid range: {MIN_JOB_ID}-{MAX_JOB_ID})");
-                            continue;
-                        }
-
-                        if (!IsValidJobLevel(level))
-                        {
-                            _logger.LogWarning($"Invalid job level {level} found for job {jobId} in Lodestone data (valid range: {MIN_JOB_LEVEL}-{MAX_JOB_LEVEL})");
-                            continue;
-                        }
-
-                        // Only store valid job data
-                        jobLevels[jobId] = level;
-                        
-                        // Track the highest level job as main job
-                        if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
-                        {
-                            mainJobId = jobId;
-                            mainJobLevel = level;
-                        }
-                    }
-                }
-            }
-            
-            // Alternative: Look for specific class/job blocks with stricter constraints
-            var jobBlockPattern = @"character__job[^>]*job--(\d{1,2})[^>]*>.*?character__job__level[^>]*>(\d{1,3})<";
-            var jobBlockMatches = Regex.Matches(html, jobBlockPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            
-            foreach (Match match in jobBlockMatches)
-            {
-                if (match.Groups.Count >= 3 && 
-                    byte.TryParse(match.Groups[1].Value, out var jobId) && 
-                    short.TryParse(match.Groups[2].Value, out var level))
-                {
-                    // Validate job ID and level ranges
-                    if (!IsValidJobId(jobId))
-                    {
-                        _logger.LogWarning($"Invalid job ID {jobId} found in job block (valid range: {MIN_JOB_ID}-{MAX_JOB_ID})");
-                        continue;
-                    }
-
-                    if (!IsValidJobLevel(level))
-                    {
-                        _logger.LogWarning($"Invalid job level {level} found for job {jobId} in job block (valid range: {MIN_JOB_LEVEL}-{MAX_JOB_LEVEL})");
-                        continue;
-                    }
-
-                    // Only store valid job data (avoid duplicates)
-                    if (!jobLevels.ContainsKey(jobId))
-                    {
-                        jobLevels[jobId] = level;
-                        
-                        if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
-                        {
-                            mainJobId = jobId;
-                            mainJobLevel = level;
-                        }
-                    }
-                }
-            }
-            
-            // Use text-based parsing to match exact Lodestone format: "80 Paladin 571,166 / 5,992,000"
-            
-            // Pattern for HTML structure: <div class="character__job__level">100</div><div class="character__job__name">Paladin</div>
-            var textPatterns = new[]
-            {
-                // Primary pattern: Level div followed by name div (actual Lodestone HTML structure)
-                @"<div\s+class=""character__job__level"">(\d{1,3})</div>.*?<div\s+class=""character__job__name[^""]*""[^>]*>([A-Za-z\s]+?)</div>",
-                // Alternative pattern: Level and name in separate HTML tags
-                @"character__job__level"">(\d{1,3})</[^>]+>.*?character__job__name[^>]*>([A-Za-z\s]+?)</",
-                // Fallback pattern: Level followed by job name in any HTML structure
-                @">(\d{1,3})<[^>]*>.*?js__tooltip[^>]*>([A-Za-z\s]+?)<"
-            };
-                
-                foreach (var pattern in textPatterns)
-                {
-                    var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                    
-                    foreach (Match match in matches)
-                    {
-                        if (match.Groups.Count >= 3 && 
-                            short.TryParse(match.Groups[1].Value, out var level) &&
-                            !string.IsNullOrWhiteSpace(match.Groups[2].Value))
-                        {
-                            var jobName = match.Groups[2].Value.Trim();
-                            
-                            // Clean up job name - remove extra whitespace and common artifacts
-                            jobName = System.Text.RegularExpressions.Regex.Replace(jobName, @"\s+", " ");
-                            jobName = jobName.Replace("  ", " ").Trim();
-                            
-                            // Try to map job name to ID
-                            if (JobNameToId.TryGetValue(jobName, out var jobId))
-                            {
-                                if (IsValidJobLevel(level))
-                                {
-                                    jobLevels[jobId] = level;
-                                    
-                                    if (!mainJobLevel.HasValue || level > mainJobLevel.Value)
-                                    {
-                                        mainJobId = jobId;
-                                        mainJobLevel = level;
-                                    }
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Invalid level {level} for job {jobName}");
-                                }
-                            }
-                            else
-                            {
-                            }
-                        }
-                    }
-                }
-            
-            
-            return jobLevels.Count > 0 ? (jobLevels, mainJobId, mainJobLevel) : (null, null, null);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error extracting job data from profile");
-            return (null, null, null);
-        }
-    }
-
-    /// <summary>
-    /// Extracts minion collection data from character minion page HTML
-    /// </summary>
-    private List<MinionInfo>? ExtractMinionDataFromProfile(string html)
-    {
-        try
-        {
-            var minions = new List<MinionInfo>();
-            
-            // Updated patterns to match current Lodestone minion page structure
-            // Try multiple patterns to handle different HTML structures
-            var minionItemPattern = @"<li[^>]*class=""[^""]*minion__list_item[^""]*""[^>]*>.*?<img[^>]+src=""(https://lds-img\.finalfantasyxiv\.com/itemicon/[^""]+\.png[^""]*)""[^>]*alt=""([^""]+)""[^>]*>.*?</li>";
-            // Alternative pattern for minion names (currently unused but available for future enhancement)
-            // var minionNamePattern = @"<div[^>]*class=""[^""]*minion__name[^""]*""[^>]*>([^<]+)</div>";
-            var minionTooltipPattern = @"data-tooltip=""([^""]+)""[^>]*><img[^>]+src=""(https://lds-img\.finalfantasyxiv\.com/itemicon/[^""]+\.png[^""]*)""";
-            
-            var itemMatches = Regex.Matches(html, minionItemPattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            
-            if (itemMatches.Count > 0)
-            {
-                _logger.LogInformation($"Found {itemMatches.Count} minion matches using primary pattern");
-                foreach (Match match in itemMatches)
-                {
-                    if (match.Groups.Count >= 3)
-                    {
-                        var iconUrl = match.Groups[1].Value.Trim();
-                        var minionName = match.Groups[2].Value.Trim();
-                        
-                        if (!string.IsNullOrEmpty(iconUrl))
-                        {
-                            var minion = new MinionInfo
-                            {
-                                Name = !string.IsNullOrEmpty(minionName) ? minionName : "Unknown Minion",
-                                MinionId = null, // Would need game data mapping to get actual ID
-                                AcquiredDate = null, // Not available from current Lodestone format
-                                IconUrl = iconUrl
-                            };
-                            
-                            minions.Add(minion);
-                            _logger.LogDebug($"Added minion: {minionName} with icon: {iconUrl}");
-                        }
-                    }
-                }
-            }
-            // Try tooltip pattern if primary pattern didn't work
-            else
-            {
-                _logger.LogInformation("Primary pattern failed, trying tooltip pattern");
-                var tooltipMatches = Regex.Matches(html, minionTooltipPattern, RegexOptions.IgnoreCase);
-                
-                if (tooltipMatches.Count > 0)
-                {
-                    _logger.LogInformation($"Found {tooltipMatches.Count} minion matches using tooltip pattern");
-                    foreach (Match match in tooltipMatches)
-                    {
-                        if (match.Groups.Count >= 3)
-                        {
-                            var minionName = match.Groups[1].Value.Trim();
-                            var iconUrl = match.Groups[2].Value.Trim();
-                            
-                            if (!string.IsNullOrEmpty(iconUrl))
-                            {
-                                var minion = new MinionInfo
-                                {
-                                    Name = !string.IsNullOrEmpty(minionName) ? minionName : "Unknown Minion",
-                                    MinionId = null,
-                                    AcquiredDate = null,
-                                    IconUrl = iconUrl
-                                };
-                                
-                                minions.Add(minion);
-                                _logger.LogDebug($"Added minion from tooltip: {minionName} with icon: {iconUrl}");
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Final fallback: just look for any minion icons if structured approaches fail
-            if (minions.Count == 0)
-            {
-                _logger.LogWarning("All structured patterns failed, using fallback icon pattern");
-                var minionIconPattern = @"<img[^>]+src=""(https://lds-img\.finalfantasyxiv\.com/itemicon/[^""]+\.png[^""]*)""[^>]*(?:alt=""([^""]*)""|title=""([^""]*)""|data-tooltip=""([^""]*)""|[^>]*)>";
-                
-                var iconMatches = Regex.Matches(html, minionIconPattern, RegexOptions.IgnoreCase);
-                _logger.LogInformation($"Found {iconMatches.Count} minion icons using fallback pattern");
-                
-                foreach (Match match in iconMatches)
-                {
-                    if (match.Groups.Count >= 2)
-                    {
-                        var iconUrl = match.Groups[1].Value.Trim();
-                        
-                        // Try to get name from various attributes
-                        var minionName = "";
-                        for (int i = 2; i < match.Groups.Count; i++)
-                        {
-                            if (!string.IsNullOrEmpty(match.Groups[i].Value.Trim()))
-                            {
-                                minionName = match.Groups[i].Value.Trim();
-                                break;
-                            }
-                        }
-                        
-                        if (!string.IsNullOrEmpty(iconUrl))
-                        {
-                            // If we still don't have a name, create a placeholder based on hash
-                            if (string.IsNullOrEmpty(minionName))
-                            {
-                                var urlParts = iconUrl.Split('/');
-                                var filename = urlParts.LastOrDefault()?.Split('?').FirstOrDefault()?.Replace(".png", "");
-                                minionName = $"Minion #{filename?.Substring(0, Math.Min(8, filename?.Length ?? 0))}";
-                            }
-                            
-                            var minion = new MinionInfo
-                            {
-                                Name = minionName,
-                                MinionId = null,
-                                AcquiredDate = null,
-                                IconUrl = iconUrl
-                            };
-                            
-                            minions.Add(minion);
-                            _logger.LogDebug($"Added fallback minion: {minionName} with icon: {iconUrl}");
-                        }
-                    }
-                }
-            }
-            
-            _logger.LogInformation($"Extracted {minions.Count} minions from Lodestone profile");
-            return minions.Count > 0 ? minions : null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error extracting minion data from profile");
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Gets current queue status for monitoring
     /// </summary>
     public (int PriorityQueueSize, int QueueSize, int QueuedPlayers) GetQueueStatus()
@@ -1056,5 +848,6 @@ internal sealed class LodestoneRefreshService : IDisposable
     {
         StopAsync().GetAwaiter().GetResult();
         _cancellationTokenSource?.Dispose();
+        _lodestoneClient?.Dispose();
     }
 }

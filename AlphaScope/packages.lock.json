@@ -72,6 +72,17 @@
           "System.Text.Json": "9.0.0"
         }
       },
+      "NetStone": {
+        "type": "Direct",
+        "requested": "[1.4.1, )",
+        "resolved": "1.4.1",
+        "contentHash": "uJawEi8Bf66tOQwZ1UHIEuqY7QD3by79iZAy10YOz0p24+wDB9vEl/3QCEXw5pxBIVGGa2GnQ7m5gT8OmXjMOQ==",
+        "dependencies": {
+          "HtmlAgilityPack": "1.11.46",
+          "Karashiiro.HtmlAgilityPack.CssSelectors.NetCoreFork": "0.0.2",
+          "Newtonsoft.Json": "13.0.3"
+        }
+      },
       "Newtonsoft.Json": {
         "type": "Direct",
         "requested": "[13.0.3, )",
@@ -94,15 +105,23 @@
           "RestSharp": "112.1.0"
         }
       },
+      "HtmlAgilityPack": {
+        "type": "Transitive",
+        "resolved": "1.11.46",
+        "contentHash": "dLMn4EVfJBHWmWK4Uh0XGD76FPLHI0qr2Tm0s1m/xmgiHb1JUb9zB8AzO8HtrkBBlMN6JfCUBYddhqC0hZNR+g=="
+      },
       "Humanizer.Core": {
         "type": "Transitive",
         "resolved": "2.14.1",
         "contentHash": "lQKvtaTDOXnoVJ20ibTuSIOf2i0uO0MPbDhd1jm238I+U/2ZnRENj0cktKZhtchBMtCUSRQ5v4xBCUbKNmyVMw=="
       },
-      "JetBrains.Annotations": {
+      "Karashiiro.HtmlAgilityPack.CssSelectors.NetCoreFork": {
         "type": "Transitive",
-        "resolved": "2024.3.0",
-        "contentHash": "ox5pkeLQXjvJdyAB4b2sBYAlqZGLh3PjSnP1bQNVx72ONuTJ9+34/+Rq91Fc0dG29XG9RgZur9+NcP4riihTug=="
+        "resolved": "0.0.2",
+        "contentHash": "+7cqe/+tN7gDW36pgrefSeyAQvhqznM34D0uTwnETgU25iAC6boPtblxbrMluW5rA9o6MzjEg4qZK7WrnT+tSw==",
+        "dependencies": {
+          "HtmlAgilityPack": "1.11.46"
+        }
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
@@ -252,16 +271,16 @@
       },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "Transitive",
-        "resolved": "9.0.2",
-        "contentHash": "ZffbJrskOZ40JTzcTyKwFHS5eACSWp2bUQBBApIgGV+es8RaTD4OxUG7XxFr3RIPLXtYQ1jQzF2DjKB5fZn7Qg==",
+        "resolved": "9.0.0",
+        "contentHash": "MCPrg7v3QgNMr0vX4vzRXvkNGgLg8vKWX0nKCWUxu2uPyMsaRgiRc1tHBnbTcfJMhMKj2slE/j2M9oGkd25DNw==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.2"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.0"
         }
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
-        "resolved": "9.0.2",
-        "contentHash": "MNe7GSTBf3jQx5vYrXF0NZvn6l7hUKF6J54ENfAgCO8y6xjN1XUmKKWG464LP2ye6QqDiA1dkaWEZBYnhoZzjg=="
+        "resolved": "9.0.0",
+        "contentHash": "+6f2qv2a3dLwd5w6JanPIPs47CxRbnk+ZocMJUhv9NxP88VlOcJYZs9jY+MYSjxvady08bUZn6qgiNh7DadGgg=="
       },
       "Microsoft.Extensions.DependencyModel": {
         "type": "Transitive",
@@ -428,13 +447,6 @@
         "type": "Transitive",
         "resolved": "7.0.0",
         "contentHash": "qmeeYNROMsONF6ndEZcIQ+VxR4Q/TX/7uIVLJqtwIWL7dDWeh0l1UIqgo4wYyjG//5lUNhwkLDSFl+pAWO6oiA=="
-      },
-      "ottergui": {
-        "type": "Project",
-        "dependencies": {
-          "JetBrains.Annotations": "[2024.3.0, )",
-          "Microsoft.Extensions.DependencyInjection": "[9.0.2, )"
-        }
       }
     },
     "net9.0-windows7.0/win-x64": {
