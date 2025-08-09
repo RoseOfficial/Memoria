@@ -95,7 +95,7 @@ namespace AlphaScope.API.Client
             {
                 throw new InvalidOperationException($"Cannot get value from failed result: {Error}", Exception);
             }
-            return Value;
+            return Value!;
         }
 
         /// <summary>
