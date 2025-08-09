@@ -161,9 +161,9 @@ public class QueryObjectTests
         var query = new PlayerQueryObject();
 
         // Act
-        query.F_WorldIds.Add(65); // Malboro
-        query.F_WorldIds.Add(66); // Hyperion
-        query.F_WorldIds.AddRange(new short[] { 67, 68, 69 });
+        query.F_WorldIds!.Add(65); // Malboro
+        query.F_WorldIds!.Add(66); // Hyperion
+        query.F_WorldIds!.AddRange(new short[] { 67, 68, 69 });
 
         // Assert
         query.F_WorldIds.Should().HaveCount(5);
@@ -177,7 +177,7 @@ public class QueryObjectTests
         var query = new PlayerQueryObject();
 
         // Act
-        query.F_WorldIds.Clear();
+        query.F_WorldIds!.Clear();
 
         // Assert
         query.F_WorldIds.Should().BeEmpty();
@@ -209,7 +209,7 @@ public class QueryObjectTests
             Name = "TestPlayer",
             Cursor = 10,
             IsFetching = true,
-            F_WorldIds = { 65, 66, 67 },
+            F_WorldIds = new List<short> { 65, 66, 67 },
             F_MatchAnyPartOfName = true
         };
 

@@ -21,17 +21,17 @@ namespace AlphaScope.API.Client
         /// <summary>
         /// Gets the success value (only valid when IsSuccess is true)
         /// </summary>
-        public T Value { get; }
+        public T? Value { get; }
 
         /// <summary>
         /// Gets the error message (only valid when IsSuccess is false)  
         /// </summary>
-        public string Error { get; }
+        public string? Error { get; }
 
         /// <summary>
         /// Gets the exception that caused the failure (optional)
         /// </summary>
-        public Exception Exception { get; }
+        public Exception? Exception { get; }
 
         private Result(T value)
         {
@@ -41,7 +41,7 @@ namespace AlphaScope.API.Client
             Exception = null;
         }
 
-        private Result(string error, Exception exception = null)
+        private Result(string error, Exception? exception = null)
         {
             IsSuccess = false;
             Value = default(T);
@@ -69,7 +69,7 @@ namespace AlphaScope.API.Client
         /// <param name="error">The error message</param>
         /// <param name="exception">The exception that caused the failure</param>
         /// <returns>A failed result</returns>
-        public static Result<T> Failure(string error, Exception exception) => new Result<T>(error, exception);
+        public static Result<T> Failure(string error, Exception? exception) => new Result<T>(error, exception);
 
         /// <summary>
         /// Creates a failed result from an exception
@@ -103,7 +103,7 @@ namespace AlphaScope.API.Client
         /// </summary>
         /// <param name="defaultValue">The default value to return on failure</param>
         /// <returns>The success value or the default value</returns>
-        public T GetValueOrDefault(T defaultValue = default(T))
+        public T? GetValueOrDefault(T? defaultValue = default(T))
         {
             return IsSuccess ? Value : defaultValue;
         }
@@ -127,14 +127,14 @@ namespace AlphaScope.API.Client
         /// <summary>
         /// Gets the error message (only valid when IsSuccess is false)
         /// </summary>
-        public string Error { get; }
+        public string? Error { get; }
 
         /// <summary>
         /// Gets the exception that caused the failure (optional)
         /// </summary>
-        public Exception Exception { get; }
+        public Exception? Exception { get; }
 
-        private Result(bool isSuccess, string error = null, Exception exception = null)
+        private Result(bool isSuccess, string? error = null, Exception? exception = null)
         {
             IsSuccess = isSuccess;
             Error = error;
@@ -160,7 +160,7 @@ namespace AlphaScope.API.Client
         /// <param name="error">The error message</param>
         /// <param name="exception">The exception that caused the failure</param>
         /// <returns>A failed result</returns>
-        public static Result Failure(string error, Exception exception) => new Result(false, error, exception);
+        public static Result Failure(string error, Exception? exception) => new Result(false, error, exception);
 
         /// <summary>
         /// Creates a failed result from an exception

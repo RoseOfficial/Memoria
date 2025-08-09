@@ -119,6 +119,7 @@ namespace AlphaScope.API.Extensions
                 var options = serviceProvider.GetService<IOptions<ApiClientOptions>>();
                 var config = serviceProvider.GetRequiredService<Configuration>();
                 
+                // Handle potential null options gracefully - constructor accepts null
                 return new ApiClient(logger, options, config);
             });
 
@@ -304,6 +305,7 @@ namespace AlphaScope.API.Extensions
                 var options = serviceProvider.GetService<IOptions<ApiClientOptions>>();
                 var config = serviceProvider.GetRequiredService<Configuration>();
                 
+                // Handle potential null options gracefully - constructor accepts null
                 return new ApiClient(logger, options, config);
             });
 

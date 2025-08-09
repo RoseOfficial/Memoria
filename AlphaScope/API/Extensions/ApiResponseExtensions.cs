@@ -38,12 +38,12 @@ namespace AlphaScope.API.Extensions
 
             if (result.IsSuccess)
             {
-                return ApiResponse<T>.Ok(result.Value, statusCode ?? 200);
+                return ApiResponse<T>.Ok(result.Value!, statusCode ?? 200);
             }
             else
             {
                 return ApiResponse<T>.Fail(
-                    result.Error, 
+                    result.Error ?? "Operation failed", 
                     statusCode ?? 400, 
                     result.Exception?.ToString());
             }
@@ -73,7 +73,7 @@ namespace AlphaScope.API.Extensions
 
             if (result.IsSuccess)
             {
-                onSuccess(result.Value);
+                onSuccess(result.Value!);
             }
 
             return result;
@@ -103,7 +103,7 @@ namespace AlphaScope.API.Extensions
 
             if (result.IsFailure)
             {
-                onFailure(result.Error);
+                onFailure(result.Error ?? "Unknown error");
             }
 
             return result;
@@ -139,7 +139,7 @@ namespace AlphaScope.API.Extensions
             {
                 try
                 {
-                    var transformedValue = transform(result.Value);
+                    var transformedValue = transform(result.Value!);
                     return Result<TResult>.Success(transformedValue);
                 }
                 catch (Exception ex)
@@ -148,7 +148,7 @@ namespace AlphaScope.API.Extensions
                 }
             }
 
-            return Result<TResult>.Failure(result.Error, result.Exception);
+            return Result<TResult>.Failure(result.Error ?? "Unknown error", result.Exception);
         }
 
         /// <summary>
@@ -181,7 +181,7 @@ namespace AlphaScope.API.Extensions
             {
                 try
                 {
-                    return next(result.Value);
+                    return next(result.Value!);
                 }
                 catch (Exception ex)
                 {
@@ -189,7 +189,7 @@ namespace AlphaScope.API.Extensions
                 }
             }
 
-            return Result<TResult>.Failure(result.Error, result.Exception);
+            return Result<TResult>.Failure(result.Error ?? "Unknown error", result.Exception);
         }
 
         /// <summary>
@@ -221,7 +221,7 @@ namespace AlphaScope.API.Extensions
             {
                 try
                 {
-                    return await next(result.Value);
+                    return await next(result.Value!);
                 }
                 catch (Exception ex)
                 {
@@ -229,7 +229,7 @@ namespace AlphaScope.API.Extensions
                 }
             }
 
-            return Result<TResult>.Failure(result.Error, result.Exception);
+            return Result<TResult>.Failure(result.Error ?? "Unknown error", result.Exception);
         }
 
         // ========== ApiResponse<T> Extensions ==========
@@ -347,7 +347,7 @@ namespace AlphaScope.API.Extensions
         ///     : new List&lt;PlayerDto&gt;();
         /// </code>
         /// </example>
-        public static T GetDataOrDefault<T>(this ApiResponse<T> apiResponse, T fallbackValue = default(T))
+        public static T? GetDataOrDefault<T>(this ApiResponse<T> apiResponse, T? fallbackValue = default(T))
         {
             if (apiResponse == null)
                 throw new ArgumentNullException(nameof(apiResponse));
@@ -386,7 +386,7 @@ namespace AlphaScope.API.Extensions
             {
                 try
                 {
-                    var transformedData = transform(apiResponse.Data);
+                    var transformedData = transform(apiResponse.Data!);
                     return ApiResponse<TResult>.Ok(transformedData, apiResponse.StatusCode);
                 }
                 catch (Exception ex)
@@ -439,7 +439,7 @@ namespace AlphaScope.API.Extensions
 
             try
             {
-                if (validator(apiResponse.Data))
+                if (validator(apiResponse.Data!))
                 {
                     return apiResponse;
                 }

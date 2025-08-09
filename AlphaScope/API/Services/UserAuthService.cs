@@ -417,16 +417,16 @@ namespace AlphaScope.API.Services
         /// <summary>
         /// Cancels any in-progress authentication operation
         /// </summary>
-        public async Task<ApiResponse> CancelAuthenticationAsync(CancellationToken cancellationToken = default)
+        public Task<ApiResponse> CancelAuthenticationAsync(CancellationToken cancellationToken = default)
         {
             try
             {
                 IsLoggingIn = false;
-                return ApiResponse.Ok();
+                return Task.FromResult(ApiResponse.Ok());
             }
             catch (Exception ex)
             {
-                return HandleCommonException(ex, "cancelling authentication");
+                return Task.FromResult(HandleCommonException(ex, "cancelling authentication"));
             }
         }
 

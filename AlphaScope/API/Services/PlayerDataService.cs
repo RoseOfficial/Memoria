@@ -58,7 +58,7 @@ namespace AlphaScope.API.Services
                 var worldIds = query.F_WorldIds != null && query.F_WorldIds.Any() 
                     ? string.Join(",", query.F_WorldIds) 
                     : string.Empty;
-                var cacheKey = ApiCacheService.GeneratePlayerSearchCacheKey(query.Name, query.Cursor, worldIds);
+                var cacheKey = ApiCacheService.GeneratePlayerSearchCacheKey(query.Name ?? string.Empty, query.Cursor, worldIds);
                 
                 // Try to get from cache first if caching is available
                 if (_cacheService != null)

@@ -45,7 +45,16 @@ internal sealed unsafe class CWLSHandler : IDisposable
 
     private void PostRequestedUpdate(AddonEvent type, AddonArgs args)
     {
-        CWLSOnUpdate((AgentCrossWorldLinkshell*)args.Addon);
+        // Get the agent directly from the AgentModule using the correct agent type
+        var agentModule = AgentModule.Instance();
+        if (agentModule != null)
+        {
+            var agent = agentModule->GetAgentCrossWorldLinkshell();
+            if (agent != null)
+            {
+                CWLSOnUpdate(agent);
+            }
+        }
     }
 
     private void CWLSOnUpdate(AgentCrossWorldLinkshell* addon)

@@ -43,7 +43,7 @@ namespace AlphaScope.API
         /// Legacy constructor for backward compatibility (especially tests).
         /// </summary>
         /// <param name="logger">Logger instance for API operations</param>
-        public ApiClient(ILogger<ApiClient> logger) : this(logger, null, null)
+        public ApiClient(ILogger<ApiClient> logger) : this(logger, (IOptions<ApiClientOptions>?)null, (Configuration?)null)
         {
         }
 
@@ -55,8 +55,8 @@ namespace AlphaScope.API
         /// <param name="config">Legacy configuration for backward compatibility</param>
         public ApiClient(
             ILogger<ApiClient> logger,
-            IOptions<ApiClientOptions> options = null,
-            Configuration config = null)
+            IOptions<ApiClientOptions>? options = null,
+            Configuration? config = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _options = options?.Value ?? CreateDefaultOptions();

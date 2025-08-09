@@ -2,41 +2,31 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Components;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
-using OtterGui.Table;
 using AlphaScope.GUI.Modern.Base;
 using AlphaScope.Handlers;
 
 namespace AlphaScope.GUI.Modern.Components;
 
 /// <summary>
-/// Advanced table component for displaying player data using OtterGui Table functionality.
-/// Features sorting, filtering, column customization, and modern table design.
+/// Advanced table component for displaying player data using direct ImGui table functionality.
+/// Features sorting, filtering, and modern table design.
 /// </summary>
 public class AdvancedPlayerTable : BaseComponent
 {
-    private readonly Table<PlayerTableEntry> _table;
     private readonly List<PlayerTableEntry> _entries = new();
     private readonly List<PlayerTableEntry> _filteredEntries = new();
     private string _filterText = "";
     private bool _showFavoritesOnly = false;
+    private int _sortColumn = 0;
+    private ImGuiSortDirection _sortDirection = ImGuiSortDirection.Ascending;
 
     public AdvancedPlayerTable(string id) : base(id)
     {
-        _table = new Table<PlayerTableEntry>($"PlayerTable_{id}", _filteredEntries,
-            new NameColumn(),
-            new ContentIdColumn(), 
-            new AccountIdColumn(),
-            new LastSeenColumn(),
-            new ActionsColumn())
-        {
-            Flags = ImGuiTableFlags.Sortable | ImGuiTableFlags.Reorderable | ImGuiTableFlags.Hideable |
-                   ImGuiTableFlags.BordersInner | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable
-        };
     }
 
     protected override void OnRender()
@@ -48,7 +38,7 @@ public class AdvancedPlayerTable : BaseComponent
         DrawFilterControls();
         
         // Table
-        _table.Draw(ImGui.GetContentRegionAvail().Y - ImGuiHelpers.ScaledVector2(0f, 50f).Y);
+        DrawTable();
         
         // Table info
         DrawTableInfo();
@@ -138,6 +128,211 @@ public class AdvancedPlayerTable : BaseComponent
         }
         
         _filteredEntries.AddRange(filtered);
+        
+        // Apply sorting
+        ApplySorting();
+    }
+    
+    private void ApplySorting()
+    {
+        if (_filteredEntries.Count == 0) return;
+        
+        _filteredEntries.Sort((a, b) =>
+        {
+            int result = 0;
+            switch (_sortColumn)
+            {
+                case 0: // Name
+                    result = string.Compare(a.Player.Name, b.Player.Name, StringComparison.OrdinalIgnoreCase);
+                    break;
+                case 1: // Content ID
+                    result = a.ContentId.CompareTo(b.ContentId);
+                    break;
+                case 2: // Account ID
+                    result = (a.Player.AccountId ?? 0).CompareTo(b.Player.AccountId ?? 0);
+                    break;
+                case 3: // Last Seen
+                    result = DateTime.Compare(a.LastSeen, b.LastSeen);
+                    break;
+            }
+            
+            return _sortDirection == ImGuiSortDirection.Descending ? -result : result;
+        });
+    }
+
+    private void DrawTable()
+    {
+        var availableHeight = ImGui.GetContentRegionAvail().Y - ImGuiHelpers.ScaledVector2(0f, 50f).Y;
+        
+        if (ImGui.BeginTable($"PlayerTable_{Id}", 5, 
+            ImGuiTableFlags.Sortable | ImGuiTableFlags.BordersInner | ImGuiTableFlags.RowBg | 
+            ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollY, new Vector2(0, availableHeight)))
+        {
+            // Setup columns
+            ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.DefaultSort);
+            ImGui.TableSetupColumn("Content ID");
+            ImGui.TableSetupColumn("Account ID");
+            ImGui.TableSetupColumn("Last Seen");
+            ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed);
+            ImGui.TableSetupScrollFreeze(0, 1);
+            ImGui.TableHeadersRow();
+            
+            // Handle sorting
+            var sortSpecs = ImGui.TableGetSortSpecs();
+            if (sortSpecs.SpecsDirty)
+            {
+                if (sortSpecs.SpecsCount > 0)
+                {
+                    _sortColumn = sortSpecs.Specs.ColumnIndex;
+                    _sortDirection = sortSpecs.Specs.SortDirection;
+                    ApplySorting();
+                }
+                sortSpecs.SpecsDirty = false;
+            }
+            
+            // Draw rows
+            for (int i = 0; i < _filteredEntries.Count; i++)
+            {
+                var entry = _filteredEntries[i];
+                ImGui.TableNextRow();
+                
+                // Name column
+                ImGui.TableSetColumnIndex(0);
+                ImGui.Text(entry.Player.Name);
+                
+                // Content ID column
+                ImGui.TableSetColumnIndex(1);
+                ImGui.Text(entry.ContentId.ToString());
+                
+                // Account ID column
+                ImGui.TableSetColumnIndex(2);
+                ImGui.Text(entry.Player.AccountId?.ToString() ?? "Unknown");
+                
+                // Last Seen column
+                ImGui.TableSetColumnIndex(3);
+                DrawLastSeenCell(entry);
+                
+                // Actions column
+                ImGui.TableSetColumnIndex(4);
+                DrawActionsCell(entry);
+            }
+            
+            ImGui.EndTable();
+        }
+    }
+    
+    private void DrawLastSeenCell(PlayerTableEntry entry)
+    {
+        if (entry.LastSeen == DateTime.MinValue)
+        {
+            using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+            {
+                ImGui.Text("Never");
+            }
+        }
+        else
+        {
+            var timeAgo = DateTime.Now - entry.LastSeen;
+            var timeText = FormatTimeAgo(timeAgo);
+            ImGui.Text(timeText);
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(entry.LastSeen.ToString("yyyy-MM-dd HH:mm:ss"));
+            }
+        }
+    }
+    
+    private void DrawActionsCell(PlayerTableEntry entry)
+    {
+        // Favorite button
+        var heartIcon = entry.IsFavorited ? FontAwesomeIcon.Heart : FontAwesomeIcon.Heart;
+        var heartColor = entry.IsFavorited ? ThemeManager.Colors.Error : ThemeManager.Colors.TextMuted;
+        
+        using (var color = ThemeManager.PushColor(ImGuiCol.Text, heartColor))
+        {
+            if (ImGuiComponents.IconButton($"fav_{entry.ContentId}", heartIcon))
+            {
+                ToggleFavorite(entry);
+            }
+        }
+        
+        ImGui.SameLine();
+        
+        // Details button
+        if (ImGuiComponents.IconButton($"details_{entry.ContentId}", FontAwesomeIcon.InfoCircle))
+        {
+            OpenDetailsWindow(entry.ContentId);
+        }
+    }
+    
+    private static string FormatTimeAgo(TimeSpan timeAgo)
+    {
+        if (timeAgo.TotalMinutes < 1) return "Just now";
+        if (timeAgo.TotalHours < 1) return $"{(int)timeAgo.TotalMinutes}m ago";
+        if (timeAgo.TotalDays < 1) return $"{(int)timeAgo.TotalHours}h ago";
+        return $"{(int)timeAgo.TotalDays}d ago";
+    }
+    
+    private static void ToggleFavorite(PlayerTableEntry entry)
+    {
+        var config = Plugin.Instance.Configuration;
+        var longContentId = (long)entry.ContentId;
+        
+        if (entry.IsFavorited)
+        {
+            config.FavoritedPlayer.TryRemove(longContentId, out _);
+            entry.IsFavorited = false;
+        }
+        else
+        {
+            var favoriteData = new Configuration.CachedFavoritedPlayer
+            {
+                Name = entry.Player.Name,
+                AccountId = entry.Player.AccountId ?? 0,
+                Note = ""
+            };
+            config.FavoritedPlayer[longContentId] = favoriteData;
+            entry.IsFavorited = true;
+        }
+        
+        config.Save();
+    }
+
+    private static void OpenDetailsWindow(ulong contentId)
+    {
+        try
+        {
+            if (PersistenceContext._playerCache.TryGetValue(contentId, out var cachedPlayer))
+            {
+                // Check if window already exists for this content ID
+                var existingWindow = Plugin.Instance.ws.Windows
+                    .OfType<GUI.Modern.Views.PlayerDetailsWindow>()
+                    .FirstOrDefault(w => w.ContentId == contentId);
+                
+                if (existingWindow != null)
+                {
+                    // Reuse existing window
+                    existingWindow.IsOpen = true;
+                    existingWindow.BringToFront();
+                }
+                else
+                {
+                    // Create new window
+                    var detailsWindow = new GUI.Modern.Views.PlayerDetailsWindow(contentId, cachedPlayer);
+                    Plugin.Instance.ws.AddWindow(detailsWindow);
+                    detailsWindow.IsOpen = true;
+                }
+            }
+            else
+            {
+                Plugin.Log.Warning($"Player {contentId} not found in cache for details window");
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error($"Failed to open details window for player {contentId}: {ex}");
+        }
     }
 
     private class PlayerTableEntry
@@ -146,155 +341,5 @@ public class AdvancedPlayerTable : BaseComponent
         public PersistenceContext.CachedPlayer Player { get; set; } = null!;
         public DateTime LastSeen { get; set; }
         public bool IsFavorited { get; set; }
-    }
-
-    // Table column definitions using OtterGui
-    private class NameColumn : ColumnString<PlayerTableEntry>
-    {
-        public NameColumn() : base() { Label = "Name"; Flags = ImGuiTableColumnFlags.DefaultSort; }
-        public override string ToName(PlayerTableEntry item) => item.Player.Name;
-    }
-
-    private class ContentIdColumn : ColumnString<PlayerTableEntry>
-    {
-        public ContentIdColumn() : base() { Label = "Content ID"; Flags = ImGuiTableColumnFlags.None; }
-        public override string ToName(PlayerTableEntry item) => item.ContentId.ToString();
-    }
-
-    private class AccountIdColumn : ColumnString<PlayerTableEntry>
-    {
-        public AccountIdColumn() : base() { Label = "Account ID"; Flags = ImGuiTableColumnFlags.None; }
-        public override string ToName(PlayerTableEntry item) => item.Player.AccountId?.ToString() ?? "Unknown";
-    }
-
-    private class LastSeenColumn : Column<PlayerTableEntry>
-    {
-        public LastSeenColumn() : base() { Label = "Last Seen"; Flags = ImGuiTableColumnFlags.DefaultSort; }
-
-        public override void DrawColumn(PlayerTableEntry item, int idx)
-        {
-            if (item.LastSeen == DateTime.MinValue)
-            {
-                using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
-                {
-                    ImGui.Text("Never");
-                }
-            }
-            else
-            {
-                var timeAgo = DateTime.Now - item.LastSeen;
-                var timeText = FormatTimeAgo(timeAgo);
-                ImGui.Text(timeText);
-                
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.SetTooltip(item.LastSeen.ToString("yyyy-MM-dd HH:mm:ss"));
-                }
-            }
-        }
-
-        public override int Compare(PlayerTableEntry lhs, PlayerTableEntry rhs)
-        {
-            return DateTime.Compare(lhs.LastSeen, rhs.LastSeen);
-        }
-
-        private static string FormatTimeAgo(TimeSpan timeAgo)
-        {
-            if (timeAgo.TotalMinutes < 1) return "Just now";
-            if (timeAgo.TotalHours < 1) return $"{(int)timeAgo.TotalMinutes}m ago";
-            if (timeAgo.TotalDays < 1) return $"{(int)timeAgo.TotalHours}h ago";
-            return $"{(int)timeAgo.TotalDays}d ago";
-        }
-    }
-
-    private class ActionsColumn : Column<PlayerTableEntry>
-    {
-        public ActionsColumn() : base() { Label = "Actions"; Flags = ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed; }
-
-        public override void DrawColumn(PlayerTableEntry item, int idx)
-        {
-            // Favorite button
-            var heartIcon = item.IsFavorited ? FontAwesomeIcon.Heart : FontAwesomeIcon.Heart;
-            var heartColor = item.IsFavorited ? ThemeManager.Colors.Error : ThemeManager.Colors.TextMuted;
-            
-            using (var color = ThemeManager.PushColor(ImGuiCol.Text, heartColor))
-            {
-                if (ImGuiComponents.IconButton($"fav_{item.ContentId}", heartIcon))
-                {
-                    ToggleFavorite(item);
-                }
-            }
-            
-            ImGui.SameLine();
-            
-            // Details button
-            if (ImGuiComponents.IconButton($"details_{item.ContentId}", FontAwesomeIcon.InfoCircle))
-            {
-                OpenDetailsWindow(item.ContentId);
-            }
-        }
-
-        private static void ToggleFavorite(PlayerTableEntry item)
-        {
-            var config = Plugin.Instance.Configuration;
-            var longContentId = (long)item.ContentId;
-            
-            if (item.IsFavorited)
-            {
-                config.FavoritedPlayer.TryRemove(longContentId, out _);
-                item.IsFavorited = false;
-            }
-            else
-            {
-                var favoriteData = new Configuration.CachedFavoritedPlayer
-                {
-                    Name = item.Player.Name,
-                    AccountId = item.Player.AccountId ?? 0,
-                    Note = ""
-                };
-                config.FavoritedPlayer[longContentId] = favoriteData;
-                item.IsFavorited = true;
-            }
-            
-            config.Save();
-        }
-
-        private static void OpenDetailsWindow(ulong contentId)
-        {
-            try
-            {
-                if (PersistenceContext._playerCache.TryGetValue(contentId, out var cachedPlayer))
-                {
-                    // Check if window already exists for this content ID
-                    var existingWindow = Plugin.Instance.ws.Windows
-                        .OfType<GUI.Modern.Views.PlayerDetailsWindow>()
-                        .FirstOrDefault(w => w.ContentId == contentId);
-                    
-                    if (existingWindow != null)
-                    {
-                        // Reuse existing window
-                        existingWindow.IsOpen = true;
-                        existingWindow.BringToFront();
-                    }
-                    else
-                    {
-                        // Create new window
-                        var detailsWindow = new GUI.Modern.Views.PlayerDetailsWindow(contentId, cachedPlayer);
-                        Plugin.Instance.ws.AddWindow(detailsWindow);
-                        detailsWindow.IsOpen = true;
-                    }
-                }
-                else
-                {
-                    Plugin.Log.Warning($"Player {contentId} not found in cache for details window");
-                }
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log.Error($"Failed to open details window for player {contentId}: {ex}");
-            }
-        }
-
-        public override int Compare(PlayerTableEntry lhs, PlayerTableEntry rhs) => 0;
     }
 }

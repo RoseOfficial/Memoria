@@ -4,7 +4,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text.Json;
 using System.Threading.Tasks;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Components;
 using Dalamud.Interface;
@@ -1065,7 +1065,7 @@ public class PlayerDetailsWindow : BaseModernWindow
         if (avatarHandle != 0)
         {
             // Display the actual avatar image
-            ImGui.Image(avatarHandle, avatarSize);
+            ImGui.Image(new ImTextureID(avatarHandle), avatarSize);
         }
         else
         {
@@ -1089,10 +1089,11 @@ public class PlayerDetailsWindow : BaseModernWindow
     private void RenderJobIcon(byte jobId, Vector2 iconSize)
     {
         var jobIcon = Utils.GetJobIcon(jobId);
-        if (jobIcon != null && jobIcon.TryGetWrap(out var wrap, out _))
+        if (jobIcon != null)
         {
+            var wrap = jobIcon.GetWrapOrEmpty();
             // Display the actual job icon
-            ImGui.Image(wrap.ImGuiHandle, iconSize);
+            ImGui.Image(wrap.Handle, iconSize);
         }
         else
         {
@@ -1142,7 +1143,7 @@ public class PlayerDetailsWindow : BaseModernWindow
         {
             // Display the actual minion icon with subtle border
             var cursorPos = ImGui.GetCursorScreenPos();
-            ImGui.Image(iconHandle, iconSize);
+            ImGui.Image(new ImTextureID(iconHandle), iconSize);
             
             // Add subtle border around loaded icons
             var drawList = ImGui.GetWindowDrawList();

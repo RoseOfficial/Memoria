@@ -41,7 +41,7 @@ namespace AlphaScope.API.Security
         {
             var sanitizedMessage = SanitizeMessage(message);
             var sanitizedArgs = SanitizeArgs(args);
-            _logger.LogInformation(sanitizedMessage, sanitizedArgs);
+            _logger.LogInformation(sanitizedMessage, sanitizedArgs ?? Array.Empty<object>());
         }
 
         /// <summary>
@@ -51,7 +51,7 @@ namespace AlphaScope.API.Security
         {
             var sanitizedMessage = SanitizeMessage(message);
             var sanitizedArgs = SanitizeArgs(args);
-            _logger.LogWarning(sanitizedMessage, sanitizedArgs);
+            _logger.LogWarning(sanitizedMessage, sanitizedArgs ?? Array.Empty<object>());
         }
 
         /// <summary>
@@ -62,7 +62,7 @@ namespace AlphaScope.API.Security
             var sanitizedMessage = SanitizeMessage(message);
             var sanitizedArgs = SanitizeArgs(args);
             var sanitizedException = SanitizeException(exception);
-            _logger.LogError(sanitizedException, sanitizedMessage, sanitizedArgs);
+            _logger.LogError(sanitizedException, sanitizedMessage, sanitizedArgs ?? Array.Empty<object>());
         }
 
         /// <summary>
@@ -72,7 +72,7 @@ namespace AlphaScope.API.Security
         {
             var sanitizedMessage = SanitizeMessage(message);
             var sanitizedArgs = SanitizeArgs(args);
-            _logger.LogError(sanitizedMessage, sanitizedArgs);
+            _logger.LogError(sanitizedMessage, sanitizedArgs ?? Array.Empty<object>());
         }
 
         /// <summary>
@@ -82,7 +82,7 @@ namespace AlphaScope.API.Security
         {
             var sanitizedMessage = SanitizeMessage(message);
             var sanitizedArgs = SanitizeArgs(args);
-            _logger.LogDebug(sanitizedMessage, sanitizedArgs);
+            _logger.LogDebug(sanitizedMessage, sanitizedArgs ?? Array.Empty<object>());
         }
 
         /// <summary>
@@ -92,7 +92,7 @@ namespace AlphaScope.API.Security
         {
             var sanitizedMessage = SanitizeMessage(message);
             var sanitizedArgs = SanitizeArgs(args);
-            _logger.LogTrace(sanitizedMessage, sanitizedArgs);
+            _logger.LogTrace(sanitizedMessage, sanitizedArgs ?? Array.Empty<object>());
         }
 
         /// <summary>
@@ -103,7 +103,7 @@ namespace AlphaScope.API.Security
             var sanitizedMessage = SanitizeMessage(message);
             var sanitizedArgs = SanitizeArgs(args);
             var sanitizedException = SanitizeException(exception);
-            _logger.LogCritical(sanitizedException, sanitizedMessage, sanitizedArgs);
+            _logger.LogCritical(sanitizedException, sanitizedMessage, sanitizedArgs ?? Array.Empty<object>());
         }
 
         /// <summary>
@@ -134,7 +134,7 @@ namespace AlphaScope.API.Security
         /// <summary>
         /// Sanitizes arguments by replacing sensitive values.
         /// </summary>
-        private static object[] SanitizeArgs(object[] args)
+        private static object[]? SanitizeArgs(object[]? args)
         {
             if (args == null || args.Length == 0)
                 return args;
@@ -142,7 +142,7 @@ namespace AlphaScope.API.Security
             var sanitizedArgs = new object[args.Length];
             for (int i = 0; i < args.Length; i++)
             {
-                sanitizedArgs[i] = SanitizeObject(args[i]);
+                sanitizedArgs[i] = SanitizeObject(args[i]) ?? "[NULL]";
             }
 
             return sanitizedArgs;
@@ -151,7 +151,7 @@ namespace AlphaScope.API.Security
         /// <summary>
         /// Sanitizes an object by checking for sensitive data patterns.
         /// </summary>
-        private static object SanitizeObject(object obj)
+        private static object? SanitizeObject(object? obj)
         {
             if (obj == null)
                 return obj;
@@ -198,7 +198,7 @@ namespace AlphaScope.API.Security
                 }
                 else
                 {
-                    sanitized[key] = SanitizeObject(value);
+                    sanitized[key] = SanitizeObject(value) ?? "[NULL]";
                 }
             }
 
@@ -286,7 +286,7 @@ namespace AlphaScope.API.Security
             else
             {
                 LogWarning("API Request Failed: {Method} {Endpoint} - Status: {StatusCode} - Error: {Error}",
-                    method, sanitizedEndpoint, statusCode, sanitizedError);
+                    method, sanitizedEndpoint, statusCode, sanitizedError ?? "Unknown error");
             }
         }
 
@@ -305,7 +305,7 @@ namespace AlphaScope.API.Security
             else
             {
                 LogInformation("Configuration Changed: {ConfigKey} - Old: {OldValue} - New: {NewValue} - User: {UserId}",
-                    configKey, oldValue, newValue, obfuscatedUserId);
+                    configKey, oldValue ?? "[NULL]", newValue ?? "[NULL]", obfuscatedUserId);
             }
         }
     }

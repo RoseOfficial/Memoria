@@ -1,4 +1,6 @@
 using Dalamud.Interface.Textures.TextureWraps;
+using Dalamud.Interface.Textures;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
@@ -47,8 +49,12 @@ namespace AlphaScope.Handlers
         {
             if (_minionCache != null && _minionCache.TryGetValue(iconUrl, out var cachedEntry))
             {
-                if (DateTime.UtcNow < cachedEntry.Expiration)
-                    return cachedEntry.TextureHandle;
+                if (DateTime.UtcNow < cachedEntry.Expiration && cachedEntry.Texture != null)
+                {
+                    // Extract nint from ImTextureID using MemoryMarshal
+                    var handle = cachedEntry.Texture.Handle;
+                    return MemoryMarshal.Cast<Dalamud.Bindings.ImGui.ImTextureID, nint>(MemoryMarshal.CreateSpan(ref handle, 1))[0];
+                }
 
                 cachedEntry.Texture?.Dispose();
                 _minionCache.TryRemove(iconUrl, out _);
@@ -75,7 +81,7 @@ namespace AlphaScope.Handlers
                             var newEntry = new MinionCacheEntry
                             {
                                 Texture = texture,
-                                TextureHandle = texture.ImGuiHandle,
+                                TextureHandle = 0, // Will be computed at render time
                                 Expiration = expiration
                             };
 

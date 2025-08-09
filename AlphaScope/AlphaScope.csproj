@@ -1,4 +1,4 @@
-﻿<Project Sdk="Dalamud.NET.Sdk/12.0.2">
+﻿<Project Sdk="Dalamud.NET.Sdk/13.0.0">
     <PropertyGroup>
         <Version>1.0.5.7</Version>
         <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -37,9 +37,6 @@
         <PackageReference Include="RestSharp.Serializers.NewtonsoftJson" Version="112.1.0" />
     </ItemGroup>
     
-    <ItemGroup>
-        <ProjectReference Include="..\OtterGui\OtterGui.csproj" />
-    </ItemGroup>
     
     <ItemGroup>
         <Reference Include="InteropGenerator.Runtime">
@@ -48,28 +45,17 @@
         </Reference>
     </ItemGroup>
     
-    <ItemGroup>
-      <Compile Update="Properties\Loc.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>Loc.resx</DependentUpon>
-      </Compile>
-    </ItemGroup>
     
     <ItemGroup>
       <EmbeddedResource Update="Properties\Loc.resx">
         <Generator>ResXFileCodeGenerator</Generator>
         <LastGenOutput>Loc.Designer.cs</LastGenOutput>
-        <StronglyTypedFileName>Properties\Loc.Designer.cs</StronglyTypedFileName>
-        <StronglyTypedLanguage>CSharp</StronglyTypedLanguage>
-        <StronglyTypedNamespace>AlphaScope.Properties</StronglyTypedNamespace>
-        <StronglyTypedClassName>Loc</StronglyTypedClassName>
       </EmbeddedResource>
     </ItemGroup>
 	
     
     <ItemGroup>
-      <PackageReference Update="DalamudPackager" Version="12.0.0" />
+      <PackageReference Update="DalamudPackager" Version="13.0.0" />
       <PackageReference Update="DotNet.ReproducibleBuilds" Version="1.2.25" />
     </ItemGroup>
 </Project>

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Components;
 using Dalamud.Interface;
@@ -365,7 +365,7 @@ public class PlayerCard : BaseComponent
         if (avatarHandle != 0)
         {
             // Display the actual avatar image
-            ImGui.Image(avatarHandle, avatarSize);
+            ImGui.Image(new ImTextureID(avatarHandle), avatarSize);
         }
         else
         {

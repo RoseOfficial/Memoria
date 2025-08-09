@@ -8,7 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using Dalamud.Interface.Utility;
-using ImGuiNET;
+using Dalamud.Bindings.ImGui;
 using FFXIVClientStructs.FFXIV.Common.Math;
 using AlphaScope.Handlers;
 using FFXIVClientStructs.FFXIV.Common.Lua;

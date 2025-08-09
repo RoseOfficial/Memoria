@@ -735,7 +735,7 @@ namespace AlphaScope.API.Services.Cache
             return options;
         }
 
-        private void OnCacheItemEvicted(object key, object value, EvictionReason reason, object state)
+        private void OnCacheItemEvicted(object key, object? value, EvictionReason reason, object? state)
         {
             if (key is string keyString)
             {
