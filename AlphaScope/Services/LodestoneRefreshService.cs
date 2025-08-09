@@ -36,6 +36,7 @@ internal sealed class LodestoneRefreshService : IDisposable
     private readonly ILogger<LodestoneRefreshService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly Configuration _configuration;
+    private readonly MinionDataService _minionDataService;
     private LodestoneClient? _lodestoneClient;
     
     /// <summary>
@@ -68,13 +69,15 @@ internal sealed class LodestoneRefreshService : IDisposable
     /// </summary>
     private Configuration Config => _configuration;
 
-    public LodestoneRefreshService(ILogger<LodestoneRefreshService> logger, IServiceProvider serviceProvider, Configuration configuration)
+    public LodestoneRefreshService(ILogger<LodestoneRefreshService> logger, IServiceProvider serviceProvider, Configuration configuration, MinionDataService minionDataService)
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _configuration = configuration;
+        _minionDataService = minionDataService;
         
         _logger.LogInformation("LodestoneRefreshService initialized - NetStone client will be created on first use");
+        _logger.LogInformation("MinionDataService initialized with {MinionCount} minions mapped", _minionDataService.MinionCount);
     }
     
     /// <summary>
@@ -708,13 +711,18 @@ internal sealed class LodestoneRefreshService : IDisposable
                                     }
                                 }
                                 
-                                // If we don't have a minion ID, try to look it up by name
+                                // If we don't have a minion ID, try to look it up by name using comprehensive service
                                 if (!minionId.HasValue && !string.IsNullOrEmpty(name))
                                 {
-                                    if (MinionNameToId.TryGetValue(name, out var mappedId))
+                                    var mappedId = _minionDataService.GetMinionId(name);
+                                    if (mappedId.HasValue)
                                     {
-                                        minionId = mappedId;
-                                        _logger.LogDebug($"Found minion ID {minionId} for {name} using name mapping");
+                                        minionId = (int)mappedId.Value;
+                                        _logger.LogDebug($"Found minion ID {minionId} for {name} using MinionDataService");
+                                    }
+                                    else
+                                    {
+                                        _logger.LogDebug($"No minion ID found for '{name}' in MinionDataService - this minion may not be available in game data");
                                     }
                                 }
                                 
@@ -789,36 +797,6 @@ internal sealed class LodestoneRefreshService : IDisposable
         return $"https://xivapi.com/i/{folder:D6}/{iconId:D6}.png";
     }
     
-    /// <summary>
-    /// Dictionary mapping common minion names to their IDs for fallback icon resolution
-    /// This is a subset - can be expanded as needed
-    /// </summary>
-    private static readonly Dictionary<string, int> MinionNameToId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-    {
-        // Starter minions
-        {"Wind-up Airship", 1},
-        {"Cactuar Cutting", 2},
-        {"Mammet #001", 3},
-        {"Buffalo Calf", 4},
-        {"Infant Imp", 5},
-        {"Wayward Hatchling", 6},
-        {"Chigoe Larva", 7},
-        {"Coeurl Kitten", 8},
-        {"Goobbue Sproutling", 9},
-        {"Wolf Pup", 10},
-        // Popular minions (can be expanded)
-        {"Fat Cat", 45},
-        {"Black Coeurl", 47},
-        {"Minion of Light", 49},
-        {"Wind-up Cursor", 50},
-        {"Wind-up Moogle", 52},
-        {"Baby Behemoth", 54},
-        {"Baby Bun", 56},
-        {"Midgardsormr", 67},
-        {"Wind-up Alphinaud", 78},
-        {"Wind-up Alisaie", 115},
-        // Add more as needed
-    };
 
     /// <summary>
     /// Validates if a job ID is within valid FFXIV range

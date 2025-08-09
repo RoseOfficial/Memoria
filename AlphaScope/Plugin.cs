@@ -223,6 +223,7 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton<CWLSHandler>();                  // Handles Cross-World Linkshell data
         serviceCollection.AddSingleton<ObjectTableHandler>();           // Scans nearby players and objects
         serviceCollection.AddSingleton<GameHooks>();                    // Low-level game event hooks
+        serviceCollection.AddSingleton<MinionDataService>();            // Comprehensive minion name-to-ID mapping service
         serviceCollection.AddSingleton<LodestoneRefreshService>();       // Background Lodestone data refresh service
         
         // Migrate configuration to newer versions
