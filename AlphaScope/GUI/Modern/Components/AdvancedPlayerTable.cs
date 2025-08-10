@@ -117,8 +117,7 @@ public class AdvancedPlayerTable : BaseComponent
             var lowerFilter = _filterText.ToLower();
             filtered = filtered.Where(e => 
                 e.Player.Name.ToLower().Contains(lowerFilter) ||
-                e.ContentId.ToString().Contains(lowerFilter) ||
-                e.Player.AccountId?.ToString().Contains(lowerFilter) == true);
+                (e.Player.HomeWorldId.HasValue && Utils.GetWorldName(e.Player.HomeWorldId.Value).ToLower().Contains(lowerFilter)));
         }
         
         // Apply favorites filter
@@ -145,13 +144,12 @@ public class AdvancedPlayerTable : BaseComponent
                 case 0: // Name
                     result = string.Compare(a.Player.Name, b.Player.Name, StringComparison.OrdinalIgnoreCase);
                     break;
-                case 1: // Content ID
-                    result = a.ContentId.CompareTo(b.ContentId);
+                case 1: // Home World
+                    var worldNameA = a.Player.HomeWorldId.HasValue ? Utils.GetWorldName(a.Player.HomeWorldId.Value) : "Unknown";
+                    var worldNameB = b.Player.HomeWorldId.HasValue ? Utils.GetWorldName(b.Player.HomeWorldId.Value) : "Unknown";
+                    result = string.Compare(worldNameA, worldNameB, StringComparison.OrdinalIgnoreCase);
                     break;
-                case 2: // Account ID
-                    result = (a.Player.AccountId ?? 0).CompareTo(b.Player.AccountId ?? 0);
-                    break;
-                case 3: // Last Seen
+                case 2: // Last Seen
                     result = DateTime.Compare(a.LastSeen, b.LastSeen);
                     break;
             }
@@ -164,14 +162,13 @@ public class AdvancedPlayerTable : BaseComponent
     {
         var availableHeight = ImGui.GetContentRegionAvail().Y - ImGuiHelpers.ScaledVector2(0f, 50f).Y;
         
-        if (ImGui.BeginTable($"PlayerTable_{Id}", 5, 
+        if (ImGui.BeginTable($"PlayerTable_{Id}", 4, 
             ImGuiTableFlags.Sortable | ImGuiTableFlags.BordersInner | ImGuiTableFlags.RowBg | 
             ImGuiTableFlags.Resizable | ImGuiTableFlags.ScrollY, new Vector2(0, availableHeight)))
         {
             // Setup columns
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.DefaultSort);
-            ImGui.TableSetupColumn("Content ID");
-            ImGui.TableSetupColumn("Account ID");
+            ImGui.TableSetupColumn("Home World");
             ImGui.TableSetupColumn("Last Seen");
             ImGui.TableSetupColumn("Actions", ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed);
             ImGui.TableSetupScrollFreeze(0, 1);
@@ -200,20 +197,26 @@ public class AdvancedPlayerTable : BaseComponent
                 ImGui.TableSetColumnIndex(0);
                 ImGui.Text(entry.Player.Name);
                 
-                // Content ID column
+                // Home World column
                 ImGui.TableSetColumnIndex(1);
-                ImGui.Text(entry.ContentId.ToString());
-                
-                // Account ID column
-                ImGui.TableSetColumnIndex(2);
-                ImGui.Text(entry.Player.AccountId?.ToString() ?? "Unknown");
+                if (entry.Player.HomeWorldId.HasValue)
+                {
+                    ImGui.Text(Utils.GetWorldName(entry.Player.HomeWorldId.Value));
+                }
+                else
+                {
+                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+                    {
+                        ImGui.Text("Unknown");
+                    }
+                }
                 
                 // Last Seen column
-                ImGui.TableSetColumnIndex(3);
+                ImGui.TableSetColumnIndex(2);
                 DrawLastSeenCell(entry);
                 
                 // Actions column
-                ImGui.TableSetColumnIndex(4);
+                ImGui.TableSetColumnIndex(3);
                 DrawActionsCell(entry);
             }
             

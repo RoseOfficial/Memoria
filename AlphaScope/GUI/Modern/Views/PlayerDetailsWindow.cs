@@ -135,19 +135,11 @@ public class PlayerDetailsWindow : BaseModernWindow
             ImGui.Text(_cachedPlayer.Name);
         }
         
-        // Content ID
-        using (var idColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+        // Home World
+        using (var worldColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
         {
-            ImGui.Text($"Content ID: {_contentId}");
-        }
-        
-        // Account ID if available
-        if (_cachedPlayer.AccountId.HasValue)
-        {
-            using (var accountColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
-            {
-                ImGui.Text($"Account ID: {_cachedPlayer.AccountId.Value}");
-            }
+            var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
+            ImGui.Text($"Home World: {homeWorldName}");
         }
         
         // Last seen info with colored indicator
@@ -222,18 +214,6 @@ public class PlayerDetailsWindow : BaseModernWindow
         if (ImGui.CollapsingHeader("Basic Information", ImGuiTreeNodeFlags.DefaultOpen))
         {
             DrawInfoRow("Name", _cachedPlayer.Name);
-            DrawInfoRow("Content ID", _contentId.ToString());
-            
-            if (_cachedPlayer.AccountId.HasValue)
-            {
-                DrawInfoRow("Account ID", _cachedPlayer.AccountId.Value.ToString());
-            }
-            else
-            {
-                DrawInfoRow("Account ID", "Unknown");
-            }
-            
-            DrawInfoRow("Status", _isFavorited ? "Favorited" : "Standard");
             
             // World information - always show separate fields
             var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
@@ -243,6 +223,7 @@ public class PlayerDetailsWindow : BaseModernWindow
             DrawInfoRow("Current World", currentWorldName);
             
             DrawInfoRow("Last Seen", GetLastSeenText());
+            DrawInfoRow("Status", _isFavorited ? "Favorited" : "Standard");
             DrawInfoRow("Last Scanned", GetLastScannedText());
             
             // Main job information from Lodestone
@@ -263,29 +244,22 @@ public class PlayerDetailsWindow : BaseModernWindow
         // Quick Actions
         if (ImGui.CollapsingHeader("Quick Actions", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            if (ImGui.Button("Copy Content ID"))
+            if (ImGui.Button("Copy Player Name"))
             {
-                ImGui.SetClipboardText(_contentId.ToString());
-                ShowNotification("Content ID copied to clipboard!");
+                ImGui.SetClipboardText(_cachedPlayer.Name);
+                ShowNotification("Player name copied to clipboard!");
             }
             
             ImGui.SameLine();
             
-            if (_cachedPlayer.AccountId.HasValue)
+            var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
+            if (ImGui.Button("Copy Home World"))
             {
-                if (ImGui.Button("Copy Account ID"))
-                {
-                    ImGui.SetClipboardText(_cachedPlayer.AccountId.Value.ToString());
-                    ShowNotification("Account ID copied to clipboard!");
-                }
+                ImGui.SetClipboardText(homeWorldName);
+                ShowNotification("Home world copied to clipboard!");
             }
-            else
-            {
-                using (ImRaii.Disabled(true))
-                {
-                    ImGui.Button("Copy Account ID");
-                }
-            }
+            
+            ImGui.SameLine();
             
             if (ImGui.Button("Search Similar"))
             {
@@ -1170,9 +1144,12 @@ public class PlayerDetailsWindow : BaseModernWindow
     {
         try
         {
+            var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
+            var currentWorldName = _cachedPlayer.CurrentWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.CurrentWorldId.Value) : "Unknown";
+            
             var exportData = $"Player: {_cachedPlayer.Name}\n" +
-                           $"Content ID: {_contentId}\n" +
-                           $"Account ID: {_cachedPlayer.AccountId?.ToString() ?? "Unknown"}\n" +
+                           $"Home World: {homeWorldName}\n" +
+                           $"Current World: {currentWorldName}\n" +
                            $"Last Seen: {GetLastSeenText()}\n" +
                            $"Favorited: {_isFavorited}\n" +
                            $"Export Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
