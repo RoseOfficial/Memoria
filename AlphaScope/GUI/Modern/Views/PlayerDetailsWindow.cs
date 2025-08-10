@@ -27,6 +27,7 @@ public class PlayerDetailsWindow : BaseModernWindow
 {
     private readonly ulong _contentId;
     private readonly PersistenceContext.CachedPlayer _cachedPlayer;
+    private readonly ICollectiblesAcquisitionService _collectiblesService;
     private bool _isFavorited;
     private DateTime? _lastScannedAt;
     private bool _isRefreshing = false;
@@ -38,11 +39,13 @@ public class PlayerDetailsWindow : BaseModernWindow
     /// </summary>
     public ulong ContentId => _contentId;
     
-    internal PlayerDetailsWindow(ulong contentId, PersistenceContext.CachedPlayer cachedPlayer) 
+    internal PlayerDetailsWindow(ulong contentId, PersistenceContext.CachedPlayer cachedPlayer, ICollectiblesAcquisitionService? collectiblesService = null) 
         : base($"PlayerDetails_{contentId}", $"Player Details - {cachedPlayer.Name}")
     {
         _contentId = contentId;
         _cachedPlayer = cachedPlayer ?? throw new ArgumentNullException(nameof(cachedPlayer));
+        _collectiblesService = collectiblesService ?? Plugin._serviceProvider?.GetRequiredService<ICollectiblesAcquisitionService>() 
+                                                    ?? throw new InvalidOperationException("Service provider not initialized");
         _isFavorited = Plugin.Instance.Configuration.FavoritedPlayer.ContainsKey((long)contentId);
         
         // Load LastScannedAt from cached player data
@@ -422,15 +425,13 @@ public class PlayerDetailsWindow : BaseModernWindow
         }
 
         // Minion Collection Section
-        if (ImGui.CollapsingHeader("🐾 Minion Collection", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Minion Collection", ImGuiTreeNodeFlags.DefaultOpen))
         {
             DrawMinionCollection(minions, lastMinionsDataUpdate);
         }
 
-        ImGuiHelpers.ScaledDummy(15f);
-
         // Mount Collection Section
-        if (ImGui.CollapsingHeader("🏇 Mount Collection", ImGuiTreeNodeFlags.DefaultOpen))
+        if (ImGui.CollapsingHeader("Mount Collection", ImGuiTreeNodeFlags.DefaultOpen))
         {
             DrawMountCollection(mounts, lastMountsDataUpdate);
         }
@@ -447,8 +448,6 @@ public class PlayerDetailsWindow : BaseModernWindow
             {
                 ImGui.Text($"{minions.Count} minions collected");
             }
-
-            ImGuiHelpers.ScaledDummy(5f);
             
             // Last Updated
             if (lastMinionsDataUpdate.HasValue)
@@ -462,14 +461,11 @@ public class PlayerDetailsWindow : BaseModernWindow
                 }
             }
 
-            ImGuiHelpers.ScaledDummy(10f);
-
             // Minion List with improved formatting
             using (var headerColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
             {
                 ImGui.Text("Collected Minions:");
             }
-            ImGuiHelpers.ScaledDummy(8f);
 
             // Enhanced table with better styling
             var tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
@@ -478,8 +474,8 @@ public class PlayerDetailsWindow : BaseModernWindow
             if (ImGui.BeginTable("MinionsTable", 3, tableFlags, new Vector2(0, Math.Min(400f, minions.Count * 40f + 60f))))
             {
                 ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 48f * ImGuiHelpers.GlobalScale);
-                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 0f);
-                ImGui.TableSetupColumn("How to Get", ImGuiTableColumnFlags.WidthFixed, 160f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 150f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupColumn("How to Get", ImGuiTableColumnFlags.WidthStretch, 0f);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 
                 // Custom header styling
@@ -520,23 +516,37 @@ public class PlayerDetailsWindow : BaseModernWindow
                     ImGui.TableSetColumnIndex(2);
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
                     
-                    var acquisitionMethod = Utils.GetMinionAcquisitionMethod(minion.Name);
-                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(acquisitionMethod)))
+                    var acquisitionMethod = GetMinionAcquisitionMethodSync(minion.Name);
+                    
+                    // Parse "Category - Details" format for colored display
+                    var parts = acquisitionMethod.Split(new[] { " - "}, 2, StringSplitOptions.None);
+                    if (parts.Length == 2)
                     {
-                        ImGui.Text(acquisitionMethod);
-                        
-                        // Add tooltip for more information
-                        if (ImGui.IsItemHovered())
+                        // Display category with color
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(parts[0])))
                         {
-                            ImGui.SetTooltip(GetAcquisitionTooltip(acquisitionMethod));
+                            ImGui.Text(parts[0]);
+                        }
+                        
+                        // Display separator and details in normal color
+                        ImGui.SameLine(0, 0);
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+                        {
+                            ImGui.Text(" - " + parts[1]);
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to original display if no separator found
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(acquisitionMethod)))
+                        {
+                            ImGui.Text(acquisitionMethod);
                         }
                     }
                 }
 
                 ImGui.EndTable();
             }
-
-            ImGuiHelpers.ScaledDummy(10f);
 
             // Collection Statistics
             if (ImGui.CollapsingHeader("Minion Statistics"))
@@ -556,7 +566,7 @@ public class PlayerDetailsWindow : BaseModernWindow
         }
         else
         {
-            DrawEmptyCollectionState("Minion", "🐾", "minion");
+            DrawEmptyCollectionState("Minion", "?", "minion");
         }
     }
 
@@ -571,8 +581,6 @@ public class PlayerDetailsWindow : BaseModernWindow
             {
                 ImGui.Text($"{mounts.Count} mounts collected");
             }
-
-            ImGuiHelpers.ScaledDummy(5f);
             
             // Last Updated
             if (lastMountsDataUpdate.HasValue)
@@ -586,14 +594,11 @@ public class PlayerDetailsWindow : BaseModernWindow
                 }
             }
 
-            ImGuiHelpers.ScaledDummy(10f);
-
             // Mount List with improved formatting
             using (var headerColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextPrimary))
             {
                 ImGui.Text("Collected Mounts:");
             }
-            ImGuiHelpers.ScaledDummy(8f);
 
             // Enhanced table with better styling
             var tableFlags = ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable | 
@@ -602,8 +607,8 @@ public class PlayerDetailsWindow : BaseModernWindow
             if (ImGui.BeginTable("MountsTable", 3, tableFlags, new Vector2(0, Math.Min(400f, mounts.Count * 40f + 60f))))
             {
                 ImGui.TableSetupColumn("Icon", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 48f * ImGuiHelpers.GlobalScale);
-                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 0f);
-                ImGui.TableSetupColumn("How to Get", ImGuiTableColumnFlags.WidthFixed, 160f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 150f * ImGuiHelpers.GlobalScale);
+                ImGui.TableSetupColumn("How to Get", ImGuiTableColumnFlags.WidthStretch, 0f);
                 ImGui.TableSetupScrollFreeze(0, 1);
                 
                 // Custom header styling
@@ -644,23 +649,37 @@ public class PlayerDetailsWindow : BaseModernWindow
                     ImGui.TableSetColumnIndex(2);
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (rowHeight - ImGui.GetTextLineHeight()) / 2);
                     
-                    var acquisitionMethod = Utils.GetMountAcquisitionMethod(mount.Name);
-                    using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(acquisitionMethod)))
+                    var acquisitionMethod = GetMountAcquisitionMethodSync(mount.Name);
+                    
+                    // Parse "Category - Details" format for colored display
+                    var parts = acquisitionMethod.Split(new[] { " - "}, 2, StringSplitOptions.None);
+                    if (parts.Length == 2)
                     {
-                        ImGui.Text(acquisitionMethod);
-                        
-                        // Add tooltip for more information
-                        if (ImGui.IsItemHovered())
+                        // Display category with color
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(parts[0])))
                         {
-                            ImGui.SetTooltip(GetAcquisitionTooltip(acquisitionMethod));
+                            ImGui.Text(parts[0]);
+                        }
+                        
+                        // Display separator and details in normal color
+                        ImGui.SameLine(0, 0);
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+                        {
+                            ImGui.Text(" - " + parts[1]);
+                        }
+                    }
+                    else
+                    {
+                        // Fallback to original display if no separator found
+                        using (var color = ThemeManager.PushColor(ImGuiCol.Text, GetAcquisitionMethodColor(acquisitionMethod)))
+                        {
+                            ImGui.Text(acquisitionMethod);
                         }
                     }
                 }
 
                 ImGui.EndTable();
             }
-
-            ImGuiHelpers.ScaledDummy(10f);
 
             // Collection Statistics
             if (ImGui.CollapsingHeader("Mount Statistics"))
@@ -680,7 +699,7 @@ public class PlayerDetailsWindow : BaseModernWindow
         }
         else
         {
-            DrawEmptyCollectionState("Mount", "🏇", "mount");
+            DrawEmptyCollectionState("Mount", "?", "mount");
         }
     }
 
@@ -1281,13 +1300,13 @@ public class PlayerDetailsWindow : BaseModernWindow
             drawList.AddRect(rectMin, rectMax, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.Border));
             
             // Draw minion placeholder icon
-            var textSize = ImGui.CalcTextSize("🐾");
+            var textSize = ImGui.CalcTextSize("?");
             var textPos = new Vector2(
                 cursorPos.X + (iconSize.X - textSize.X) / 2,
                 cursorPos.Y + (iconSize.Y - textSize.Y) / 2
             );
             
-            drawList.AddText(textPos, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.TextMuted), "🐾");
+            drawList.AddText(textPos, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.TextMuted), "?");
             
             // Advance cursor
             ImGui.SetCursorScreenPos(new Vector2(cursorPos.X + iconSize.X, cursorPos.Y));
@@ -1359,13 +1378,13 @@ public class PlayerDetailsWindow : BaseModernWindow
             drawList.AddRect(rectMin, rectMax, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.Border));
             
             // Draw mount placeholder icon
-            var textSize = ImGui.CalcTextSize("🏇");
+            var textSize = ImGui.CalcTextSize("?");
             var textPos = new Vector2(
                 cursorPos.X + (iconSize.X - textSize.X) / 2,
                 cursorPos.Y + (iconSize.Y - textSize.Y) / 2
             );
             
-            drawList.AddText(textPos, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.TextMuted), "🏇");
+            drawList.AddText(textPos, ImGui.ColorConvertFloat4ToU32(ThemeManager.Colors.TextMuted), "?");
             
             // Advance cursor
             ImGui.SetCursorScreenPos(new Vector2(cursorPos.X + iconSize.X, cursorPos.Y));
@@ -1424,61 +1443,58 @@ public class PlayerDetailsWindow : BaseModernWindow
 
     private Vector4 GetAcquisitionMethodColor(string acquisitionMethod)
     {
-        return acquisitionMethod switch
+        // Extract category from "Category - Details" format if present
+        var category = acquisitionMethod.Contains(" - ") 
+            ? acquisitionMethod.Split(new[] { " - " }, 2, StringSplitOptions.None)[0]
+            : acquisitionMethod;
+
+        return category switch
         {
-            "Quest Reward" => ThemeManager.Colors.Success,
+            // Quest and Main Story
+            "Quest" or "Quest Reward" => ThemeManager.Colors.Success, // Green
+            "Special Quest" => new Vector4(0.2f, 1.0f, 0.6f, 1.0f), // Mint green
+            
+            // Achievements and Progression
             "Achievement" => new Vector4(1.0f, 0.84f, 0.0f, 1.0f), // Gold
-            "Dungeon Drop" => new Vector4(0.5f, 0.8f, 1.0f, 1.0f), // Light blue
-            "Trial Drop" => new Vector4(0.7f, 0.9f, 1.0f, 1.0f), // Lighter blue
-            "Raid Drop" => new Vector4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
+            
+            // Dungeons and Trials  
+            "Dungeon" or "Dungeon Drop" => new Vector4(0.5f, 0.8f, 1.0f, 1.0f), // Light blue
+            "Trial" or "Trial Drop" => new Vector4(0.7f, 0.9f, 1.0f, 1.0f), // Lighter blue
+            "Raid" or "Raid Drop" => new Vector4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
+            "Deep Dungeon" => new Vector4(0.4f, 0.2f, 0.6f, 1.0f), // Dark purple
+            
+            // Economy and Trading
             "Market Board" => new Vector4(0.8f, 0.8f, 0.8f, 1.0f), // Silver
             "Market Board / Quest" => new Vector4(0.8f, 0.8f, 0.8f, 1.0f), // Silver
-            "PvP Reward" => new Vector4(1.0f, 0.2f, 0.2f, 1.0f), // Red
+            "Crafted" => new Vector4(0.7f, 0.7f, 0.7f, 1.0f), // Light gray
+            
+            // PvP Activities
+            "PvP" or "PvP Reward" => new Vector4(1.0f, 0.2f, 0.2f, 1.0f), // Red
             "PvP / Event" => new Vector4(1.0f, 0.2f, 0.2f, 1.0f), // Red
-            "Seasonal Event" => new Vector4(1.0f, 0.4f, 0.8f, 1.0f), // Pink
+            
+            // Events and Limited Time
+            "Event" or "Seasonal Event" => new Vector4(1.0f, 0.4f, 0.8f, 1.0f), // Pink
+            "Pre-order" or "Pre-order Bonus" => new Vector4(0.8f, 0.2f, 1.0f, 1.0f), // Magenta
+            "Special" => new Vector4(0.9f, 0.3f, 0.9f, 1.0f), // Bright magenta
+            
+            // Mini-Games and Side Content
             "Gold Saucer" => new Vector4(1.0f, 0.84f, 0.0f, 1.0f), // Gold
-            "Retainer Venture" => new Vector4(0.6f, 0.4f, 0.8f, 1.0f), // Purple
-            "Deep Dungeon" => new Vector4(0.4f, 0.2f, 0.6f, 1.0f), // Dark purple
-            "Special Quest" => new Vector4(0.2f, 1.0f, 0.6f, 1.0f), // Mint green
-            "Treasure Hunt" => new Vector4(1.0f, 0.6f, 0.2f, 1.0f), // Amber
-            "Pre-order Bonus" => new Vector4(0.8f, 0.2f, 1.0f, 1.0f), // Magenta
-            "Check Lodestone" => new Vector4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
+            "FATE" => new Vector4(0.3f, 0.9f, 0.7f, 1.0f), // Aqua green
+            
+            // Retainer and Venture Content
+            "Venture" or "Retainer Venture" => new Vector4(0.6f, 0.4f, 0.8f, 1.0f), // Purple
+            
+            // Exploration and Discovery
+            "Treasure" or "Treasure Hunt" => new Vector4(1.0f, 0.6f, 0.2f, 1.0f), // Amber
             "Eureka" => new Vector4(0.2f, 0.8f, 0.4f, 1.0f), // Green
             "Bozja" => new Vector4(0.4f, 0.6f, 1.0f, 1.0f), // Blue-purple
-            _ => ThemeManager.Colors.TextMuted // Unknown or other
-        };
-    }
-    
-    private string GetAcquisitionTooltip(string method)
-    {
-        return method switch
-        {
-            // Common methods for both minions and mounts
-            "Quest Reward" => "Obtained by completing specific quests",
-            "Achievement" => "Earned through specific achievements",
-            "Market Board" => "Can be purchased from other players",
-            "Market Board / Quest" => "Available through market board or quest rewards",
-            "PvP Reward" => "Earned through PvP activities",
-            "PvP / Event" => "Available through PvP or seasonal events",
-            "Seasonal Event" => "Limited-time seasonal event reward",
-            "Gold Saucer" => "Purchased with MGP at the Gold Saucer",
-            "Deep Dungeon" => "Reward from Palace of the Dead or Heaven-on-High",
-            "Special Quest" => "Obtained through special questlines",
-            "Treasure Hunt" => "Found in treasure coffers",
-            "Pre-order Bonus" => "Exclusive pre-order or collector's edition bonus",
-            "Check Lodestone" => "Name failed to load - check Lodestone for details",
             
-            // Minion-specific methods
-            "Dungeon Drop" => "Random drop from dungeon bosses",
-            "Retainer Venture" => "Found through retainer ventures",
+            // Data and System
+            "Check Lodestone" => new Vector4(1.0f, 0.5f, 0.0f, 1.0f), // Orange
+            "Unknown" => new Vector4(0.5f, 0.5f, 0.5f, 1.0f), // Gray
             
-            // Mount-specific methods
-            "Trial Drop" => "Rare drop from trial encounters with primals",
-            "Raid Drop" => "Rare drop from raid encounters",
-            "Eureka" => "Obtained through Eureka content",
-            "Bozja" => "Obtained through Bozja content",
-            
-            _ => "Acquisition method unknown"
+            // Default for any unmapped categories
+            _ => ThemeManager.Colors.TextMuted // Default muted text
         };
     }
 
@@ -1630,5 +1646,67 @@ public class PlayerDetailsWindow : BaseModernWindow
         }
         
         return null;
+    }
+
+    /// <summary>
+    /// Synchronous wrapper for getting minion acquisition method
+    /// Uses async/await internally but blocks for UI thread compatibility
+    /// </summary>
+    private string GetMinionAcquisitionMethodSync(string? minionName)
+    {
+        try
+        {
+            // For UI rendering, we can't use async, so we check if we have cached data
+            // If not, we fall back to static data and trigger a background refresh
+            var task = _collectiblesService.GetMinionAcquisitionMethodAsync(minionName);
+            
+            // Use a slightly longer timeout for better cache hit rate
+            if (task.Wait(TimeSpan.FromMilliseconds(200)))
+            {
+                return task.Result;
+            }
+            else
+            {
+                // Fall back to static data and trigger background update
+                _ = Task.Run(async () => await _collectiblesService.GetMinionAcquisitionMethodAsync(minionName));
+                return Utils.GetMinionAcquisitionMethod(minionName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning($"Failed to get minion acquisition method for '{minionName}': {ex.Message}");
+            return Utils.GetMinionAcquisitionMethod(minionName);
+        }
+    }
+
+    /// <summary>
+    /// Synchronous wrapper for getting mount acquisition method  
+    /// Uses async/await internally but blocks for UI thread compatibility
+    /// </summary>
+    private string GetMountAcquisitionMethodSync(string? mountName)
+    {
+        try
+        {
+            // For UI rendering, we can't use async, so we check if we have cached data
+            // If not, we fall back to static data and trigger a background refresh
+            var task = _collectiblesService.GetMountAcquisitionMethodAsync(mountName);
+            
+            // Use a slightly longer timeout for better cache hit rate
+            if (task.Wait(TimeSpan.FromMilliseconds(200)))
+            {
+                return task.Result;
+            }
+            else
+            {
+                // Fall back to static data and trigger background update
+                _ = Task.Run(async () => await _collectiblesService.GetMountAcquisitionMethodAsync(mountName));
+                return Utils.GetMountAcquisitionMethod(mountName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Warning($"Failed to get mount acquisition method for '{mountName}': {ex.Message}");
+            return Utils.GetMountAcquisitionMethod(mountName);
+        }
     }
 }

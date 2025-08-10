@@ -209,6 +209,9 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton(objectTable);
         serviceCollection.AddSingleton(marketBoard);
         serviceCollection.AddSingleton(textureProvider);
+        
+        // Add memory cache for API caching
+        serviceCollection.AddMemoryCache();
 
         // Load plugin configuration from Dalamud config system
         Configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
@@ -231,6 +234,7 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton<MinionDataService>();            // Comprehensive minion name-to-ID mapping service
         serviceCollection.AddSingleton<MountDataService>();             // Comprehensive mount name-to-ID mapping service
         serviceCollection.AddSingleton<LodestoneRefreshService>();       // Background Lodestone data refresh service
+        serviceCollection.AddSingleton<ICollectiblesAcquisitionService, CollectiblesApiService>(); // FFXIVCollect API service for acquisition data
         
         // Migrate configuration to newer versions
         MigrateConfiguration(pluginInterface);
