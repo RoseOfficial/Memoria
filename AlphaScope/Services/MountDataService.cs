@@ -135,51 +135,12 @@ public sealed class MountDataService : IDisposable
                 }
             }
             
-            _logger.LogInformation("Mount mapping built successfully: {ProcessedCount} mounts mapped, {DuplicateCount} duplicates skipped, {InvalidCount} invalid entries skipped", 
+            _logger.LogInformation("Mount mapping built successfully: {ProcessedCount} mounts mapped, {DuplicateCount} duplicates skipped, {InvalidCount} invalid entries skipped",
                 processedCount, duplicateCount, invalidCount);
-                
-            // Log some example mappings for verification
-            LogSampleMappings();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Critical error building mount mapping from Lumina data");
-        }
-    }
-    
-    /// <summary>
-    /// Logs a sample of mount mappings for verification and debugging
-    /// </summary>
-    private void LogSampleMappings()
-    {
-        try
-        {
-            var sampleNames = new[] { "Chocobo", "Magitek Armor", "Company Chocobo", "Black Chocobo", "Legacy Chocobo", "Sleipnir" };
-            var foundSamples = 0;
-            
-            foreach (var sampleName in sampleNames)
-            {
-                if (_nameToIdMapping.TryGetValue(sampleName, out var id))
-                {
-                    _logger.LogInformation("Sample mapping verified: '{Name}' -> ID {Id}", sampleName, id);
-                    foundSamples++;
-                }
-            }
-            
-            if (foundSamples == 0)
-            {
-                // Log first 5 actual mappings for debugging if samples not found
-                var firstFive = _nameToIdMapping.Take(5).ToList();
-                _logger.LogInformation("Sample mappings from actual data:");
-                foreach (var (name, id) in firstFive)
-                {
-                    _logger.LogInformation("  '{Name}' -> ID {Id}", name, id);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error logging sample mappings");
         }
     }
     

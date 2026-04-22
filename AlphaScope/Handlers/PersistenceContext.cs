@@ -161,12 +161,10 @@ internal sealed class PersistenceContext
         _serviceProvider = serviceProvider;
 
         // Force clear all static caches immediately on startup
-        _logger.LogInformation("PersistenceContext: Force clearing all static caches on startup");
         _playerCache.Clear();
         _UploadPlayers.Clear();
         _UploadedPlayersCache.Clear();
         _recentlyScannedPlayers.Clear();
-        _logger.LogInformation($"PersistenceContext: After force clear - playerCache has {_playerCache.Count} entries");
 
         // Initialize durable upload outbox and replay anything left over from a previous session
         var configDir = Plugin.Instance._pluginInterface.GetPluginConfigDirectory();
@@ -181,7 +179,6 @@ internal sealed class PersistenceContext
             _logger.LogInformation("PersistenceContext: Replayed {Count} pending uploads from outbox", replayed);
 
         // Load existing data from database into memory caches
-        _logger.LogInformation("PersistenceContext: Calling ReloadCache() during initialization...");
         ReloadCache();
 
         // Start background upload processing
@@ -194,12 +191,11 @@ internal sealed class PersistenceContext
     /// </summary>
     public static void ClearCache()
     {
-        _logger?.LogInformation("Clearing all in-memory caches...");
         _playerCache.Clear();
         _UploadPlayers.Clear();
         _UploadedPlayersCache.Clear();
         _recentlyScannedPlayers.Clear();
-        _logger?.LogInformation("All caches cleared successfully");
+        _logger?.LogDebug("In-memory caches cleared");
     }
 
     /// <summary>

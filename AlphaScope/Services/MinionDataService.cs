@@ -135,51 +135,12 @@ public sealed class MinionDataService : IDisposable
                 }
             }
             
-            _logger.LogInformation("Minion mapping built successfully: {ProcessedCount} minions mapped, {DuplicateCount} duplicates skipped, {InvalidCount} invalid entries skipped", 
+            _logger.LogInformation("Minion mapping built successfully: {ProcessedCount} minions mapped, {DuplicateCount} duplicates skipped, {InvalidCount} invalid entries skipped",
                 processedCount, duplicateCount, invalidCount);
-                
-            // Log some example mappings for verification
-            LogSampleMappings();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Critical error building minion mapping from Lumina data");
-        }
-    }
-    
-    /// <summary>
-    /// Logs a sample of minion mappings for verification and debugging
-    /// </summary>
-    private void LogSampleMappings()
-    {
-        try
-        {
-            var sampleNames = new[] { "Mammet #001", "Cactuar Cutting", "Fat Cat", "Wind-up Moogle", "Midgardsormr", "Taoist Moogle" };
-            var foundSamples = 0;
-            
-            foreach (var sampleName in sampleNames)
-            {
-                if (_nameToIdMapping.TryGetValue(sampleName, out var id))
-                {
-                    _logger.LogInformation("Sample mapping verified: '{Name}' -> ID {Id}", sampleName, id);
-                    foundSamples++;
-                }
-            }
-            
-            if (foundSamples == 0)
-            {
-                // Log first 5 actual mappings for debugging if samples not found
-                var firstFive = _nameToIdMapping.Take(5).ToList();
-                _logger.LogInformation("Sample mappings from actual data:");
-                foreach (var (name, id) in firstFive)
-                {
-                    _logger.LogInformation("  '{Name}' -> ID {Id}", name, id);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error logging sample mappings");
         }
     }
     

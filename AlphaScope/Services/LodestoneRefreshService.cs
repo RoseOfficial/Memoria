@@ -295,7 +295,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                 // Only log every 30th loop to reduce spam (since we're processing every second now)
                 if (loopCount % 30 == 1)
                 {
-                    _logger.LogInformation($"Processing loop #{loopCount} - Priority queue: {priorityQueueSize}, Regular queue: {queueSize}, Queued players: {queuedPlayersCount}");
+                    _logger.LogTrace($"Processing loop #{loopCount} - Priority queue: {priorityQueueSize}, Regular queue: {queueSize}, Queued players: {queuedPlayersCount}");
                 }
                 
                 // Process one player per second - priority queue first
@@ -333,7 +333,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                     // Only log wait message every 30th loop to reduce spam
                     if (loopCount % 30 == 1)
                     {
-                        _logger.LogInformation($"No players in queue, waiting {idleDelay.TotalSeconds}s...");
+                        _logger.LogTrace($"No players in queue, waiting {idleDelay.TotalSeconds}s...");
                     }
                     await Task.Delay(idleDelay, cancellationToken);
                 }
