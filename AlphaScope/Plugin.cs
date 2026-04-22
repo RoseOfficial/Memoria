@@ -427,8 +427,22 @@ public sealed class Plugin : IDalamudPlugin
                 Version = Utils.clientVer,
             };
 
-            var result = await ApiClient.UserLoginAsync(request);
-            if (result.IsSuccess && result.Value.User is not null && !string.IsNullOrWhiteSpace(result.Value.User.ApiKey))
+            // Retry login a few times — Neon serverless compute can take several seconds to
+            // wake from idle, and a single timeout on first contact would otherwise leave the
+            // plugin stuck without a valid API key until the next plugin reload.
+            API.Client.Result<(API.Models.Responses.User.User? User, string Message)>? result = null;
+            for (int attempt = 1; attempt <= 5; attempt++)
+            {
+                result = await ApiClient.UserLoginAsync(request);
+                if (result.IsSuccess && result.Value.User is not null && !string.IsNullOrWhiteSpace(result.Value.User.ApiKey))
+                    break;
+                Log.Warning("AutoRegisterWithServerAsync: login attempt {Attempt}/5 failed — {Error}",
+                    attempt, result?.Error ?? result?.Value.Message ?? "unknown");
+                if (attempt < 5)
+                    await Task.Delay(TimeSpan.FromSeconds(attempt * 3)); // 3s, 6s, 9s, 12s
+            }
+
+            if (result is { IsSuccess: true } && result.Value.User is not null && !string.IsNullOrWhiteSpace(result.Value.User.ApiKey))
             {
                 Configuration.Key = result.Value.User.ApiKey!;
                 Configuration.AccountId = request.GameAccountId;

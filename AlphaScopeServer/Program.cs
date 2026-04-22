@@ -32,7 +32,9 @@ if (!builder.Environment.IsEnvironment("Testing"))
 
         options.UseNpgsql(connectionString, npgsql =>
         {
-            npgsql.CommandTimeout(10);
+            // 30s gives Neon's serverless compute room to warm up on the first request after
+            // an idle period. The previous 10s would 500-error the first plugin login of the day.
+            npgsql.CommandTimeout(30);
             npgsql.MigrationsAssembly("AlphaScopeServer");
         });
 
