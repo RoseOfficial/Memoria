@@ -10,7 +10,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NetStone;
 using NetStone.Search.Character;
-using AlphaScope.Database;
 using AlphaScope.Handlers;
 
 namespace AlphaScope.Services;
@@ -219,26 +218,16 @@ internal sealed class LodestoneRefreshService : IDisposable
     public async Task<bool> RefreshPlayerImmediately(ulong contentId)
     {
         _logger.LogInformation($"Performing immediate refresh for player {contentId}");
-        
+
         try
         {
-            using var scope = _serviceProvider.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-            
-            var player = await dbContext.Players.FindAsync(contentId);
-            if (player == null)
+            if (!PersistenceContext._playerCache.TryGetValue(contentId, out var cached) || cached is null)
             {
-                _logger.LogWarning($"Player {contentId} not found for immediate refresh");
+                _logger.LogWarning($"Player {contentId} not in cache for immediate refresh");
                 return false;
             }
 
-            var success = await RefreshPlayerData(player, dbContext);
-            if (success)
-            {
-                await dbContext.SaveChangesAsync();
-            }
-            
-            return success;
+            return await RefreshPlayerData(contentId, cached);
         }
         catch (Exception ex)
         {
@@ -248,29 +237,23 @@ internal sealed class LodestoneRefreshService : IDisposable
     }
 
     /// <summary>
-    /// Populates the initial refresh queue with existing players, prioritizing stale data
+    /// Populates the initial refresh queue from the in-memory player cache, prioritizing stale data.
     /// </summary>
-    private async Task PopulateInitialQueue()
+    private Task PopulateInitialQueue()
     {
         try
         {
-            
-            using var scope = _serviceProvider.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-            
             var staleThreshold = DateTime.UtcNow.AddHours(-Config.LodestoneStaleThresholdHours);
             _logger.LogInformation($"PopulateInitialQueue: Stale threshold is {staleThreshold} (older than {Config.LodestoneStaleThresholdHours}h)");
-            
-            // First, count total players in database
-            var totalPlayers = await dbContext.Players.CountAsync();
-            _logger.LogInformation($"PopulateInitialQueue: Total players in database: {totalPlayers}");
-            
-            // Get players ordered by LastScannedAt (oldest first), with nulls first
-            var playersToRefresh = await dbContext.Players
-                .Where(p => p.LastScannedAt == null || p.LastScannedAt < staleThreshold)
-                .OrderBy(p => p.LastScannedAt ?? DateTime.MinValue)
-                .Select(p => p.LocalContentId)
-                .ToListAsync();
+
+            var totalPlayers = PersistenceContext._playerCache.Count;
+            _logger.LogInformation($"PopulateInitialQueue: Total players in cache: {totalPlayers}");
+
+            var playersToRefresh = PersistenceContext._playerCache
+                .Where(kvp => kvp.Value.LastScannedAt == null || kvp.Value.LastScannedAt < staleThreshold)
+                .OrderBy(kvp => kvp.Value.LastScannedAt ?? DateTime.MinValue)
+                .Select(kvp => kvp.Key)
+                .ToList();
 
             _logger.LogInformation($"PopulateInitialQueue: Found {playersToRefresh.Count} players needing refresh");
 
@@ -282,17 +265,15 @@ internal sealed class LodestoneRefreshService : IDisposable
                     _refreshQueue.Enqueue(contentId);
                     queuedCount++;
                 }
-                else
-                {
-                }
             }
-            
+
             _logger.LogInformation($"PopulateInitialQueue: Successfully populated refresh queue with {queuedCount} players needing updates");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error populating initial refresh queue");
         }
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -374,33 +355,23 @@ internal sealed class LodestoneRefreshService : IDisposable
     }
 
     /// <summary>
-    /// Processes a single player's Lodestone data refresh
+    /// Processes a single player's Lodestone data refresh. Pulls the latest cached state from
+    /// PersistenceContext, fetches Lodestone data, and writes updates back into the cache —
+    /// which then rides the next scan upload to the server.
     /// </summary>
     private async Task ProcessSinglePlayer(ulong contentId)
     {
         try
         {
-            
-            using var scope = _serviceProvider.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-            
-            var player = await dbContext.Players.FindAsync(contentId);
-            if (player == null)
+            if (!PersistenceContext._playerCache.TryGetValue(contentId, out var cached) || cached is null)
             {
-                _logger.LogWarning($"ProcessSinglePlayer: Player {contentId} not found during refresh processing");
+                _logger.LogWarning($"ProcessSinglePlayer: Player {contentId} not in cache during refresh processing");
                 return;
             }
 
-            
-            var success = await RefreshPlayerData(player, dbContext);
-            if (success)
-            {
-                await dbContext.SaveChangesAsync();
-            }
-            else
-            {
-                _logger.LogWarning($"ProcessSinglePlayer: Failed to refresh data for player {player.Name}");
-            }
+            var success = await RefreshPlayerData(contentId, cached);
+            if (!success)
+                _logger.LogWarning($"ProcessSinglePlayer: Failed to refresh data for player {cached.Name}");
         }
         catch (Exception ex)
         {
@@ -409,250 +380,194 @@ internal sealed class LodestoneRefreshService : IDisposable
     }
 
     /// <summary>
-    /// Refreshes Lodestone data for a specific player by fetching directly from Lodestone
+    /// Refreshes Lodestone data for a specific player by fetching directly from Lodestone.
+    /// All updates land in <see cref="PersistenceContext._playerCache"/> via the Update*
+    /// helpers; the next scan upload carries the enriched fields to the server.
     /// </summary>
-    private async Task<bool> RefreshPlayerData(Player player, RetainerTrackContext dbContext)
+    private async Task<bool> RefreshPlayerData(ulong contentId, PersistenceContext.CachedPlayer cached)
     {
         try
         {
-            
-            // Fetch avatar URL directly from Lodestone using character name and world
-            if (string.IsNullOrEmpty(player.Name))
+            if (string.IsNullOrEmpty(cached.Name))
             {
-                _logger.LogWarning($"Player {player.LocalContentId} has no name, skipping Lodestone refresh");
-                player.LastScannedAt = DateTime.UtcNow;
+                _logger.LogWarning($"Player {contentId} has no name, skipping Lodestone refresh");
+                PersistenceContext.UpdateCachedPlayerLastScannedAt(contentId, DateTime.UtcNow);
                 return true;
             }
-            
-            var (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData, mountsData) = await FetchLodestonePlayerData(player);
-            
+
+            var (avatarUrl, jobLevels, mainJobId, mainJobLevel, minionsData, mountsData) =
+                await FetchLodestonePlayerData(contentId, cached.Name, cached.HomeWorldId, cached.CurrentWorldId);
+
             var hasUpdates = false;
-            
-            // Handle avatar updates
-            if (!string.IsNullOrEmpty(avatarUrl) && avatarUrl != player.AvatarLink)
+
+            if (!string.IsNullOrEmpty(avatarUrl) && avatarUrl != cached.AvatarLink)
             {
-                player.AvatarLink = avatarUrl;
+                PersistenceContext.UpdateCachedPlayerAvatar(contentId, avatarUrl);
+                Plugin.AvatarCacheManager.ClearFailedDownloads(avatarUrl);
                 hasUpdates = true;
-                
-                // Update cached player data so UI reflects changes immediately
-                PersistenceContext.UpdateCachedPlayerAvatar(player.LocalContentId, player.AvatarLink);
-                
-                // Clear any failed download attempts for this new URL
-                Plugin.AvatarCacheManager.ClearFailedDownloads(player.AvatarLink);
-                
             }
             else if (string.IsNullOrEmpty(avatarUrl))
             {
-                _logger.LogWarning($"Could not fetch avatar URL for player {player.Name}");
+                _logger.LogWarning($"Could not fetch avatar URL for player {cached.Name}");
             }
-            else
-            {
-            }
-            
-            // Handle job data updates
+
             if (jobLevels != null && jobLevels.Count > 0)
             {
                 var jobDataJson = JsonSerializer.Serialize(jobLevels);
-                
-                if (jobDataJson != player.LodestoneJobData)
+                if (jobDataJson != cached.LodestoneJobData)
                 {
-                    var jobDataUpdateTime = DateTime.UtcNow;
-                    player.LodestoneJobData = jobDataJson;
-                    player.MainJobId = mainJobId;
-                    player.MainJobLevel = mainJobLevel;
-                    player.LastJobDataUpdate = jobDataUpdateTime;
+                    PersistenceContext.UpdateCachedPlayerJobData(contentId, jobDataJson, mainJobId, mainJobLevel, DateTime.UtcNow);
                     hasUpdates = true;
-                    
-                    // Update cached player data so UI reflects changes immediately
-                    PersistenceContext.UpdateCachedPlayerJobData(player.LocalContentId, jobDataJson, mainJobId, mainJobLevel, jobDataUpdateTime);
-                    
-                }
-                else
-                {
                 }
             }
             else
             {
-                _logger.LogWarning($"Could not extract job data for player {player.Name}");
+                _logger.LogWarning($"Could not extract job data for player {cached.Name}");
             }
-            
-            // Handle minion data updates
+
             if (minionsData != null && minionsData.Count > 0)
             {
                 var minionsDataJson = JsonSerializer.Serialize(minionsData);
-                _logger.LogInformation($"Serialized minion data for {player.Name}: {minionsDataJson.Length} chars, first minion: {minionsData.FirstOrDefault()?.Name}");
-                
-                if (minionsDataJson != player.LodestoneMinionsData)
+                if (minionsDataJson != cached.LodestoneMinionsData)
                 {
-                    var minionsDataUpdateTime = DateTime.UtcNow;
-                    player.LodestoneMinionsData = minionsDataJson;
-                    player.LastMinionsDataUpdate = minionsDataUpdateTime;
+                    PersistenceContext.UpdateCachedPlayerMinionsData(contentId, minionsDataJson, DateTime.UtcNow);
+                    _logger.LogInformation($"Updated minion data for {cached.Name} with {minionsData.Count} minions");
                     hasUpdates = true;
-                    _logger.LogInformation($"Updated minion data for {player.Name} in database with {minionsData.Count} minions");
-                    
-                    // Update cached player data so UI reflects changes immediately
-                    PersistenceContext.UpdateCachedPlayerMinionsData(player.LocalContentId, minionsDataJson, minionsDataUpdateTime);
-                    
-                }
-                else
-                {
                 }
             }
             else
             {
-                _logger.LogDebug($"Could not extract minion data for player {player.Name}");
+                _logger.LogDebug($"Could not extract minion data for player {cached.Name}");
             }
-            
-            // Handle mount data updates
+
             if (mountsData != null && mountsData.Count > 0)
             {
                 var mountsDataJson = JsonSerializer.Serialize(mountsData);
-                _logger.LogInformation($"Serialized mount data for {player.Name}: {mountsDataJson.Length} chars, first mount: {mountsData.FirstOrDefault()?.Name}");
-                
-                if (mountsDataJson != player.LodestoneMountsData)
+                if (mountsDataJson != cached.LodestoneMountsData)
                 {
-                    var mountsDataUpdateTime = DateTime.UtcNow;
-                    player.LodestoneMountsData = mountsDataJson;
-                    player.LastMountsDataUpdate = mountsDataUpdateTime;
+                    PersistenceContext.UpdateCachedPlayerMountsData(contentId, mountsDataJson, DateTime.UtcNow);
+                    _logger.LogInformation($"Updated mount data for {cached.Name} with {mountsData.Count} mounts");
                     hasUpdates = true;
-                    _logger.LogInformation($"Updated mount data for {player.Name} in database with {mountsData.Count} mounts");
-                    
-                    // Update cached player data so UI reflects changes immediately
-                    PersistenceContext.UpdateCachedPlayerMountsData(player.LocalContentId, mountsDataJson, mountsDataUpdateTime);
-                    
-                }
-                else
-                {
                 }
             }
             else
             {
-                _logger.LogDebug($"Could not extract mount data for player {player.Name}");
+                _logger.LogDebug($"Could not extract mount data for player {cached.Name}");
             }
-            
+
             // Always update LastScannedAt to track when we attempted refresh
-            var now = DateTime.UtcNow;
-            player.LastScannedAt = now;
+            PersistenceContext.UpdateCachedPlayerLastScannedAt(contentId, DateTime.UtcNow);
             hasUpdates = true;
-            
-            // Update cached player LastScannedAt so UI reflects changes immediately
-            PersistenceContext.UpdateCachedPlayerLastScannedAt(player.LocalContentId, now);
-            
+
             return hasUpdates;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error refreshing Lodestone data for player {player.Name}");
-            
-            // Still update LastScannedAt to avoid infinite retry loops
-            var now = DateTime.UtcNow;
-            player.LastScannedAt = now;
-            
-            // Update cached player LastScannedAt so UI reflects changes immediately
-            PersistenceContext.UpdateCachedPlayerLastScannedAt(player.LocalContentId, now);
-            
-            return true; // Return true to save the timestamp update
+            _logger.LogError(ex, $"Error refreshing Lodestone data for player {cached.Name}");
+            // Still stamp LastScannedAt to avoid infinite retry loops
+            PersistenceContext.UpdateCachedPlayerLastScannedAt(contentId, DateTime.UtcNow);
+            return true;
         }
     }
 
     /// <summary>
     /// Fetches comprehensive player data from Lodestone using NetStone library
     /// </summary>
-    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel, List<MinionInfo>? MinionsData, List<MountInfo>? MountsData)> FetchLodestonePlayerData(Player player)
+    private async Task<(string? AvatarUrl, Dictionary<byte, short>? JobLevels, byte? MainJobId, short? MainJobLevel, List<MinionInfo>? MinionsData, List<MountInfo>? MountsData)> FetchLodestonePlayerData(ulong contentId, string name, ushort? homeWorldId, ushort? currentWorldId)
     {
         try
         {
-            if (string.IsNullOrEmpty(player.Name))
+            if (string.IsNullOrEmpty(name))
             {
-                _logger.LogWarning($"Player {player.LocalContentId} has no name, cannot search Lodestone");
+                _logger.LogWarning($"Player {contentId} has no name, cannot search Lodestone");
                 return (null, null, null, null, null, null);
             }
 
             // Get the NetStone client (lazy initialization)
             var client = await GetLodestoneClientAsync();
-            
+
             // Try to get world name for more reliable search
             string? worldName = null;
             uint? worldIdToUse = null;
-            
+
             // Try HomeWorldId first, fall back to CurrentWorldId
-            if (player.HomeWorldId.HasValue)
+            if (homeWorldId.HasValue)
             {
-                worldIdToUse = player.HomeWorldId.Value;
+                worldIdToUse = homeWorldId.Value;
                 worldName = Utils.GetWorldName(worldIdToUse.Value);
-                _logger.LogDebug($"Using HomeWorldId {worldIdToUse} ({worldName}) for character search: {player.Name}");
+                _logger.LogDebug($"Using HomeWorldId {worldIdToUse} ({worldName}) for character search: {name}");
             }
-            else if (player.CurrentWorldId.HasValue)
+            else if (currentWorldId.HasValue)
             {
-                worldIdToUse = player.CurrentWorldId.Value;
+                worldIdToUse = currentWorldId.Value;
                 worldName = Utils.GetWorldName(worldIdToUse.Value);
-                _logger.LogDebug($"Using CurrentWorldId {worldIdToUse} ({worldName}) for character search: {player.Name}");
+                _logger.LogDebug($"Using CurrentWorldId {worldIdToUse} ({worldName}) for character search: {name}");
             }
             else
             {
-                _logger.LogWarning($"Player {player.Name} has no world information, searching all worlds");
+                _logger.LogWarning($"Player {name} has no world information, searching all worlds");
             }
 
             // Validate world name if we have one
             if (!string.IsNullOrEmpty(worldName) && worldName == "Unknown")
             {
-                _logger.LogWarning($"World ID {worldIdToUse} resolved to 'Unknown', falling back to search all worlds for {player.Name}");
+                _logger.LogWarning($"World ID {worldIdToUse} resolved to 'Unknown', falling back to search all worlds for {name}");
                 worldName = null;
             }
 
             // Build search query with world filter if available
             var query = new CharacterSearchQuery()
             {
-                CharacterName = player.Name
+                CharacterName = name
             };
 
             // Add world filter if we have a valid world name
             if (!string.IsNullOrEmpty(worldName))
             {
                 query.World = worldName;
-                _logger.LogDebug($"Searching for character {player.Name} on world {worldName}");
+                _logger.LogDebug($"Searching for character {name} on world {worldName}");
             }
             else
             {
-                _logger.LogDebug($"Searching for character {player.Name} across all worlds");
+                _logger.LogDebug($"Searching for character {name} across all worlds");
             }
 
             var searchResult = await client.SearchCharacter(query);
             var character = searchResult?.Results?.FirstOrDefault();
-            
+
             if (character == null)
             {
                 if (!string.IsNullOrEmpty(worldName))
                 {
                     // If world-specific search failed, try without world filter as fallback
-                    _logger.LogWarning($"Character {player.Name} not found on world {worldName}, trying search across all worlds");
-                    query = new CharacterSearchQuery() { CharacterName = player.Name };
+                    _logger.LogWarning($"Character {name} not found on world {worldName}, trying search across all worlds");
+                    query = new CharacterSearchQuery() { CharacterName = name };
                     searchResult = await client.SearchCharacter(query);
                     character = searchResult?.Results?.FirstOrDefault();
                 }
-                
+
                 if (character == null)
                 {
                     var worldInfo = !string.IsNullOrEmpty(worldName) ? $" (searched {worldName} and all worlds)" : " (searched all worlds)";
-                    _logger.LogWarning($"Could not find character {player.Name} in Lodestone search{worldInfo}");
+                    _logger.LogWarning($"Could not find character {name} in Lodestone search{worldInfo}");
                     return (null, null, null, null, null, null);
                 }
                 else
                 {
-                    _logger.LogInformation($"Found character {player.Name} via fallback search across all worlds");
+                    _logger.LogInformation($"Found character {name} via fallback search across all worlds");
                 }
             }
             else
             {
                 var searchInfo = !string.IsNullOrEmpty(worldName) ? $" on world {worldName}" : " via all-worlds search";
-                _logger.LogDebug($"Successfully found character {player.Name}{searchInfo}");
+                _logger.LogDebug($"Successfully found character {name}{searchInfo}");
             }
             
             // Get character profile
             var profile = await client.GetCharacter(character.Id!);
             if (profile == null)
             {
-                _logger.LogWarning($"Could not fetch profile for character {player.Name}");
+                _logger.LogWarning($"Could not fetch profile for character {name}");
                 return (null, null, null, null, null, null);
             }
             
@@ -692,16 +607,16 @@ internal sealed class LodestoneRefreshService : IDisposable
                         }
                     }
                     
-                    _logger.LogDebug($"Extracted {jobLevels.Count} job levels for {player.Name}");
+                    _logger.LogDebug($"Extracted {jobLevels.Count} job levels for {name}");
                 }
                 else
                 {
-                    _logger.LogWarning($"GetClassJobInfo returned null for {player.Name}");
+                    _logger.LogWarning($"GetClassJobInfo returned null for {name}");
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, $"Could not extract job data for {player.Name}");
+                _logger.LogWarning(ex, $"Could not extract job data for {name}");
             }
             
             // Extract minion data using NetStone's GetMinions() method  
@@ -800,7 +715,7 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, $"Could not fetch minion data for {player.Name}");
+                _logger.LogWarning(ex, $"Could not fetch minion data for {name}");
             }
             
             // Extract mount data using NetStone's GetMounts() method  
@@ -899,16 +814,16 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, $"Could not fetch mount data for {player.Name}");
+                _logger.LogWarning(ex, $"Could not fetch mount data for {name}");
             }
             
-            _logger.LogDebug($"Successfully fetched Lodestone data for {player.Name}: Avatar={!string.IsNullOrEmpty(avatarUrl)}, Jobs={jobLevels?.Count ?? 0}, Minions={minionsData?.Count ?? 0}, Mounts={mountsData?.Count ?? 0}");
+            _logger.LogDebug($"Successfully fetched Lodestone data for {name}: Avatar={!string.IsNullOrEmpty(avatarUrl)}, Jobs={jobLevels?.Count ?? 0}, Minions={minionsData?.Count ?? 0}, Mounts={mountsData?.Count ?? 0}");
             
             return (avatarUrl, jobLevels?.Count > 0 ? jobLevels : null, mainJobId, mainJobLevel, minionsData, mountsData);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error fetching Lodestone data for {player.Name} using NetStone");
+            _logger.LogError(ex, $"Error fetching Lodestone data for {name} using NetStone");
             return (null, null, null, null, null, null);
         }
     }
