@@ -35,7 +35,6 @@ using Newtonsoft.Json;
 // AlphaScope internal dependencies
 using AlphaScope.API;
 using AlphaScope.API.Models.Requests.Player;
-using AlphaScope.Database;
 using AlphaScope.GUI;
 using AlphaScope.Persistence;
 using AlphaScope.Services;
@@ -186,9 +185,6 @@ internal sealed class PersistenceContext
         // Load existing data from database into memory caches
         _logger.LogInformation("PersistenceContext: Calling ReloadCache() during initialization...");
         ReloadCache();
-        
-        // One-time cleanup: remove players with null homeworld data so they get re-scanned properly
-        CleanupPlayersWithNullHomeworld();
 
         // Start background upload processing
         _cancellationTokenSource = new CancellationTokenSource();
@@ -209,90 +205,102 @@ internal sealed class PersistenceContext
     }
 
     /// <summary>
-    /// Clears all data from the local database and resets caches.
-    /// This will delete all stored player data permanently from the local cache.
-    /// Server data remains unaffected.
+    /// Clears the in-memory cache and triggers a fresh hydration from the server. Server data
+    /// is unaffected — this is a local-view reset, useful when the cache has drifted or the UI
+    /// wants a forced refresh. Historically this cleared a local SQLite database; there is no
+    /// longer one, so the method is kept under the same name for UI compatibility but the work
+    /// it does is just cache reset + server fetch.
     /// </summary>
     public static void ClearDatabase()
     {
-        try
-        {
-            _logger?.LogWarning("Clearing local database - all player data will be deleted permanently");
-            
-            using var scope = _serviceProvider.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-            
-            // Get count before deletion for logging
-            var playerCount = dbContext.Players.Count();
-            
-            // Clear all players from database
-            dbContext.Players.RemoveRange(dbContext.Players);
-            var deletedRows = dbContext.SaveChanges();
-            
-            _logger?.LogWarning($"Database cleared: {deletedRows} players deleted from local database");
-            
-            // Clear all in-memory caches after successful database clear
-            ClearCache();
-            
-            _logger?.LogInformation("Database and cache clearing completed successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Failed to clear local database");
-            throw;
-        }
+        _logger?.LogInformation("ClearDatabase: resetting in-memory cache and refetching from server");
+        ClearCache();
+        ReloadCache();
     }
 
     /// <summary>
-    /// Reloads all in-memory caches from the local SQLite database.
-    /// This method rebuilds player caches from persistent storage.
-    /// Called during initialization and when cache invalidation is needed.
+    /// Rehydrates the in-memory player cache from the central server. Fire-and-forget; the UI
+    /// stays empty until the first page returns, and if the server is unreachable the cache
+    /// stays empty until a future invocation succeeds.
     /// </summary>
     public static void ReloadCache()
     {
+        _ = Task.Run(ReloadCacheAsync);
+    }
+
+    private static async Task ReloadCacheAsync()
+    {
         try
         {
-            // Clear existing cache first to ensure fresh state
             ClearCache();
-            
-            using (IServiceScope scope = _serviceProvider.CreateScope())
-            {
-                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
 
-                var playerCount = 0;
-                var avatarCount = 0;
-                
-                foreach (var player in dbContext.Players)
+            var apiClient = _serviceProvider.GetRequiredService<ApiClient>();
+            var cursor = 0;
+            var playerCount = 0;
+            var avatarCount = 0;
+
+            while (true)
+            {
+                var query = new API.Query.Player.PlayerQueryObject
                 {
-                    _playerCache[player.LocalContentId] = new CachedPlayer
+                    Cursor = cursor,
+                    IsFetching = true,
+                };
+
+                var response = await apiClient.GetPlayersAsync<API.Models.Responses.Player.PlayerSearchDto>(query).ConfigureAwait(false);
+                if (!response.IsSuccess || response.Value.Page is null)
+                {
+                    _logger?.LogWarning("Cache hydration from server halted: {Error}",
+                        response.Error ?? response.Value.Message ?? "no data in response");
+                    break;
+                }
+
+                var page = response.Value.Page;
+                if (page.Data is null || page.Data.Count == 0)
+                    break;
+
+                foreach (var dto in page.Data)
+                {
+                    _playerCache[(ulong)dto.LocalContentId] = new CachedPlayer
                     {
-                        AccountId = player.AccountId,
-                        Name = player.Name ?? string.Empty,
-                        AvatarLink = player.AvatarLink,
-                        HomeWorldId = player.HomeWorldId,
-                        CurrentWorldId = player.CurrentWorldId,
-                        LastScannedAt = player.LastScannedAt,
-                        LodestoneJobData = player.LodestoneJobData,
-                        MainJobId = player.MainJobId,
-                        MainJobLevel = player.MainJobLevel,
-                        LastJobDataUpdate = player.LastJobDataUpdate,
-                        LodestoneMinionsData = player.LodestoneMinionsData,
-                        LastMinionsDataUpdate = player.LastMinionsDataUpdate,
-                        LodestoneMountsData = player.LodestoneMountsData,
-                        LastMountsDataUpdate = player.LastMountsDataUpdate,
+                        AccountId = dto.AccountId.HasValue ? (ulong)dto.AccountId.Value : (ulong?)null,
+                        Name = dto.Name ?? string.Empty,
+                        AvatarLink = dto.AvatarLink,
+                        HomeWorldId = dto.HomeWorldId.HasValue ? (ushort)dto.HomeWorldId.Value : (ushort?)null,
+                        CurrentWorldId = dto.WorldId.HasValue ? (ushort)dto.WorldId.Value : (ushort?)null,
+                        LastScannedAt = dto.LastScannedAt,
+                        LodestoneJobData = dto.LodestoneJobData,
+                        MainJobId = dto.MainJobId,
+                        MainJobLevel = dto.MainJobLevel,
+                        LastJobDataUpdate = dto.LastJobDataUpdate,
+                        LodestoneMinionsData = dto.LodestoneMinionsData,
+                        LastMinionsDataUpdate = dto.LastMinionsDataUpdate,
+                        LodestoneMountsData = dto.LodestoneMountsData,
+                        LastMountsDataUpdate = dto.LastMountsDataUpdate,
                     };
                     playerCount++;
-                    if (!string.IsNullOrEmpty(player.AvatarLink))
-                    {
+                    if (!string.IsNullOrEmpty(dto.AvatarLink))
                         avatarCount++;
-                    }
                 }
-                _logger?.LogInformation($"Cache reload completed: loaded {playerCount} players, {avatarCount} with avatars");
+
+                // End of pagination: the server reports how many rows remain past this page.
+                if (page.NextCount <= 0)
+                    break;
+
+                // The controller paginates on LocalContentId >= Cursor and returns the last id
+                // seen on this page; advance just past it for the next request.
+                var nextCursor = page.LastCursor + 1;
+                if (nextCursor == cursor)
+                    break; // defensive: avoid infinite loop if cursor ever fails to advance
+                cursor = nextCursor;
             }
+
+            _logger?.LogInformation("Cache hydrated from server: {Count} players loaded, {AvatarCount} with avatars",
+                playerCount, avatarCount);
         }
         catch (Exception ex)
         {
-            _logger?.LogError(ex, "Error during cache reload from database");
+            _logger?.LogError(ex, "Failed to hydrate cache from server — UI will remain empty until a future sync succeeds");
         }
     }
 
@@ -539,91 +547,16 @@ internal sealed class PersistenceContext
     }
 
 
-    private void HandleContentIdMappingFallback(PlayerMapping mapping, ushort? currentWorldId = null)
-    {
-        try
-        {
-            if (mapping.ContentId == 0 || string.IsNullOrEmpty(mapping.PlayerName))
-                return;
-
-            if (_playerCache.TryGetValue(mapping.ContentId, out CachedPlayer? cachedPlayer))
-            {
-                if (mapping.PlayerName == cachedPlayer.Name && mapping.AccountId == cachedPlayer.AccountId)
-                    return;
-            }
-
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-                var dbPlayer = dbContext.Players.Find(mapping.ContentId);
-                if (dbPlayer == null)
-                    dbContext.Players.Add(new Player
-                    {
-                        LocalContentId = mapping.ContentId,
-                        Name = mapping.PlayerName,
-                        AccountId = mapping.AccountId,
-                        HomeWorldId = mapping.WorldId,
-                        CurrentWorldId = mapping.CurrentWorldId,
-                        LastScannedAt = DateTime.UtcNow,
-                    });
-                else
-                {
-                    dbPlayer.Name = mapping.PlayerName;
-                    dbPlayer.AccountId ??= mapping.AccountId;
-                    dbPlayer.HomeWorldId ??= mapping.WorldId;
-                    dbPlayer.CurrentWorldId = mapping.CurrentWorldId; // Always update current world
-                    dbContext.Entry(dbPlayer).State = EntityState.Modified;
-                }
-
-                int changeCount = dbContext.SaveChanges();
-                if (changeCount > 0)
-                {
-                    //_logger.LogDebug("Saved fallback player mappings for {ContentId} / {Name} / {AccountId}", mapping.ContentId, mapping.PlayerName, mapping.AccountId);
-                }
-
-                var newCachedPlayer = new CachedPlayer
-                {
-                    AccountId = mapping.AccountId,
-                    Name = mapping.PlayerName,
-                    AvatarLink = null,
-                    HomeWorldId = mapping.WorldId,
-                    CurrentWorldId = mapping.CurrentWorldId,
-                    LastScannedAt = DateTime.UtcNow,
-                    LodestoneJobData = null,
-                    MainJobId = null,
-                    MainJobLevel = null,
-                    LastJobDataUpdate = null,
-                    LodestoneMinionsData = null,
-                    LastMinionsDataUpdate = null,
-                    LodestoneMountsData = null,
-                    LastMountsDataUpdate = null,
-                };
-                _playerCache[mapping.ContentId] = newCachedPlayer;
-                
-                _recentlyScannedPlayers[mapping.ContentId] = (newCachedPlayer, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-            }
-        }
-        catch (DbUpdateException e)
-        {
-            _logger.LogError(e, "Database error while persisting singular mapping for {ContentId} / {Name} / {AccountId}",
-                mapping.ContentId, mapping.PlayerName, mapping.AccountId);
-        }
-        catch (InvalidOperationException e)
-        {
-            _logger.LogWarning(e, "Invalid operation while persisting singular mapping for {ContentId} / {Name} / {AccountId}",
-                mapping.ContentId, mapping.PlayerName, mapping.AccountId);
-        }
-        catch (Exception e)
-        {
-            _logger.LogWarning(e, "Unexpected error while persisting singular mapping for {ContentId} / {Name} / {AccountId}",
-                mapping.ContentId, mapping.PlayerName, mapping.AccountId);
-        }
-    }
-
     public static SemaphoreSlim processPlayers = new SemaphoreSlim(1, 999);
+
+    /// <summary>
+    /// Updates the in-memory caches for a batch of player mappings observed by the scan loop.
+    /// The server receives these players via the scan upload pipeline (ObjectTableHandler enqueues
+    /// a <see cref="PostPlayerRequest"/> per observed player every tick), so this method does not
+    /// need to write anywhere durable itself.
+    /// </summary>
     public async Task HandleContentIdMappingAsync(IReadOnlyList<PlayerMapping> mappings, ushort? currentWorldId = null)
     {
-        // Filter to only players that actually need updates (not cached or have changes)
         var updates = new List<PlayerMapping>();
         var validMappings = mappings.DistinctBy(x => x.ContentId)
             .Where(mapping => mapping.ContentId != 0 && !string.IsNullOrEmpty(mapping.PlayerName))
@@ -631,124 +564,60 @@ internal sealed class PersistenceContext
 
         foreach (var mapping in validMappings)
         {
-            // Check if player is in recently scanned cache (to avoid immediate re-processing)
             if (_recentlyScannedPlayers.TryGetValue(mapping.ContentId, out var recentData))
             {
                 var timeSinceLastScan = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - recentData.ScannedAt;
-                if (timeSinceLastScan < 300) // Skip if scanned within last 5 minutes
-                {
+                if (timeSinceLastScan < 300)
                     continue;
-                }
             }
 
-            // Check if we need to update based on cache
             if (_playerCache.TryGetValue(mapping.ContentId, out var cachedPlayer))
             {
-                // Only update if data has actually changed
                 if (mapping.PlayerName == cachedPlayer.Name && mapping.AccountId == cachedPlayer.AccountId)
-                {
-                    continue; // No changes needed
-                }
+                    continue;
             }
-            
+
             updates.Add(mapping);
         }
-        
+
         if (updates.Count == 0)
             return;
 
         await processPlayers.WaitAsync().ConfigureAwait(false);
-
         try
         {
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-                foreach (var update in updates)
-                {
-                    var dbPlayer = dbContext.Players.Find(update.ContentId);
-                    if (dbPlayer == null)
-                        dbContext.Players.Add(new Player
-                        {
-                            LocalContentId = update.ContentId,
-                            Name = update.PlayerName,
-                            AccountId = update.AccountId,
-                            HomeWorldId = update.WorldId,
-                            CurrentWorldId = update.CurrentWorldId,
-                        });
-                    else
-                    {
-                        dbPlayer.Name = update.PlayerName;
-                        dbPlayer.AccountId ??= update.AccountId;
-                        dbPlayer.HomeWorldId ??= update.WorldId;
-                        dbPlayer.CurrentWorldId = update.CurrentWorldId; // Always update current world
-                        dbContext.Entry(dbPlayer).State = EntityState.Modified;
-                    }
-                }
-
-                int changeCount = await dbContext.SaveChangesAsync();
-                if (changeCount > 0)
-                {
-                    // foreach (var update in updates)
-                    //_logger.LogDebug("  {ContentId} = {Name} ({AccountId})", update.ContentId, update.PlayerName,  update.AccountId);
-
-                }
-                else
-                {
-                    _logger.LogWarning("Database save completed but no rows were affected");
-                }
-            }
-
             foreach (var player in updates)
             {
+                // Preserve existing Lodestone enrichment data if we already had this player cached —
+                // the scan payload doesn't carry Lodestone fields and we don't want to clobber them.
+                _playerCache.TryGetValue(player.ContentId, out var existing);
+
                 var cachedPlayer = new CachedPlayer
                 {
                     AccountId = player.AccountId,
                     Name = player.PlayerName,
-                    AvatarLink = null,
+                    AvatarLink = existing?.AvatarLink,
                     HomeWorldId = player.WorldId,
                     CurrentWorldId = player.CurrentWorldId,
                     LastScannedAt = DateTime.UtcNow,
-                    LodestoneJobData = null,
-                    MainJobId = null,
-                    MainJobLevel = null,
-                    LastJobDataUpdate = null,
-                    LodestoneMinionsData = null,
-                    LastMinionsDataUpdate = null,
-                    LodestoneMountsData = null,
-                    LastMountsDataUpdate = null,
+                    LodestoneJobData = existing?.LodestoneJobData,
+                    MainJobId = existing?.MainJobId,
+                    MainJobLevel = existing?.MainJobLevel,
+                    LastJobDataUpdate = existing?.LastJobDataUpdate,
+                    LodestoneMinionsData = existing?.LodestoneMinionsData,
+                    LastMinionsDataUpdate = existing?.LastMinionsDataUpdate,
+                    LodestoneMountsData = existing?.LodestoneMountsData,
+                    LastMountsDataUpdate = existing?.LastMountsDataUpdate,
                 };
                 _playerCache[player.ContentId] = cachedPlayer;
-                
                 _recentlyScannedPlayers[player.ContentId] = (cachedPlayer, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
         }
-        catch (DbUpdateException e)
+        finally
         {
-            _logger.LogError(e, "Database error while persisting multiple mappings, attempting non-batch update");
-            foreach (var update in updates)
-            {
-                HandleContentIdMappingFallback(update, currentWorldId);
-            }
+            processPlayers.Release();
         }
-        catch (InvalidOperationException e)
-        {
-            _logger.LogWarning(e, "Invalid operation while persisting multiple mappings, attempting non-batch update");
-            foreach (var update in updates)
-            {
-                HandleContentIdMappingFallback(update, currentWorldId);
-            }
-        }
-        catch (Exception e)
-        {
-            _logger.LogWarning(e, "Unexpected error while persisting multiple mappings, attempting non-batch update");
-            foreach (var update in updates)
-            {
-                HandleContentIdMappingFallback(update, currentWorldId);
-            }
-        }
-
-        processPlayers.Release();
+        await Task.CompletedTask;
     }
 
     public class CachedPlayer
@@ -803,48 +672,25 @@ internal sealed class PersistenceContext
     }
 
     /// <summary>
-    /// Updates the avatar link for a cached player and persists it to the database
+    /// Updates the avatar link for a cached player. The next scan upload will carry it to the
+    /// server via <see cref="EnrichWithLodestoneCacheData"/>.
     /// </summary>
     public static void UpdateCachedPlayerAvatar(ulong contentId, string avatarLink)
     {
-        
         if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
         {
             cachedPlayer.AvatarLink = avatarLink;
-            
-            // Persist to database
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-                var dbPlayer = dbContext.Players.Find(contentId);
-                if (dbPlayer != null)
-                {
-                    dbPlayer.AvatarLink = avatarLink;
-                    dbContext.SaveChanges();
-                }
-                else
-                {
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, $"Failed to persist avatar URL for player {cachedPlayer.Name}");
-            }
-        }
-        else
-        {
         }
     }
 
     /// <summary>
-    /// Updates the job data for a cached player and persists it to the database
+    /// Updates the job data for a cached player. The next scan upload will carry it to the
+    /// server via <see cref="EnrichWithLodestoneCacheData"/>.
     /// </summary>
     public static void UpdateCachedPlayerJobData(ulong contentId, string? lodestoneJobData, byte? mainJobId, short? mainJobLevel, DateTime? lastJobDataUpdate)
     {
         if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
         {
-            // Create new cached player instance with updated job data
             _playerCache[contentId] = new CachedPlayer
             {
                 AccountId = cachedPlayer.AccountId,
@@ -862,32 +708,6 @@ internal sealed class PersistenceContext
                 LodestoneMountsData = cachedPlayer.LodestoneMountsData,
                 LastMountsDataUpdate = cachedPlayer.LastMountsDataUpdate,
             };
-            
-            
-            // Persist to database
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-                
-                var player = dbContext.Players.Find(contentId);
-                if (player != null)
-                {
-                    player.LodestoneJobData = lodestoneJobData;
-                    player.MainJobId = mainJobId;
-                    player.MainJobLevel = mainJobLevel;
-                    player.LastJobDataUpdate = lastJobDataUpdate;
-                    dbContext.SaveChanges();
-                }
-                else
-                {
-                    _logger?.LogWarning($"Could not find player {contentId} in database to update job data");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, $"Failed to persist job data for player {cachedPlayer.Name}");
-            }
         }
         else
         {
@@ -896,18 +716,14 @@ internal sealed class PersistenceContext
     }
 
     /// <summary>
-    /// Updates the minion data for a cached player and persists it to the database
+    /// Updates the minion data for a cached player. The next scan upload will carry it to the
+    /// server via <see cref="EnrichWithLodestoneCacheData"/>.
     /// </summary>
     public static void UpdateCachedPlayerMinionsData(ulong contentId, string? lodestoneMinionsData, DateTime? lastMinionsDataUpdate)
     {
-        Plugin.Log.Information($"[Cache Debug] UpdateCachedPlayerMinionsData called for {contentId}, data length: {lodestoneMinionsData?.Length ?? 0}");
-        
         if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
         {
-            Plugin.Log.Information($"[Cache Debug] Found cached player {cachedPlayer.Name}, updating minion data");
-            
-            // Create new cached player instance with updated minion data
-            var newCachedPlayer = new CachedPlayer
+            _playerCache[contentId] = new CachedPlayer
             {
                 AccountId = cachedPlayer.AccountId,
                 Name = cachedPlayer.Name,
@@ -921,47 +737,9 @@ internal sealed class PersistenceContext
                 LastJobDataUpdate = cachedPlayer.LastJobDataUpdate,
                 LodestoneMinionsData = lodestoneMinionsData,
                 LastMinionsDataUpdate = lastMinionsDataUpdate,
+                LodestoneMountsData = cachedPlayer.LodestoneMountsData,
+                LastMountsDataUpdate = cachedPlayer.LastMountsDataUpdate,
             };
-            
-            _playerCache[contentId] = newCachedPlayer;
-            
-            Plugin.Log.Information($"[Cache Debug] Successfully updated cached player minion data for {cachedPlayer.Name}");
-            Plugin.Log.Information($"[Cache Debug] New cached player minion data length: {newCachedPlayer.LodestoneMinionsData?.Length ?? 0}");
-            
-            // Verify the cache update worked
-            if (_playerCache.TryGetValue(contentId, out var verifyPlayer))
-            {
-                Plugin.Log.Information($"[Cache Debug] Verification: Cache now contains minion data length: {verifyPlayer.LodestoneMinionsData?.Length ?? 0}");
-            }
-            else
-            {
-                Plugin.Log.Warning($"[Cache Debug] Verification failed: Could not retrieve updated player from cache");
-            }
-            
-            
-            // Persist to database
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-                
-                var player = dbContext.Players.Find(contentId);
-                if (player != null)
-                {
-                    player.LodestoneMinionsData = lodestoneMinionsData;
-                    player.LastMinionsDataUpdate = lastMinionsDataUpdate;
-                    var changes = dbContext.SaveChanges();
-                    Plugin.Log.Information($"[Cache Debug] Persisted minion data to database for {player.Name}, {changes} rows affected");
-                }
-                else
-                {
-                    Plugin.Log.Warning($"[Cache Debug] Could not find player {contentId} in database to persist minion data");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, $"Failed to persist minion data for player {cachedPlayer.Name}");
-            }
         }
         else
         {
@@ -970,18 +748,14 @@ internal sealed class PersistenceContext
     }
 
     /// <summary>
-    /// Updates the mount data for a cached player and persists it to the database
+    /// Updates the mount data for a cached player. The next scan upload will carry it to the
+    /// server via <see cref="EnrichWithLodestoneCacheData"/>.
     /// </summary>
     public static void UpdateCachedPlayerMountsData(ulong contentId, string? lodestoneMountsData, DateTime? lastMountsDataUpdate)
     {
-        Plugin.Log.Information($"[Cache Debug] UpdateCachedPlayerMountsData called for {contentId}, data length: {lodestoneMountsData?.Length ?? 0}");
-        
         if (_playerCache.TryGetValue(contentId, out var cachedPlayer) && cachedPlayer != null)
         {
-            Plugin.Log.Information($"[Cache Debug] Found cached player {cachedPlayer.Name}, updating mount data");
-            
-            // Create new cached player instance with updated mount data
-            var newCachedPlayer = new CachedPlayer
+            _playerCache[contentId] = new CachedPlayer
             {
                 AccountId = cachedPlayer.AccountId,
                 Name = cachedPlayer.Name,
@@ -998,46 +772,6 @@ internal sealed class PersistenceContext
                 LodestoneMountsData = lodestoneMountsData,
                 LastMountsDataUpdate = lastMountsDataUpdate,
             };
-            
-            _playerCache[contentId] = newCachedPlayer;
-            
-            Plugin.Log.Information($"[Cache Debug] Successfully updated cached player mount data for {cachedPlayer.Name}");
-            Plugin.Log.Information($"[Cache Debug] New cached player mount data length: {newCachedPlayer.LodestoneMountsData?.Length ?? 0}");
-            
-            // Verify the cache update worked
-            if (_playerCache.TryGetValue(contentId, out var verifyPlayer))
-            {
-                Plugin.Log.Information($"[Cache Debug] Verification: Cache now contains mount data length: {verifyPlayer.LodestoneMountsData?.Length ?? 0}");
-            }
-            else
-            {
-                Plugin.Log.Warning($"[Cache Debug] Verification failed: Could not retrieve updated player from cache");
-            }
-            
-            
-            // Persist to database
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-                
-                var player = dbContext.Players.Find(contentId);
-                if (player != null)
-                {
-                    player.LodestoneMountsData = lodestoneMountsData;
-                    player.LastMountsDataUpdate = lastMountsDataUpdate;
-                    var changes = dbContext.SaveChanges();
-                    Plugin.Log.Information($"[Cache Debug] Persisted mount data to database for {player.Name}, {changes} rows affected");
-                }
-                else
-                {
-                    Plugin.Log.Warning($"[Cache Debug] Could not find player {contentId} in database to persist mount data");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, $"Failed to persist mount data for player {cachedPlayer.Name}");
-            }
         }
         else
         {
@@ -1091,49 +825,6 @@ internal sealed class PersistenceContext
         return false;
     }
 
-    /// <summary>
-    /// One-time cleanup to remove players with null homeworld data so they get re-scanned with proper data
-    /// </summary>
-    private static void CleanupPlayersWithNullHomeworld()
-    {
-        try
-        {
-            using var scope = _serviceProvider.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-            
-            var playersWithNullHomeworld = dbContext.Players
-                .Where(p => p.HomeWorldId == null)
-                .ToList();
-                
-            if (playersWithNullHomeworld.Count > 0)
-            {
-                _logger?.LogInformation($"Cleaning up {playersWithNullHomeworld.Count} players with null homeworld data for re-scanning...");
-                
-                foreach (var player in playersWithNullHomeworld)
-                {
-                    _logger?.LogInformation($"Removing {player.Name} (will be re-scanned with proper homeworld data)");
-                    
-                    // Remove from cache
-                    _playerCache.TryRemove(player.LocalContentId, out _);
-                }
-                
-                // Remove from database
-                dbContext.Players.RemoveRange(playersWithNullHomeworld);
-                var deletedCount = dbContext.SaveChanges();
-                
-                _logger?.LogInformation($"Cleanup complete: removed {deletedCount} players with null homeworld data. They will be re-scanned when encountered again.");
-            }
-            else
-            {
-                _logger?.LogInformation("No players with null homeworld data found - cleanup not needed");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Error during cleanup of players with null homeworld data");
-        }
-    }
-    
     /// <summary>
     /// Enriches a PostPlayerRequest with cached Lodestone data (minions, mounts, job data) if available
     /// </summary>
