@@ -7,9 +7,20 @@ using Xunit;
 namespace AlphaScope.Tests.Handlers;
 
 /// <summary>
+/// Serialises any test class that mutates PersistenceContext's static _playerCache.
+/// Future test classes that touch _playerCache should also opt into this collection
+/// by adding [Collection("PersistenceContextStatic")].
+/// </summary>
+[CollectionDefinition("PersistenceContextStatic", DisableParallelization = true)]
+public class PersistenceContextStaticCollection
+{
+}
+
+/// <summary>
 /// Tests for PersistenceContext.GetAccountAltCharacters.
 /// Mutates the static _playerCache; each test clears it before and after to stay isolated.
 /// </summary>
+[Collection("PersistenceContextStatic")]
 public class PersistenceContextAltCharactersTests : IDisposable
 {
     public PersistenceContextAltCharactersTests()
@@ -60,8 +71,7 @@ public class PersistenceContextAltCharactersTests : IDisposable
 
         var result = PersistenceContext.GetAccountAltCharacters(accountId: 42, excludeContentId: 100);
 
-        result.Select(r => r.ContentId).Should().NotContain((ulong)100);
-        result.Should().HaveCount(1);
+        result.Select(r => r.ContentId).Should().ContainSingle().Which.Should().Be(101);
     }
 
     [Fact]
@@ -80,6 +90,16 @@ public class PersistenceContextAltCharactersTests : IDisposable
     {
         PersistenceContext._playerCache[100] = MakePlayer("Target", accountId: 42);
         PersistenceContext._playerCache[101] = MakePlayer("Unknown", accountId: null);
+
+        var result = PersistenceContext.GetAccountAltCharacters(accountId: 42, excludeContentId: 100);
+
+        result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetAccountAltCharacters_ReturnsEmpty_WhenCacheIsEmpty()
+    {
+        // Constructor already cleared _playerCache; do not insert anything.
 
         var result = PersistenceContext.GetAccountAltCharacters(accountId: 42, excludeContentId: 100);
 

@@ -492,7 +492,9 @@ internal sealed class PersistenceContext
 
     /// <summary>
     /// Returns other characters known to share the given Account ID, excluding the specified character.
-    /// Scans the in-memory player cache; no database access. Safe to call every frame for small alt counts.
+    /// Scans the in-memory player cache; no database access. The scan is O(n) over every cached player
+    /// on every call, so per-frame callers should memoise if the cache routinely exceeds a few thousand
+    /// entries.
     /// </summary>
     public static IReadOnlyList<(ulong ContentId, CachedPlayer Player)> GetAccountAltCharacters(
         ulong accountId,
