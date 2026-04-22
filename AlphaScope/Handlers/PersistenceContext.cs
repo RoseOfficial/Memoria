@@ -27,7 +27,6 @@ using Dalamud.Bindings.ImGui;
 using Lumina.Excel.Sheets;
 
 // Microsoft framework dependencies
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -41,7 +40,6 @@ using AlphaScope.Services;
 
 // Static imports for specific functionality
 using static FFXIVClientStructs.Havok.Animation.Deform.Skinning.hkaMeshBinding;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 using static AlphaScope.Handlers.PersistenceContext;
 
 namespace AlphaScope.Handlers;

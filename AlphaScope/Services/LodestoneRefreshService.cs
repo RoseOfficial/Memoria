@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NetStone;
@@ -638,7 +637,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                             foreach (var minion in enumerable.Cast<object>())
                             {
                                 var nameProperty = minion.GetType().GetProperty("Name");
-                                var name = nameProperty?.GetValue(minion)?.ToString() ?? "Unknown";
+                                var minionName = nameProperty?.GetValue(minion)?.ToString() ?? "Unknown";
                                 
                                 // Try to extract icon URL from NetStone
                                 string? iconUrl = null;
@@ -665,19 +664,19 @@ internal sealed class LodestoneRefreshService : IDisposable
                                 }
                                 
                                 // If we don't have a minion ID, try to look it up by name using comprehensive service
-                                if (!minionId.HasValue && !string.IsNullOrEmpty(name))
+                                if (!minionId.HasValue && !string.IsNullOrEmpty(minionName))
                                 {
-                                    var mappedId = _minionDataService.GetMinionId(name);
+                                    var mappedId = _minionDataService.GetMinionId(minionName);
                                     if (mappedId.HasValue)
                                     {
                                         minionId = (int)mappedId.Value;
                                     }
                                     else
                                     {
-                                        _logger.LogWarning($"Minion '{name}' not found in MinionDataService - no icon available");
+                                        _logger.LogWarning($"Minion '{minionName}' not found in MinionDataService - no icon available");
                                     }
                                 }
-                                
+
                                 // If we have an ID but no icon URL, use XIVAPI with actual icon ID from Lumina
                                 if (string.IsNullOrEmpty(iconUrl) && minionId.HasValue)
                                 {
@@ -689,19 +688,19 @@ internal sealed class LodestoneRefreshService : IDisposable
                                     }
                                     else
                                     {
-                                        _logger.LogWarning($"No icon ID found in MinionDataService for minion '{name}' (ID: {minionId})");
+                                        _logger.LogWarning($"No icon ID found in MinionDataService for minion '{minionName}' (ID: {minionId})");
                                     }
                                 }
-                                
+
                                 // Log when we can't get an icon for debugging the remaining 10%
                                 if (string.IsNullOrEmpty(iconUrl))
                                 {
-                                    _logger.LogWarning($"No icon available for minion '{name}' - NetStone icon: {iconProperty?.GetValue(minion)}, MinionDataService ID: {(minionId.HasValue ? minionId.ToString() : "not found")}");
+                                    _logger.LogWarning($"No icon available for minion '{minionName}' - NetStone icon: {iconProperty?.GetValue(minion)}, MinionDataService ID: {(minionId.HasValue ? minionId.ToString() : "not found")}");
                                 }
-                                
+
                                 var minionInfo = new MinionInfo
                                 {
-                                    Name = name,
+                                    Name = minionName,
                                     IconUrl = iconUrl,
                                     MinionId = minionId,
                                     AcquiredDate = null // Check if available in minion properties
@@ -737,7 +736,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                             foreach (var mount in enumerable.Cast<object>())
                             {
                                 var nameProperty = mount.GetType().GetProperty("Name");
-                                var name = nameProperty?.GetValue(mount)?.ToString() ?? "Unknown";
+                                var mountName = nameProperty?.GetValue(mount)?.ToString() ?? "Unknown";
                                 
                                 // Try to extract icon URL from NetStone
                                 string? iconUrl = null;
@@ -764,19 +763,19 @@ internal sealed class LodestoneRefreshService : IDisposable
                                 }
                                 
                                 // If we don't have a mount ID, try to look it up by name using comprehensive service
-                                if (!mountId.HasValue && !string.IsNullOrEmpty(name))
+                                if (!mountId.HasValue && !string.IsNullOrEmpty(mountName))
                                 {
-                                    var mappedId = _mountDataService.GetMountId(name);
+                                    var mappedId = _mountDataService.GetMountId(mountName);
                                     if (mappedId.HasValue)
                                     {
                                         mountId = (int)mappedId.Value;
                                     }
                                     else
                                     {
-                                        _logger.LogWarning($"Mount '{name}' not found in MountDataService - no icon available");
+                                        _logger.LogWarning($"Mount '{mountName}' not found in MountDataService - no icon available");
                                     }
                                 }
-                                
+
                                 // If we have an ID but no icon URL, use XIVAPI with actual icon ID from Lumina
                                 if (string.IsNullOrEmpty(iconUrl) && mountId.HasValue)
                                 {
@@ -788,19 +787,19 @@ internal sealed class LodestoneRefreshService : IDisposable
                                     }
                                     else
                                     {
-                                        _logger.LogWarning($"No icon ID found in MountDataService for mount '{name}' (ID: {mountId})");
+                                        _logger.LogWarning($"No icon ID found in MountDataService for mount '{mountName}' (ID: {mountId})");
                                     }
                                 }
-                                
+
                                 // Log when we can't get an icon for debugging the remaining cases
                                 if (string.IsNullOrEmpty(iconUrl))
                                 {
-                                    _logger.LogWarning($"No icon available for mount '{name}' - NetStone icon: {iconProperty?.GetValue(mount)}, MountDataService ID: {(mountId.HasValue ? mountId.ToString() : "not found")}");
+                                    _logger.LogWarning($"No icon available for mount '{mountName}' - NetStone icon: {iconProperty?.GetValue(mount)}, MountDataService ID: {(mountId.HasValue ? mountId.ToString() : "not found")}");
                                 }
-                                
+
                                 var mountInfo = new MountInfo
                                 {
-                                    Name = name,
+                                    Name = mountName,
                                     IconUrl = iconUrl,
                                     MountId = mountId,
                                     AcquiredDate = null // Check if available in mount properties
