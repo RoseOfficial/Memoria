@@ -56,10 +56,12 @@ namespace AlphaScopeServer.Controllers
 
                     _context.Users.Add(user);
 
-                    // Create primary character entry
+                    // Use the navigation property so EF patches UserId after the user row is
+                    // inserted and the identity column is populated. Setting UserId = user.Id
+                    // directly would capture 0 and trip the FK constraint on SaveChanges.
                     var primaryChar = new UserCharacter
                     {
-                        UserId = user.Id,
+                        User = user,
                         LocalContentId = request.UserLocalContentId,
                         Name = request.Name
                     };
@@ -136,7 +138,16 @@ namespace AlphaScopeServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during user login");
-                return StatusCode(500, "Error during login");
+                // Include the exception type + message in the response so plugin logs are
+                // self-diagnostic. The login endpoint is exempt from auth and doesn't take any
+                // sensitive input, so echoing the server exception is safe.
+                return StatusCode(500, new
+                {
+                    error = "Error during login",
+                    type = ex.GetType().Name,
+                    detail = ex.Message,
+                    inner = ex.InnerException?.Message,
+                });
             }
         }
 
