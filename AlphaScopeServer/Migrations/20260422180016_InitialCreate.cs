@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -15,22 +16,30 @@ namespace AlphaScopeServer.Migrations
                 name: "Players",
                 columns: table => new
                 {
-                    LocalContentId = table.Column<long>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    AccountId = table.Column<int>(type: "INTEGER", nullable: true),
-                    HomeWorldId = table.Column<short>(type: "INTEGER", nullable: true),
-                    CurrentWorldId = table.Column<short>(type: "INTEGER", nullable: true),
-                    TerritoryId = table.Column<short>(type: "INTEGER", nullable: true),
-                    CurrentJobId = table.Column<byte>(type: "INTEGER", nullable: true),
-                    CurrentJobLevel = table.Column<short>(type: "INTEGER", nullable: true),
-                    PlayerPos = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    AvatarLink = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    LastScannedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    IsPrivate = table.Column<bool>(type: "INTEGER", nullable: false),
-                    HideInSearch = table.Column<bool>(type: "INTEGER", nullable: false)
+                    LocalContentId = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    AccountId = table.Column<int>(type: "integer", nullable: true),
+                    HomeWorldId = table.Column<short>(type: "smallint", nullable: true),
+                    CurrentWorldId = table.Column<short>(type: "smallint", nullable: true),
+                    TerritoryId = table.Column<short>(type: "smallint", nullable: true),
+                    CurrentJobId = table.Column<byte>(type: "smallint", nullable: true),
+                    CurrentJobLevel = table.Column<short>(type: "smallint", nullable: true),
+                    PlayerPos = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    AvatarLink = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    LastScannedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LodestoneJobData = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    MainJobId = table.Column<byte>(type: "smallint", nullable: true),
+                    MainJobLevel = table.Column<short>(type: "smallint", nullable: true),
+                    LastJobDataUpdate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LodestoneMinionsData = table.Column<string>(type: "character varying(10000)", maxLength: 10000, nullable: true),
+                    LastMinionsDataUpdate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    LodestoneMountsData = table.Column<string>(type: "character varying(10000)", maxLength: 10000, nullable: true),
+                    LastMountsDataUpdate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    IsPrivate = table.Column<bool>(type: "boolean", nullable: false),
+                    HideInSearch = table.Column<bool>(type: "boolean", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -41,23 +50,23 @@ namespace AlphaScopeServer.Migrations
                 name: "Users",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    GameAccountId = table.Column<int>(type: "INTEGER", nullable: false),
-                    PrimaryCharacterLocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    ApiKey = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
-                    AppRoleId = table.Column<int>(type: "INTEGER", nullable: false),
-                    BaseUrl = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    LastLoginAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UploadedPlayersCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    UploadedPlayerInfoCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    UploadedRetainersCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    UploadedRetainerInfoCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    FetchedPlayerInfoCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    SearchedNamesCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    LastSyncedTime = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    GameAccountId = table.Column<int>(type: "integer", nullable: false),
+                    PrimaryCharacterLocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    ApiKey = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    AppRoleId = table.Column<int>(type: "integer", nullable: false),
+                    BaseUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastLoginAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UploadedPlayersCount = table.Column<int>(type: "integer", nullable: false),
+                    UploadedPlayerInfoCount = table.Column<int>(type: "integer", nullable: false),
+                    UploadedRetainersCount = table.Column<int>(type: "integer", nullable: false),
+                    UploadedRetainerInfoCount = table.Column<int>(type: "integer", nullable: false),
+                    FetchedPlayerInfoCount = table.Column<int>(type: "integer", nullable: false),
+                    SearchedNamesCount = table.Column<int>(type: "integer", nullable: false),
+                    LastSyncedTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -68,23 +77,23 @@ namespace AlphaScopeServer.Migrations
                 name: "PlayerCustomizationHistory",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    PlayerLocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    BodyType = table.Column<byte>(type: "INTEGER", nullable: true),
-                    GenderRace = table.Column<byte>(type: "INTEGER", nullable: true),
-                    Height = table.Column<byte>(type: "INTEGER", nullable: true),
-                    Face = table.Column<byte>(type: "INTEGER", nullable: true),
-                    SkinColor = table.Column<byte>(type: "INTEGER", nullable: true),
-                    Nose = table.Column<byte>(type: "INTEGER", nullable: true),
-                    Jaw = table.Column<byte>(type: "INTEGER", nullable: true),
-                    MuscleMass = table.Column<byte>(type: "INTEGER", nullable: true),
-                    BustSize = table.Column<byte>(type: "INTEGER", nullable: true),
-                    TailShape = table.Column<byte>(type: "INTEGER", nullable: true),
-                    Mouth = table.Column<byte>(type: "INTEGER", nullable: true),
-                    EyeShape = table.Column<byte>(type: "INTEGER", nullable: true),
-                    SmallIris = table.Column<bool>(type: "INTEGER", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PlayerLocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    BodyType = table.Column<byte>(type: "smallint", nullable: true),
+                    GenderRace = table.Column<byte>(type: "smallint", nullable: true),
+                    Height = table.Column<byte>(type: "smallint", nullable: true),
+                    Face = table.Column<byte>(type: "smallint", nullable: true),
+                    SkinColor = table.Column<byte>(type: "smallint", nullable: true),
+                    Nose = table.Column<byte>(type: "smallint", nullable: true),
+                    Jaw = table.Column<byte>(type: "smallint", nullable: true),
+                    MuscleMass = table.Column<byte>(type: "smallint", nullable: true),
+                    BustSize = table.Column<byte>(type: "smallint", nullable: true),
+                    TailShape = table.Column<byte>(type: "smallint", nullable: true),
+                    Mouth = table.Column<byte>(type: "smallint", nullable: true),
+                    EyeShape = table.Column<byte>(type: "smallint", nullable: true),
+                    SmallIris = table.Column<bool>(type: "boolean", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -101,10 +110,10 @@ namespace AlphaScopeServer.Migrations
                 name: "PlayerLodestone",
                 columns: table => new
                 {
-                    PlayerLocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    LodestoneId = table.Column<int>(type: "INTEGER", nullable: true),
-                    CharacterCreationDate = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    AvatarLink = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true)
+                    PlayerLocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    LodestoneId = table.Column<int>(type: "integer", nullable: true),
+                    CharacterCreationDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    AvatarLink = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -121,11 +130,11 @@ namespace AlphaScopeServer.Migrations
                 name: "PlayerNameHistory",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    PlayerLocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PlayerLocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -142,11 +151,11 @@ namespace AlphaScopeServer.Migrations
                 name: "PlayerProfileVisits",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    PlayerLocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    VisitorId = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    VisitedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PlayerLocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    VisitorId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    VisitedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -163,14 +172,14 @@ namespace AlphaScopeServer.Migrations
                 name: "PlayerTerritoryHistory",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    PlayerLocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    TerritoryId = table.Column<short>(type: "INTEGER", nullable: true),
-                    PlayerPos = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    WorldId = table.Column<short>(type: "INTEGER", nullable: true),
-                    FirstSeenAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    LastSeenAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PlayerLocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    TerritoryId = table.Column<short>(type: "smallint", nullable: true),
+                    PlayerPos = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    WorldId = table.Column<short>(type: "smallint", nullable: true),
+                    FirstSeenAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastSeenAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -187,11 +196,11 @@ namespace AlphaScopeServer.Migrations
                 name: "PlayerWorldHistory",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    PlayerLocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    WorldId = table.Column<short>(type: "INTEGER", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    PlayerLocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    WorldId = table.Column<short>(type: "smallint", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -208,20 +217,20 @@ namespace AlphaScopeServer.Migrations
                 name: "UserCharacters",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    UserId = table.Column<int>(type: "INTEGER", nullable: false),
-                    LocalContentId = table.Column<long>(type: "INTEGER", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    AvatarLink = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    HideFullProfile = table.Column<bool>(type: "INTEGER", nullable: false),
-                    HideTerritoryInfo = table.Column<bool>(type: "INTEGER", nullable: false),
-                    HideCustomizations = table.Column<bool>(type: "INTEGER", nullable: false),
-                    HideInSearchResults = table.Column<bool>(type: "INTEGER", nullable: false),
-                    HideRetainersInfo = table.Column<bool>(type: "INTEGER", nullable: false),
-                    HideAltCharacters = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ProfileTotalVisitCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    LastProfileVisitDate = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<int>(type: "integer", nullable: false),
+                    LocalContentId = table.Column<long>(type: "bigint", nullable: false),
+                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    AvatarLink = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    HideFullProfile = table.Column<bool>(type: "boolean", nullable: false),
+                    HideTerritoryInfo = table.Column<bool>(type: "boolean", nullable: false),
+                    HideCustomizations = table.Column<bool>(type: "boolean", nullable: false),
+                    HideInSearchResults = table.Column<bool>(type: "boolean", nullable: false),
+                    HideRetainersInfo = table.Column<bool>(type: "boolean", nullable: false),
+                    HideAltCharacters = table.Column<bool>(type: "boolean", nullable: false),
+                    ProfileTotalVisitCount = table.Column<int>(type: "integer", nullable: false),
+                    LastProfileVisitDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -238,13 +247,13 @@ namespace AlphaScopeServer.Migrations
                 name: "UserLodestoneCharacters",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    UserId = table.Column<int>(type: "INTEGER", nullable: false),
-                    LodestoneId = table.Column<int>(type: "INTEGER", nullable: false),
-                    NameAndWorld = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    AvatarLink = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    VerifiedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UserId = table.Column<int>(type: "integer", nullable: false),
+                    LodestoneId = table.Column<int>(type: "integer", nullable: false),
+                    NameAndWorld = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
+                    AvatarLink = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    VerifiedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
