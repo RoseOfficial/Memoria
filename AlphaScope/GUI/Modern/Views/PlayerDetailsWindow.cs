@@ -258,7 +258,11 @@ public class PlayerDetailsWindow : BaseModernWindow
         }
         
         ImGuiHelpers.ScaledDummy(10f);
-        
+
+        DrawAccountCharactersSection();
+
+        ImGuiHelpers.ScaledDummy(10f);
+
         // Quick Actions
         if (ImGui.CollapsingHeader("Quick Actions", ImGuiTreeNodeFlags.DefaultOpen))
         {
@@ -1221,6 +1225,108 @@ public class PlayerDetailsWindow : BaseModernWindow
 
         var timeAgo = DateTime.UtcNow - _lastScannedAt.Value;
         return $"Scanned {FormatTimeAgo(timeAgo)}";
+    }
+
+    private static void OpenDetailsWindow(ulong contentId)
+    {
+        try
+        {
+            if (!PersistenceContext._playerCache.TryGetValue(contentId, out var cachedPlayer))
+            {
+                Plugin.Log.Warning($"Player {contentId} not found in cache for details window");
+                return;
+            }
+
+            var existingWindow = Plugin.Instance.ws.Windows
+                .OfType<PlayerDetailsWindow>()
+                .FirstOrDefault(w => w.ContentId == contentId);
+
+            if (existingWindow != null)
+            {
+                existingWindow.IsOpen = true;
+                existingWindow.BringToFront();
+            }
+            else
+            {
+                var detailsWindow = new PlayerDetailsWindow(contentId, cachedPlayer);
+                Plugin.Instance.ws.AddWindow(detailsWindow);
+                detailsWindow.IsOpen = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Error($"Failed to open details window for player {contentId}: {ex}");
+        }
+    }
+
+    private void DrawAccountCharactersSection()
+    {
+        if (!_cachedPlayer.AccountId.HasValue)
+            return;
+
+        var alts = PersistenceContext.GetAccountAltCharacters(
+            _cachedPlayer.AccountId.Value,
+            _contentId);
+
+        ImGui.SetNextItemOpen(alts.Count > 0, ImGuiCond.Appearing);
+        if (!ImGui.CollapsingHeader($"Characters on Same Account ({alts.Count})"))
+            return;
+
+        if (alts.Count == 0)
+        {
+            using (var mutedColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+            {
+                ImGui.Text("No other known characters on this account.");
+            }
+            return;
+        }
+
+        if (ImGui.BeginTable("AccountAltsTable", 3,
+            ImGuiTableFlags.BordersInner | ImGuiTableFlags.RowBg | ImGuiTableFlags.Resizable))
+        {
+            ImGui.TableSetupColumn("Name");
+            ImGui.TableSetupColumn("Home World");
+            ImGui.TableSetupColumn("Last Seen");
+            ImGui.TableHeadersRow();
+
+            foreach (var (altContentId, altPlayer) in alts)
+            {
+                ImGui.TableNextRow();
+
+                ImGui.TableSetColumnIndex(0);
+                if (ImGui.Selectable($"{altPlayer.Name}##alt_{altContentId}", false, ImGuiSelectableFlags.SpanAllColumns))
+                {
+                    OpenDetailsWindow(altContentId);
+                }
+
+                ImGui.TableSetColumnIndex(1);
+                if (altPlayer.HomeWorldId.HasValue)
+                {
+                    ImGui.Text(Utils.GetWorldName(altPlayer.HomeWorldId.Value));
+                }
+                else
+                {
+                    using (var mutedColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextMuted))
+                    {
+                        ImGui.Text("Unknown");
+                    }
+                }
+
+                ImGui.TableSetColumnIndex(2);
+                ImGui.Text(FormatAltLastSeen(altPlayer));
+            }
+
+            ImGui.EndTable();
+        }
+    }
+
+    private static string FormatAltLastSeen(PersistenceContext.CachedPlayer player)
+    {
+        if (!player.LastScannedAt.HasValue)
+            return "Never";
+
+        var timeAgo = DateTime.UtcNow - player.LastScannedAt.Value;
+        return FormatTimeAgo(timeAgo);
     }
 
     private void RenderAvatar(Vector2 avatarSize)
