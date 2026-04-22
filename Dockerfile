@@ -20,12 +20,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Render injects $PORT; default is 10000. Listen on all interfaces so the proxy can reach us.
-ENV ASPNETCORE_URLS=http://+:10000
-EXPOSE 10000
-
 # On small instances (Render free = 512 MB), workstation GC uses noticeably less memory
 # than the default server GC and is plenty for our light traffic.
 ENV DOTNET_gcServer=0
 
-ENTRYPOINT ["dotnet", "AlphaScopeServer.dll"]
+# Render injects $PORT at runtime and expects the server to bind to it (host 0.0.0.0).
+# Dockerfile ENV cannot expand env vars, so we use shell-form entrypoint to let the
+# shell substitute $PORT when the container starts. Fallback to 10000 for local docker runs.
+EXPOSE 10000
+ENTRYPOINT ["sh", "-c", "ASPNETCORE_URLS=http://0.0.0.0:${PORT:-10000} dotnet AlphaScopeServer.dll"]
