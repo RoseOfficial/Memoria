@@ -293,7 +293,7 @@ namespace AlphaScopeServer.Controllers
                             CurrentJobId = playerRequest.CurrentJobId,
                             CurrentJobLevel = playerRequest.CurrentJobLevel,
                             PlayerPos = playerRequest.PlayerPos,
-                            CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime,
+                            CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime,
                             LodestoneJobData = playerRequest.LodestoneJobData,
                             MainJobId = playerRequest.MainJobId,
                             MainJobLevel = playerRequest.MainJobLevel,
@@ -321,7 +321,7 @@ namespace AlphaScopeServer.Controllers
                             {
                                 PlayerLocalContentId = existingPlayer.LocalContentId,
                                 Name = playerRequest.Name,
-                                CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime
+                                CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
                             };
                             _context.PlayerNameHistory.Add(nameHistory);
                         }
@@ -337,7 +337,7 @@ namespace AlphaScopeServer.Controllers
                                 {
                                     PlayerLocalContentId = existingPlayer.LocalContentId,
                                     WorldId = (short)playerRequest.CurrentWorldId.Value,
-                                    CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime
+                                    CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
                                 };
                                 _context.PlayerWorldHistory.Add(worldHistory);
                             }
@@ -377,14 +377,14 @@ namespace AlphaScopeServer.Controllers
                                     TerritoryId = playerRequest.TerritoryId,
                                     PlayerPos = playerRequest.PlayerPos,
                                     WorldId = (short)playerRequest.CurrentWorldId.Value,
-                                    FirstSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime,
-                                    LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime
+                                    FirstSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime,
+                                    LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
                                 };
                                 _context.PlayerTerritoryHistory.Add(territoryHistory);
                             }
                             else
                             {
-                                territoryHistory.LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime;
+                                territoryHistory.LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime;
                                 territoryHistory.PlayerPos = playerRequest.PlayerPos;
                             }
                         }
