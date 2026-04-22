@@ -16,14 +16,17 @@ builder.Services.AddControllers()
 // Configure Entity Framework with performance optimizations
 builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-        ?? "Data Source=AlphaScope.db;Cache=Shared;Pooling=true";
-    options.UseSqlite(connectionString, sqliteOptions =>
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException(
+            "ConnectionStrings:DefaultConnection is not configured. " +
+            "Set it via user-secrets, environment variable, or appsettings.json.");
+
+    options.UseNpgsql(connectionString, npgsql =>
     {
-        sqliteOptions.CommandTimeout(10); // Reduced timeout for faster failure detection
+        npgsql.CommandTimeout(10);
+        npgsql.MigrationsAssembly("AlphaScopeServer");
     });
-    
-    // Performance optimizations
+
     options.EnableSensitiveDataLogging(false);
     options.EnableServiceProviderCaching();
     options.EnableDetailedErrors(false);

@@ -29,19 +29,6 @@ namespace AlphaScopeServer.Data
             base.OnConfiguring(optionsBuilder);
         }
 
-        /// <summary>
-        /// Enables foreign key constraints for SQLite databases.
-        /// SQLite requires explicit enabling of foreign key enforcement.
-        /// No action needed for SQL Server as it enforces foreign keys by default.
-        /// </summary>
-        private void EnableForeignKeys()
-        {
-            if (Database.IsSqlite())
-            {
-                Database.ExecuteSqlRaw("PRAGMA foreign_keys = ON;");
-            }
-        }
-
         // ========== PLAYER DATA ENTITIES ==========
         /// <summary>Primary player entity containing current character information</summary>
         public DbSet<Player> Players { get; set; }
@@ -190,7 +177,6 @@ namespace AlphaScopeServer.Data
         /// <returns>Number of entities written to the database</returns>
         public override int SaveChanges()
         {
-            EnableForeignKeys();
             UpdateTimestamps();
             return base.SaveChanges();
         }
@@ -203,7 +189,6 @@ namespace AlphaScopeServer.Data
         /// <returns>Task returning the number of entities written to the database</returns>
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            EnableForeignKeys();
             UpdateTimestamps();
             return base.SaveChangesAsync(cancellationToken);
         }
