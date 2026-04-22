@@ -359,10 +359,13 @@ namespace AlphaScopeServer.Controllers
                             hasChanges = true;
 
                             // Update or create territory history
+                            // Explicit (short?) cast is required: t.WorldId is short (smallint) but
+                            // CurrentWorldId is ushort?, and Npgsql refuses to bind a UInt16
+                            // parameter as smallint.
                             var territoryHistory = await _context.PlayerTerritoryHistory
                                 .FirstOrDefaultAsync(t => t.PlayerLocalContentId == existingPlayer.LocalContentId &&
                                                         t.TerritoryId == playerRequest.TerritoryId &&
-                                                        t.WorldId == playerRequest.CurrentWorldId);
+                                                        t.WorldId == (short?)playerRequest.CurrentWorldId);
 
                             if (territoryHistory == null && playerRequest.CurrentWorldId.HasValue)
                             {
