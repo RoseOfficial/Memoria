@@ -19,6 +19,7 @@ public abstract class BaseModernWindow : Window
     protected readonly List<BaseComponent> _components = [];
     protected bool _isInitialized = false;
     protected DateTime _lastUpdate = DateTime.UtcNow;
+    private IDisposable? _windowStyle;
     
     /// <summary>
     /// Whether to show the window title bar
@@ -80,6 +81,28 @@ public abstract class BaseModernWindow : Window
     public T? GetComponent<T>(string id) where T : BaseComponent
     {
         return _components.Find(c => c.Id == id) as T;
+    }
+
+    /// <summary>
+    /// Pushes the AlphaScope window styling onto the ImGui stack before this window
+    /// renders, so custom colours and rounding only affect this window. The push is
+    /// unwound in PostDraw. Without this scoping, writing to the global ImGui style
+    /// would leak the theme into every other plugin's windows.
+    /// </summary>
+    public override void PreDraw()
+    {
+        _windowStyle = ThemeManager.PushWindowStyle();
+    }
+
+    /// <summary>
+    /// Pops the styling pushed in PreDraw. Must match PreDraw exactly — if this
+    /// doesn't run, the style stack stays imbalanced and other plugins will
+    /// render with AlphaScope's colours for the rest of the frame.
+    /// </summary>
+    public override void PostDraw()
+    {
+        _windowStyle?.Dispose();
+        _windowStyle = null;
     }
 
     /// <summary>
