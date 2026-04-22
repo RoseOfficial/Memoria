@@ -230,7 +230,14 @@ namespace AlphaScope.API.Services
                 }
                 
                 var isAuthFailure = response.StatusCode == HttpStatusCode.Unauthorized;
-                Logger.LogWarning("Failed to post players data. Status: {StatusCode}", response.StatusCode);
+                // Include the response body (truncated) so server-side exception details surface
+                // in the plugin log without needing a separate Render-logs round trip.
+                var bodySnippet = string.IsNullOrEmpty(response.Content)
+                    ? "<empty>"
+                    : (response.Content!.Length > 500 ? response.Content[..500] + "…" : response.Content);
+                Logger.LogWarning(
+                    "Failed to post players data. Status: {StatusCode}. Body: {Body}",
+                    response.StatusCode, bodySnippet);
                 return ApiResponse<(bool Success, bool AuthenticationFailure)>.Ok((false, isAuthFailure), (int)response.StatusCode);
             }
             catch (Exception ex)
