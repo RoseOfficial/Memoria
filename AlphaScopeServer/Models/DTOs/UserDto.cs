@@ -12,6 +12,8 @@ namespace AlphaScopeServer.Models.DTOs
         [JsonProperty("5")] public List<UserCharacterDto> Characters { get; set; } = new();
         [JsonProperty("6")] public UserNetworkStatsDto NetworkStats { get; set; } = new();
         [JsonProperty("7")] public List<UserLodestoneCharacterDto> LodestoneCharacters { get; set; } = new();
+        // Emitted on the Login response so the plugin can persist its API key after first registration.
+        [JsonProperty("ApiKey")] public string? ApiKey { get; set; }
     }
 
     public class UserCharacterDto

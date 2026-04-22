@@ -363,7 +363,77 @@ public sealed class Plugin : IDalamudPlugin
             }
         }, TaskScheduler.Default);
 
-        // Authentication check removed - users will need to manually configure API keys
+        // Auto-register with the server once we know the player's game AccountId. The auth
+        // middleware expects keys of the form {random}-{gameAccountId}; only the server can
+        // generate one, so on first run we post a login request and persist the returned key.
+        _ = Task.Run(() => AutoRegisterWithServerAsync(serviceProvider));
+    }
+
+    private async Task AutoRegisterWithServerAsync(IServiceProvider serviceProvider)
+    {
+        try
+        {
+            if (Configuration.AutoRegistered && !string.IsNullOrWhiteSpace(Configuration.Key) && Configuration.Key.Contains('-'))
+                return;
+
+            var clientState = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IClientState>();
+
+            // Poll for LocalPlayer. The plugin may load before the user has reached the character
+            // select screen; we just wait.
+            var deadline = DateTime.UtcNow.AddMinutes(30);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (clientState.IsLoggedIn && clientState.LocalPlayer is not null)
+                    break;
+                await Task.Delay(TimeSpan.FromSeconds(5));
+            }
+
+            if (!clientState.IsLoggedIn || clientState.LocalPlayer is null)
+            {
+                Log.Warning("AutoRegisterWithServerAsync: gave up waiting for LocalPlayer after 30min; will retry on next plugin start");
+                return;
+            }
+
+            var localPlayer = clientState.LocalPlayer;
+            var request = new API.Models.Requests.User.UserRegister
+            {
+                Name = localPlayer.Name.TextValue,
+                GameAccountId = unchecked((int)localPlayer.HomeWorld.RowId), // placeholder until we can read AccountId from IClientState
+                UserLocalContentId = (long)clientState.LocalContentId,
+                ClientId = "AlphaScope",
+                Version = Utils.clientVer,
+            };
+
+            // Resolve the real game AccountId via the FFXIV client structs, since IClientState
+            // does not expose it directly.
+            unsafe
+            {
+                var chr = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)localPlayer.Address;
+                if (chr != null && chr->AccountId != 0)
+                    request.GameAccountId = unchecked((int)chr->AccountId);
+            }
+
+            var result = await ApiClient.UserLoginAsync(request);
+            if (result.IsSuccess && result.Value.User is not null && !string.IsNullOrWhiteSpace(result.Value.User.ApiKey))
+            {
+                Configuration.Key = result.Value.User.ApiKey!;
+                Configuration.AccountId = request.GameAccountId;
+                Configuration.ContentId = request.UserLocalContentId;
+                Configuration.Username = request.Name;
+                Configuration.AutoRegistered = true;
+                Configuration.LoggedIn = true;
+                _pluginInterface.SavePluginConfig(Configuration);
+                Log.Information("AutoRegisterWithServerAsync: registered successfully, API key saved");
+            }
+            else
+            {
+                Log.Warning("AutoRegisterWithServerAsync: login failed — {Error}", result.Error ?? result.Value.Message ?? "unknown");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "AutoRegisterWithServerAsync failed");
+        }
     }
 
 

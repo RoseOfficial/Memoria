@@ -31,6 +31,9 @@ namespace AlphaScope.API.Models.Responses.User
         public UserNetworkStatsDto NetworkStats { get; set; } = new UserNetworkStatsDto();
         [JsonProperty("7")]
         public List<UserLodestoneCharacterDto> LodestoneCharacters { get; set; } = new List<UserLodestoneCharacterDto>();
+        // Populated on the Login response so the plugin can persist its API key after first registration.
+        [JsonProperty("ApiKey")]
+        public string? ApiKey { get; set; }
         public class UserCharacterDto
         {
             [JsonProperty("1"), JsonPropertyName("1")]

@@ -80,7 +80,8 @@ namespace AlphaScopeServer.Controllers
                     await _context.SaveChangesAsync();
                 }
 
-                // Map to DTO
+                // Map to DTO. The ApiKey is returned here (and only here) so newly-registered
+                // plugin instances can persist it and authenticate subsequent requests.
                 var userDto = new User
                 {
                     BaseUrl = user.BaseUrl ?? "https://localhost:5001/v1/",
@@ -88,6 +89,7 @@ namespace AlphaScopeServer.Controllers
                     LocalContentId = user.PrimaryCharacterLocalContentId,
                     Name = user.Name,
                     AppRoleId = user.AppRoleId,
+                    ApiKey = user.ApiKey,
                     Characters = user.Characters.Select(c => new UserCharacterDto
                     {
                         Name = c.Name,

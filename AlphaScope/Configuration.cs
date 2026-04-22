@@ -111,6 +111,14 @@ namespace AlphaScope
         /// Whether the user is currently logged into the API server
         /// </summary>
         public bool LoggedIn { get; set; } = true;
+
+        /// <summary>
+        /// True once the plugin has completed one-time registration with the central server and
+        /// received its API key. The middleware on the server requires keys of the form
+        /// {random}-{gameAccountId}; this flag tells us whether we've already gone through the
+        /// login exchange that produces such a key.
+        /// </summary>
+        public bool AutoRegistered { get; set; } = false;
         
         /// <summary>
         /// Flag indicating if this is a fresh plugin installation (used for initial setup)
