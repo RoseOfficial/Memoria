@@ -289,6 +289,7 @@ namespace AlphaScope.API.Services
                     return ApiResponse<User>.Fail(ErrorCodes.PARAMETER_CANNOT_BE_NULL_MESSAGE, ErrorCodes.BAD_REQUEST);
 
                 var request = new RestRequest(ApiEndpoints.USERS_UPDATE)
+                    .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
                     
@@ -335,6 +336,7 @@ namespace AlphaScope.API.Services
             try
             {
                 var request = new RestRequest(ApiEndpoints.USERS_ME)
+                    .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
                     
@@ -386,6 +388,7 @@ namespace AlphaScope.API.Services
                     return ApiResponse<ClaimLodestoneCharacterDto>.Fail(ErrorCodes.INVALID_URL_MESSAGE, ErrorCodes.BAD_REQUEST);
 
                 var request = new RestRequest(ApiEndpoints.USERS_LODESTONE_CLAIM)
+                    .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
                     

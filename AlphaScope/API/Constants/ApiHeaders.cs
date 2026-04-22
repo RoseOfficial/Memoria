@@ -38,6 +38,12 @@ namespace AlphaScope.API.Constants
         /// Authorization header for API key or token authentication
         /// </summary>
         public const string AUTHORIZATION = "Authorization";
+
+        /// <summary>
+        /// API key header — what the server's ApiKeyAuthenticationMiddleware actually reads.
+        /// Format: {userKey}-{gameAccountId}.
+        /// </summary>
+        public const string API_KEY = "api-key";
         
         /// <summary>
         /// User-Agent header for client identification

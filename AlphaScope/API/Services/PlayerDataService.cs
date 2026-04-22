@@ -73,6 +73,7 @@ namespace AlphaScope.API.Services
                 }
 
                 var request = new RestRequest(ApiEndpoints.PLAYERS)
+                    .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
 
@@ -140,6 +141,7 @@ namespace AlphaScope.API.Services
                 }
 
                 var request = new RestRequest(ApiEndpoints.GetPlayerById(contentId))
+                    .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
                     
@@ -215,6 +217,7 @@ namespace AlphaScope.API.Services
                     return ApiResponse<(bool Success, bool AuthenticationFailure)>.Fail(ErrorCodes.COLLECTION_CANNOT_BE_EMPTY_MESSAGE, ErrorCodes.BAD_REQUEST);
 
                 var request = new RestRequest(ApiEndpoints.PLAYERS)
+                    .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
                     
