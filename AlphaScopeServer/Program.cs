@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using AlphaScopeServer;
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Middleware;
 using Newtonsoft.Json;
@@ -16,10 +17,14 @@ builder.Services.AddControllers()
 // Configure Entity Framework with performance optimizations
 builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    var raw = builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException(
             "ConnectionStrings:DefaultConnection is not configured. " +
             "Set it via user-secrets, environment variable, or appsettings.json.");
+
+    // Neon's dashboard hands out postgresql:// URIs by default; Npgsql expects
+    // key-value. Convert transparently so operators can paste either form.
+    var connectionString = ConnectionStringHelper.NormalizeForNpgsql(raw);
 
     options.UseNpgsql(connectionString, npgsql =>
     {
@@ -58,16 +63,21 @@ builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Information);
 
 var app = builder.Build();
 
-// Ensure database is created
+// Apply EF Core migrations at startup. Fail fast if they don't apply — starting
+// the server with an out-of-sync schema is worse than refusing to start.
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<AlphaScopeDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
-        context.Database.EnsureCreated();
+        context.Database.Migrate();
+        logger.LogInformation("Database migrations applied successfully");
     }
-    catch (Exception)
+    catch (Exception ex)
     {
+        logger.LogCritical(ex, "Database migration failed — server cannot start");
+        throw;
     }
 }
 
