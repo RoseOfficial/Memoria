@@ -11,9 +11,7 @@ using Dalamud.Plugin.Services;
 // FFXIV client structures for direct game memory access
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
-// Microsoft dependencies for dependency injection, logging, and Entity Framework
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
+// Microsoft dependencies for dependency injection and logging
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -22,7 +20,6 @@ using AlphaScope.API;
 using AlphaScope.API.Client.Configuration;
 using AlphaScope.API.Extensions;
 using Microsoft.Extensions.Options;
-using AlphaScope.Database;
 using AlphaScope.GUI;
 using AlphaScope.Handlers;
 using AlphaScope.Properties;
@@ -31,7 +28,6 @@ using AlphaScope.Services;
 // System dependencies
 using System;
 using System.Globalization;
-using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 
@@ -44,16 +40,6 @@ namespace AlphaScope;
 /// </summary>
 public sealed class Plugin : IDalamudPlugin
 {
-    /// <summary>
-    /// SQLite database filename for local data storage
-    /// </summary>
-    public const string DatabaseFileName = "AlphaScope.data.sqlite3";
-    
-    /// <summary>
-    /// SQLite connection string for database operations
-    /// </summary>
-    private readonly string _sqliteConnectionString;
-    
     /// <summary>
     /// Dependency injection service provider for managing plugin services
     /// </summary>
@@ -188,11 +174,10 @@ public sealed class Plugin : IDalamudPlugin
         // Initialize dependency injection container
         ServiceCollection serviceCollection = new();
         
-        // Configure logging with Dalamud integration and Entity Framework filtering
+        // Configure logging with Dalamud integration
         serviceCollection.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Trace)
             .ClearProviders()
-            .AddDalamudLogger(pluginLog)
-            .AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning));
+            .AddDalamudLogger(pluginLog));
         
         // Register core plugin services
         serviceCollection.AddSingleton<IDalamudPlugin>(this);
@@ -296,13 +281,9 @@ public sealed class Plugin : IDalamudPlugin
             HelpMessage = Loc.CmOpenUI
         });
 
-        // Set up database connection and build service provider
-        _sqliteConnectionString = PrepareSqliteDb(serviceCollection, pluginInterface.GetPluginConfigDirectory());
+        // Build service provider and start all handlers. No local DB — the server is the source of truth.
         _serviceProvider = serviceCollection.BuildServiceProvider();
         ApiClient = _serviceProvider.GetRequiredService<ApiClient>();
-
-        // Initialize database with proper schema and start all handlers
-        RunMigrations(_serviceProvider);
         InitializeRequiredServices(_serviceProvider);
     }
     /// <summary>
@@ -339,233 +320,9 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
-    /// <summary>
-    /// Configures the SQLite database connection and registers the Entity Framework context.
-    /// Creates the database file path within the plugin configuration directory.
-    /// </summary>
-    /// <param name="serviceCollection">Service collection to register the DbContext with</param>
-    /// <param name="getPluginConfigDirectory">Plugin configuration directory path</param>
-    /// <returns>SQLite connection string for the configured database</returns>
-    private static string PrepareSqliteDb(IServiceCollection serviceCollection, string getPluginConfigDirectory)
-    {
-        string connectionString = $"Data Source={Path.Join(getPluginConfigDirectory, DatabaseFileName)}";
-        serviceCollection.AddDbContext<RetainerTrackContext>(o => o
-            .UseSqlite(connectionString));
-            //.UseModel(RetainerTrackContextModel.Instance)); // Commented out - using standard EF model
-        return connectionString;
-    }
-
-    /// <summary>
-    /// Handles database initialization and schema migrations.
-    /// Creates the database with proper nullable schema if it doesn't exist,
-    /// or updates existing schema to ensure compatibility with current data model.
-    /// This method handles legacy database upgrades and ensures proper nullable foreign keys.
-    /// </summary>
-    /// <param name="serviceProvider">Service provider for accessing database context</param>
-    private static void RunMigrations(IServiceProvider serviceProvider)
-    {
-        using var scope = serviceProvider.CreateScope();
-        using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-        
-        try
-        {
-            var connection = dbContext.Database.GetDbConnection();
-            Log.Information($"Database connection string: {connection.ConnectionString}");
-            connection.Open();
-            
-            using var command = connection.CreateCommand();
-            
-            // Check if database exists by looking for the Players table
-            command.CommandText = @"
-                SELECT name FROM sqlite_master WHERE type='table' AND name='Players';
-            ";
-            
-            var result = command.ExecuteScalar();
-            bool playersTableExists = result != null;
-            Log.Information($"Players table exists: {playersTableExists}");
-            
-            if (!playersTableExists)
-            {
-                // Create fresh database with proper nullable schema
-                // Players table stores character information with nullable job data
-                command.CommandText = @"
-                    CREATE TABLE Players (
-                        LocalContentId INTEGER PRIMARY KEY,
-                        Name TEXT NOT NULL,
-                        AccountId INTEGER NULL,
-                        HomeWorldId INTEGER NULL,
-                        CurrentWorldId INTEGER NULL,
-                        CurrentJobId INTEGER NULL,
-                        CurrentJobLevel INTEGER NULL,
-                        AvatarLink TEXT NULL,
-                        LastScannedAt TEXT NULL,
-                        LodestoneJobData TEXT NULL,
-                        MainJobId INTEGER NULL,
-                        MainJobLevel INTEGER NULL,
-                        LastJobDataUpdate TEXT NULL,
-                        LodestoneMinionsData TEXT NULL,
-                        LastMinionsDataUpdate TEXT NULL,
-                        LodestoneMountsData TEXT NULL,
-                        LastMountsDataUpdate TEXT NULL
-                    );
-                ";
-                command.ExecuteNonQuery();
-            }
-            else
-            {
-                // Database exists - check if legacy Retainers table exists and remove it
-                command.CommandText = @"
-                    SELECT name FROM sqlite_master WHERE type='table' AND name='Retainers';
-                ";
-                
-                var retainerTableResult = command.ExecuteScalar();
-                if (retainerTableResult != null)
-                {
-                    // Drop legacy Retainers table since we're removing retainer tracking
-                    command.CommandText = "DROP TABLE IF EXISTS Retainers;";
-                    command.ExecuteNonQuery();
-                }
-                
-                // Check if Players table has job tracking columns (added in later versions)
-                command.CommandText = @"
-                    PRAGMA table_info(Players);
-                ";
-                
-                using var playerReader = command.ExecuteReader();
-                bool hasJobId = false;
-                bool hasJobLevel = false;
-                bool hasAvatarLink = false;
-                bool hasLastScannedAt = false;
-                bool hasHomeWorldId = false;
-                bool hasCurrentWorldId = false;
-                bool hasLodestoneJobData = false;
-                bool hasMainJobId = false;
-                bool hasMainJobLevel = false;
-                bool hasLastJobDataUpdate = false;
-                bool hasLodestoneMinionsData = false;
-                bool hasLastMinionsDataUpdate = false;
-                bool hasLodestoneMountsData = false;
-                bool hasLastMountsDataUpdate = false;
-                while (playerReader.Read())
-                {
-                    var columnName = playerReader.GetString(1); // name column
-                    if (columnName == "CurrentJobId") hasJobId = true;
-                    if (columnName == "CurrentJobLevel") hasJobLevel = true;
-                    if (columnName == "AvatarLink") hasAvatarLink = true;
-                    if (columnName == "LastScannedAt") hasLastScannedAt = true;
-                    if (columnName == "HomeWorldId") hasHomeWorldId = true;
-                    if (columnName == "CurrentWorldId") hasCurrentWorldId = true;
-                    if (columnName == "LodestoneJobData") hasLodestoneJobData = true;
-                    if (columnName == "MainJobId") hasMainJobId = true;
-                    if (columnName == "MainJobLevel") hasMainJobLevel = true;
-                    if (columnName == "LastJobDataUpdate") hasLastJobDataUpdate = true;
-                    if (columnName == "LodestoneMinionsData") hasLodestoneMinionsData = true;
-                    if (columnName == "LastMinionsDataUpdate") hasLastMinionsDataUpdate = true;
-                    if (columnName == "LodestoneMountsData") hasLodestoneMountsData = true;
-                    if (columnName == "LastMountsDataUpdate") hasLastMountsDataUpdate = true;
-                }
-                playerReader.Close();
-                
-                // Add job tracking columns if they don't exist (legacy database upgrade)
-                if (!hasJobId)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN CurrentJobId INTEGER NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                if (!hasJobLevel)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN CurrentJobLevel INTEGER NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                // Add avatar link column if it doesn't exist
-                if (!hasAvatarLink)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN AvatarLink TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                // Add last scanned timestamp column if it doesn't exist (for background refresh system)
-                if (!hasLastScannedAt)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastScannedAt TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                // Add world tracking columns if they don't exist (for player card display)
-                if (!hasHomeWorldId)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN HomeWorldId INTEGER NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                if (!hasCurrentWorldId)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN CurrentWorldId INTEGER NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                // Add Lodestone job data columns if they don't exist (for comprehensive job tracking)
-                if (!hasLodestoneJobData)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN LodestoneJobData TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                if (!hasMainJobId)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN MainJobId INTEGER NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                if (!hasMainJobLevel)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN MainJobLevel INTEGER NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                if (!hasLastJobDataUpdate)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastJobDataUpdate TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                // Add minion data columns if they don't exist (for minion collection tracking)
-                if (!hasLodestoneMinionsData)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN LodestoneMinionsData TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                if (!hasLastMinionsDataUpdate)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastMinionsDataUpdate TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                // Add mount data columns if they don't exist (for mount collection tracking)
-                if (!hasLodestoneMountsData)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN LodestoneMountsData TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-                
-                if (!hasLastMountsDataUpdate)
-                {
-                    command.CommandText = "ALTER TABLE Players ADD COLUMN LastMountsDataUpdate TEXT NULL;";
-                    command.ExecuteNonQuery();
-                }
-            }
-            
-            connection.Close();
-        }
-        catch (Exception)
-        {
-            // Log database setup errors - database is critical for plugin functionality
-            throw; // Re-throw since the plugin cannot function without database access
-        }
-    }
+    // PrepareSqliteDb and RunMigrations removed along with the local SQLite layer. The server
+    // is the sole source of truth for player data; see PersistenceContext.ReloadCache for how
+    // the in-memory cache is hydrated from the API on startup.
 
     /// <summary>
     /// Initializes all required plugin services that need to start immediately.
@@ -639,9 +396,6 @@ public sealed class Plugin : IDalamudPlugin
         _pluginInterface.UiBuilder.OpenMainUi -= delegate { ModernMainWindow.IsOpen = true; };
         _pluginInterface.UiBuilder.OpenConfigUi -= delegate { ModernMainWindow.IsOpen = true; };
 
-        // Ensure SQLite connection pool is cleared to prevent file locking issues
-        using (SqliteConnection sqliteConnection = new(_sqliteConnectionString))
-            SqliteConnection.ClearPool(sqliteConnection);
     }
 
     /// <summary>

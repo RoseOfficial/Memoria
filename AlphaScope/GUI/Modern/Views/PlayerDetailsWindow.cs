@@ -12,7 +12,6 @@ using Dalamud.Interface.Utility.Raii;
 using AlphaScope.GUI.Modern.Base;
 using AlphaScope.Handlers;
 using AlphaScope.GUI;
-using AlphaScope.Database;
 using AlphaScope.Services;
 using Microsoft.Extensions.DependencyInjection;
 using static AlphaScope.Services.LodestoneRefreshService;

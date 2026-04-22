@@ -3,7 +3,6 @@ using Dalamud.Interface.Colors;
 using Dalamud.Interface.Style;
 using FFXIVClientStructs.FFXIV.Common.Math;
 using Newtonsoft.Json;
-using AlphaScope.Database;
 using AlphaScope.Properties;
 using System;
 using System.Collections.Generic;

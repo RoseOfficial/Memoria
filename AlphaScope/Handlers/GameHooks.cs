@@ -18,7 +18,6 @@ using AlphaScope.API.Models.Responses.User;
 using AlphaScope.API.Models.Responses.Server;
 using AlphaScope.API.Models.Responses.Common;
 using AlphaScope.API.Models.Requests.Player;
-using AlphaScope.Database;
 using static FFXIVClientStructs.FFXIV.Client.UI.Info.InfoProxyCommonList.CharacterData;
 
 namespace AlphaScope.Handlers;
