@@ -142,16 +142,13 @@ namespace AlphaScopeServer.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LodestoneJobData")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("LodestoneMinionsData")
-                        .HasMaxLength(10000)
-                        .HasColumnType("character varying(10000)");
+                        .HasColumnType("text");
 
                     b.Property<string>("LodestoneMountsData")
-                        .HasMaxLength(10000)
-                        .HasColumnType("character varying(10000)");
+                        .HasColumnType("text");
 
                     b.Property<byte?>("MainJobId")
                         .HasColumnType("smallint");

@@ -29,18 +29,21 @@ namespace AlphaScopeServer.Models.Entities
         
         public DateTime? LastScannedAt { get; set; }
         
-        [MaxLength(2000)]
+        // Lodestone JSON blobs are unbounded — a single player can own 400+ minions/mounts and
+        // serialize past the old 10k cap. Use the Postgres `text` type (no length limit) via
+        // Column(TypeName = "text") so we never truncate or 500 on long collections.
+        [Column(TypeName = "text")]
         public string? LodestoneJobData { get; set; }
-        
+
         public byte? MainJobId { get; set; }
         public short? MainJobLevel { get; set; }
         public DateTime? LastJobDataUpdate { get; set; }
-        
-        [MaxLength(10000)]
+
+        [Column(TypeName = "text")]
         public string? LodestoneMinionsData { get; set; }
         public DateTime? LastMinionsDataUpdate { get; set; }
 
-        [MaxLength(10000)]
+        [Column(TypeName = "text")]
         public string? LodestoneMountsData { get; set; }
         public DateTime? LastMountsDataUpdate { get; set; }
         
