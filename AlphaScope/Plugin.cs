@@ -377,41 +377,55 @@ public sealed class Plugin : IDalamudPlugin
                 return;
 
             var clientState = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IClientState>();
+            var framework = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IFramework>();
 
-            // Poll for LocalPlayer. The plugin may load before the user has reached the character
-            // select screen; we just wait.
+            // Reads of IClientState members must happen on the framework thread; touching them
+            // from the thread-pool throws "Not on main thread!". We marshal each poll and the
+            // final field-grab through framework.RunOnFrameworkThread, then do the HTTP call
+            // back on the thread pool so we don't stall the game.
+            (string? Name, int AccountId, long ContentId)? snapshot = null;
             var deadline = DateTime.UtcNow.AddMinutes(30);
             while (DateTime.UtcNow < deadline)
             {
-                if (clientState.IsLoggedIn && clientState.LocalPlayer is not null)
+                snapshot = await framework.RunOnFrameworkThread(() =>
+                {
+                    if (!clientState.IsLoggedIn || clientState.LocalPlayer is null)
+                        return ((string?)null, 0, 0L);
+
+                    var lp = clientState.LocalPlayer;
+                    var name = lp.Name.TextValue;
+                    int accountId = 0;
+                    unsafe
+                    {
+                        var chr = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)lp.Address;
+                        if (chr != null && chr->AccountId != 0)
+                            accountId = unchecked((int)chr->AccountId);
+                    }
+                    return (name, accountId, (long)clientState.LocalContentId);
+                });
+
+                if (snapshot is { } s && !string.IsNullOrEmpty(s.Name) && s.AccountId != 0)
                     break;
+
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
 
-            if (!clientState.IsLoggedIn || clientState.LocalPlayer is null)
+            if (snapshot is not { } finalSnapshot
+                || string.IsNullOrEmpty(finalSnapshot.Name)
+                || finalSnapshot.AccountId == 0)
             {
-                Log.Warning("AutoRegisterWithServerAsync: gave up waiting for LocalPlayer after 30min; will retry on next plugin start");
+                Log.Warning("AutoRegisterWithServerAsync: gave up waiting for LocalPlayer/AccountId after 30min; will retry on next plugin start");
                 return;
             }
 
-            var localPlayer = clientState.LocalPlayer;
             var request = new API.Models.Requests.User.UserRegister
             {
-                Name = localPlayer.Name.TextValue,
-                GameAccountId = unchecked((int)localPlayer.HomeWorld.RowId), // placeholder until we can read AccountId from IClientState
-                UserLocalContentId = (long)clientState.LocalContentId,
+                Name = finalSnapshot.Name!,
+                GameAccountId = finalSnapshot.AccountId,
+                UserLocalContentId = finalSnapshot.ContentId,
                 ClientId = "AlphaScope",
                 Version = Utils.clientVer,
             };
-
-            // Resolve the real game AccountId via the FFXIV client structs, since IClientState
-            // does not expose it directly.
-            unsafe
-            {
-                var chr = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)localPlayer.Address;
-                if (chr != null && chr->AccountId != 0)
-                    request.GameAccountId = unchecked((int)chr->AccountId);
-            }
 
             var result = await ApiClient.UserLoginAsync(request);
             if (result.IsSuccess && result.Value.User is not null && !string.IsNullOrWhiteSpace(result.Value.User.ApiKey))
