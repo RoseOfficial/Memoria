@@ -439,10 +439,8 @@ DalamudPackager.targets
 config.json
 settings.json
 
-# Claude Code settings
+# Local tool settings and notes
 .claude/settings.local.json
-
-# AI-assisted development files
 CLAUDE.md
 .cursor/
 .windsurf/

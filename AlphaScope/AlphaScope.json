@@ -1,17 +1,19 @@
 {
-  "Author": "AlphaScope",
+  "Author": "RoseOfficial",
   "Name": "AlphaScope",
-  "Punchline": "Track players and retainers across servers.",
-  "Description": "A Dalamud plugin for tracking player and retainer information across FFXIV servers with local database storage and optional cloud synchronization.",
+  "Punchline": "Player tracker with full history, alt detection, and Lodestone integration.",
+  "Description": "Tracks every player you encounter, with full history of name changes, world transfers, and appearance changes. Links alt characters on the same account via Account ID. Pulls jobs, minions, and mounts from the Lodestone. Stored locally in SQLite, with optional server sync for shared data.",
   "InternalName": "AlphaScope",
-  "AssemblyVersion": "1.0.5.7",
-  "RepoUrl": "https://github.com/AlphaScope/AlphaScope",
+  "AssemblyVersion": "1.0.0",
+  "RepoUrl": "https://github.com/RoseOfficial/AlphaScope",
   "ApplicableVersion": "any",
   "Tags": [
-    "player tracking",
-    "retainer",
-    "database",
-    "social"
+    "player",
+    "tracker",
+    "history",
+    "alts",
+    "lodestone",
+    "account"
   ],
   "DalamudApiLevel": 14,
   "LoadRequiredState": 0,
