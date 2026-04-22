@@ -1,0 +1,24 @@
+# Render infrastructure-as-code for the AlphaScope API server.
+# Push this file to the repo, then in Render: New → Blueprint → point at this repo.
+# Secrets (ConnectionStrings__DefaultConnection, Cors__AllowedOrigins) are set in the
+# Render dashboard as Environment variables. They are NEVER committed.
+
+services:
+  - type: web
+    name: alphascope-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    # Ohio is Render's us-east region — closest to Neon's us-east-1 pool so DB hops stay short.
+    region: ohio
+    healthCheckPath: /health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # Set in dashboard. Paste the Neon pooled connection string; ConnectionStringHelper
+      # normalises both postgresql:// URIs and key-value form.
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      # Optional, comma-separated. Leave unset for no browser origins (plugin is non-browser).
+      - key: Cors__AllowedOrigins
+        sync: false

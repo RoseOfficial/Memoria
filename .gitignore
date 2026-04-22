@@ -464,9 +464,9 @@ PROMPT.md
 # SonarQube
 .sonarqube/
 
-# Docker
-.dockerignore
-Dockerfile*
+# Docker — the root Dockerfile + .dockerignore ARE committed (Render deploy config).
+# Ignore only environment/secret overrides if they show up.
+docker-compose.override.y*ml
 
 # Terraform
 *.tfstate

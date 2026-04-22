@@ -1,0 +1,26 @@
+# Exclude anything that's not part of the server build. Keeps the build context small
+# and prevents the plugin's Dalamud-dependent DLLs from ever reaching the image.
+
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+
+# The plugin and test projects aren't part of the server deploy.
+AlphaScope/
+AlphaScope.Tests/
+AlphaScopeServer.Tests/
+TestUtilities/
+
+# Artefacts and local-only files.
+CoverageReport/
+docs/
+.git/
+.github/
+.env
+.env.local
+*.user
+*.suo
+
+# Keep *.md out of the context — nothing in the server image needs them.
+*.md
