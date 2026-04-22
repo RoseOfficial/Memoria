@@ -33,7 +33,11 @@ public class PlayerDetailsWindow : BaseModernWindow
     private bool _isRefreshing = false;
     private string? _avatarUrl;
     private bool _hasQueuedForRefresh = false;
-    
+    private IReadOnlyList<(ulong ContentId, PersistenceContext.CachedPlayer Player)> _cachedAlts
+        = new List<(ulong, PersistenceContext.CachedPlayer)>();
+    private long _altsCachedAt;
+    private const int AltsCacheRefreshIntervalMs = 1000;
+
     /// <summary>
     /// Public getter for the content ID to allow window identification
     /// </summary>
@@ -1264,9 +1268,15 @@ public class PlayerDetailsWindow : BaseModernWindow
         if (!_cachedPlayer.AccountId.HasValue)
             return;
 
-        var alts = PersistenceContext.GetAccountAltCharacters(
-            _cachedPlayer.AccountId.Value,
-            _contentId);
+        var now = Environment.TickCount64;
+        if (now - _altsCachedAt > AltsCacheRefreshIntervalMs)
+        {
+            _cachedAlts = PersistenceContext.GetAccountAltCharacters(
+                _cachedPlayer.AccountId.Value,
+                _contentId);
+            _altsCachedAt = now;
+        }
+        var alts = _cachedAlts;
 
         ImGui.SetNextItemOpen(alts.Count > 0, ImGuiCond.Appearing);
         if (!ImGui.CollapsingHeader($"Characters on Same Account ({alts.Count})"))
@@ -1323,7 +1333,7 @@ public class PlayerDetailsWindow : BaseModernWindow
     private static string FormatAltLastSeen(PersistenceContext.CachedPlayer player)
     {
         if (!player.LastScannedAt.HasValue)
-            return "Never";
+            return "Never seen";
 
         var timeAgo = DateTime.UtcNow - player.LastScannedAt.Value;
         return FormatTimeAgo(timeAgo);
