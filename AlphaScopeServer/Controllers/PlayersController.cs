@@ -264,7 +264,15 @@ namespace AlphaScopeServer.Controllers
         {
             try
             {
-                // Authentication removed - public API for plugin uploads
+                // Dedupe by LocalContentId before the loop. The plugin's outbox can replay hundreds
+                // of pending snapshots and they frequently include multiple entries for the same
+                // player; processing them naively double-Adds the entity and EF's change tracker
+                // throws "already being tracked". Keep the newest snapshot per player.
+                players = players
+                    .Where(p => p != null && p.LocalContentId != 0)
+                    .GroupBy(p => p.LocalContentId)
+                    .Select(g => g.OrderByDescending(p => p.CreatedAt).First())
+                    .ToList();
 
                 foreach (var playerRequest in players)
                 {
@@ -356,14 +364,16 @@ namespace AlphaScopeServer.Controllers
                                                         t.TerritoryId == playerRequest.TerritoryId &&
                                                         t.WorldId == playerRequest.CurrentWorldId);
 
-                            if (territoryHistory == null)
+                            if (territoryHistory == null && playerRequest.CurrentWorldId.HasValue)
                             {
+                                // Only record territory history if we actually have a world id;
+                                // otherwise the (short) cast on CurrentWorldId!.Value would NRE.
                                 territoryHistory = new PlayerTerritoryHistory
                                 {
                                     PlayerLocalContentId = existingPlayer.LocalContentId,
                                     TerritoryId = playerRequest.TerritoryId,
                                     PlayerPos = playerRequest.PlayerPos,
-                                    WorldId = (short)playerRequest.CurrentWorldId!.Value,
+                                    WorldId = (short)playerRequest.CurrentWorldId.Value,
                                     FirstSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime,
                                     LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).DateTime
                                 };
@@ -516,7 +526,13 @@ namespace AlphaScopeServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error uploading players");
-                return StatusCode(500, "Error uploading players");
+                return StatusCode(500, new
+                {
+                    error = "Error uploading players",
+                    type = ex.GetType().Name,
+                    detail = ex.Message,
+                    inner = ex.InnerException?.Message,
+                });
             }
         }
 
