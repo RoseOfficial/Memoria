@@ -37,14 +37,31 @@ builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
     options.EnableDetailedErrors(false);
 }, ServiceLifetime.Scoped);
 
-// Configure CORS
+// Configure CORS. No wildcard origins — the Dalamud plugin calls via RestSharp (not a browser),
+// so CORS does not apply to it. Browser-based clients must be explicitly allowlisted via
+// the `Cors:AllowedOrigins` config key (comma-separated). Unset = no browser origins allowed.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AlphaScopePolicy", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        var originsConfig = builder.Configuration["Cors:AllowedOrigins"];
+        var origins = string.IsNullOrWhiteSpace(originsConfig)
+            ? Array.Empty<string>()
+            : originsConfig.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (origins.Length == 0)
+        {
+            policy.WithOrigins("https://alphascope.invalid")
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        }
+        else
+        {
+            policy.WithOrigins(origins)
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+        }
     });
 });
 
@@ -53,7 +70,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "AlphaScope Server API", Version = "v1" });
-    // API Key authentication removed - now public API
 });
 
 // Configure logging with performance filters
@@ -95,7 +111,10 @@ if (app.Environment.IsDevelopment())
 // Add CORS before authentication
 app.UseCors("AlphaScopePolicy");
 
-// Authentication removed - public API
+// API key authentication — required for all endpoints except the paths the middleware
+// explicitly skips (GET /server, /users/login, /users/create-test-user, /auth/*,
+// /waitforlogin, /swagger/*, /health).
+app.UseMiddleware<ApiKeyAuthenticationMiddleware>();
 
 // Add routing and controllers
 app.UseRouting();
