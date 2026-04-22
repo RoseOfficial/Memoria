@@ -43,10 +43,10 @@ namespace AlphaScope
         public int Version { get; set; } = 3;
         
         /// <summary>
-        /// Base URL for the AlphaScopeServer API endpoint
-        /// TODO: Update this to production server URL before distribution
+        /// Base URL for the AlphaScopeServer API endpoint. Default points at the production
+        /// Render deployment; users on a fork or self-host can override via plugin settings.
         /// </summary>
-        public string BaseUrl { get; set; } = "https://localhost:5001/v1/";
+        public string BaseUrl { get; set; } = "https://alphascope-rvbq.onrender.com/v1/";
         
         /// <summary>
         /// Current user's character name
