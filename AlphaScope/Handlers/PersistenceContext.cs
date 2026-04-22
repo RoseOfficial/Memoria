@@ -76,11 +76,6 @@ internal sealed class PersistenceContext
     public static readonly ConcurrentDictionary<ulong, CachedPlayer> _playerCache = new();
     
     /// <summary>
-    /// Cache mapping Account ID to list of Content IDs (for alt character tracking)
-    /// </summary>
-    public static readonly ConcurrentDictionary<ulong, List<ulong>> _AccountIdCache = new();
-
-    /// <summary>
     /// Queue of player data pending upload to server
     /// </summary>
     public static ConcurrentDictionary<ulong, PostPlayerRequest> _UploadPlayers = new();
@@ -164,7 +159,6 @@ internal sealed class PersistenceContext
         // Force clear all static caches immediately on startup
         _logger.LogInformation("PersistenceContext: Force clearing all static caches on startup");
         _playerCache.Clear();
-        _AccountIdCache.Clear();
         _UploadPlayers.Clear();
         _UploadedPlayersCache.Clear();
         _recentlyScannedPlayers.Clear();
@@ -189,7 +183,6 @@ internal sealed class PersistenceContext
     {
         _logger?.LogInformation("Clearing all in-memory caches...");
         _playerCache.Clear();
-        _AccountIdCache.Clear();
         _UploadPlayers.Clear();
         _UploadedPlayersCache.Clear();
         _recentlyScannedPlayers.Clear();
@@ -281,29 +274,6 @@ internal sealed class PersistenceContext
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Error during cache reload from database");
-        }
-    }
-
-
-   public static void UpdateAccountIds()
-    {
-        foreach (var player in _playerCache)
-        {
-            if (player.Value.AccountId != null)
-            {
-                var _GetAccountsCache = _AccountIdCache.TryGetValue((ulong)player.Value.AccountId, out var AccountContentIds);
-                if (_GetAccountsCache && AccountContentIds != null)
-                {
-                    if (!AccountContentIds.Contains(player.Key))
-                    {
-                        AccountContentIds.Add(player.Key);
-                    }
-                }
-                else
-                {
-                    _AccountIdCache[(ulong)player.Value.AccountId] = new List<ulong> { player.Key };
-                }
-            }
         }
     }
 
@@ -520,20 +490,20 @@ internal sealed class PersistenceContext
         return currentWorld;
     }
 
-
-
-    public IReadOnlyList<string> GetAllAccountNamesForCharacter(ulong playerContentId)
+    /// <summary>
+    /// Returns other characters known to share the given Account ID, excluding the specified character.
+    /// Scans the in-memory player cache; no database access. Safe to call every frame for small alt counts.
+    /// </summary>
+    public static IReadOnlyList<(ulong ContentId, CachedPlayer Player)> GetAccountAltCharacters(
+        ulong accountId,
+        ulong excludeContentId)
     {
-        using var scope = _serviceProvider.CreateScope();
-        using var dbContext = scope.ServiceProvider.GetRequiredService<RetainerTrackContext>();
-        return dbContext.Players.Where(p => playerContentId == p.LocalContentId)
-            .SelectMany(player =>
-                dbContext.Players.Where(x => x.AccountId == player.AccountId && player.AccountId != null))
-            .Select(x => x.Name)
-            .Where(x => !string.IsNullOrEmpty(x))
-            .Cast<string>()
-            .ToList()
-            .AsReadOnly();
+        return _playerCache
+            .Where(kvp => kvp.Key != excludeContentId
+                          && kvp.Value.AccountId.HasValue
+                          && kvp.Value.AccountId.Value == accountId)
+            .Select(kvp => (kvp.Key, kvp.Value))
+            .ToList();
     }
 
 
