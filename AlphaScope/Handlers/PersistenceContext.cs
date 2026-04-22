@@ -37,6 +37,7 @@ using AlphaScope.API;
 using AlphaScope.API.Models.Requests.Player;
 using AlphaScope.Database;
 using AlphaScope.GUI;
+using AlphaScope.Persistence;
 using AlphaScope.Services;
 
 // Static imports for specific functionality
@@ -99,6 +100,12 @@ internal sealed class PersistenceContext
     /// Cache of recently scanned players with scan timestamps for avoiding duplicate processing
     /// </summary>
     public static ConcurrentDictionary<ulong, (CachedPlayer Player, long ScannedAt)> _recentlyScannedPlayers = new();
+
+    /// <summary>
+    /// Durable write-ahead log for pending uploads. Survives plugin crashes so scans are not
+    /// lost between capture and successful POST to the server.
+    /// </summary>
+    public static UploadOutbox _outbox = null!;
     
     /// <summary>
     /// Cleans up old entries from the recently scanned players cache to prevent memory bloat.
@@ -163,6 +170,18 @@ internal sealed class PersistenceContext
         _UploadedPlayersCache.Clear();
         _recentlyScannedPlayers.Clear();
         _logger.LogInformation($"PersistenceContext: After force clear - playerCache has {_playerCache.Count} entries");
+
+        // Initialize durable upload outbox and replay anything left over from a previous session
+        var configDir = Plugin.Instance._pluginInterface.GetPluginConfigDirectory();
+        _outbox = new UploadOutbox(System.IO.Path.Combine(configDir, "pending_uploads.jsonl"));
+        var replayed = 0;
+        foreach (var pending in _outbox.ReadPending())
+        {
+            _UploadPlayers[pending.LocalContentId] = pending;
+            replayed++;
+        }
+        if (replayed > 0)
+            _logger.LogInformation("PersistenceContext: Replayed {Count} pending uploads from outbox", replayed);
 
         // Load existing data from database into memory caches
         _logger.LogInformation("PersistenceContext: Calling ReloadCache() during initialization...");
@@ -331,6 +350,14 @@ internal sealed class PersistenceContext
         foreach (var request in requests)
         {
             UpdateCacheIfNeeded(request.LocalContentId, request, _UploadPlayers, _UploadedPlayersCache);
+            // Only append to the outbox when the request actually landed in the upload queue.
+            // UpdateCacheIfNeeded short-circuits on stationary players to avoid flooding the log
+            // with identical snapshots; in that case the queued entry is not this request.
+            if (_UploadPlayers.TryGetValue(request.LocalContentId, out var queued)
+                && ReferenceEquals(queued, request))
+            {
+                _outbox?.Append(request);
+            }
         }
     }
 
@@ -405,13 +432,16 @@ internal sealed class PersistenceContext
             
             if (uploadResult.Success)
             {
+                var uploadedKeys = new List<ulong>(itemsToUpload.Count);
                 foreach (var item in itemsToUpload)
                 {
                     var key = GetKey(item);
                     _UploadPlayers.TryRemove(key, out _);
                     _UploadedPlayersCache[key] = item;
+                    uploadedKeys.Add(key);
                 }
-                //_logger.LogInformation("Player upload successful, items added to cache.");
+                // Drop successfully-uploaded entries from the durable outbox.
+                _outbox?.Remove(uploadedKeys);
                 uploadSuccess = true;
             }
             else if (uploadResult.AuthenticationFailure)
