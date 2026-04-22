@@ -141,7 +141,16 @@ public class PlayerDetailsWindow : BaseModernWindow
             var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
             ImGui.Text($"Home World: {homeWorldName}");
         }
-        
+
+        // Account ID (if known)
+        if (_cachedPlayer.AccountId.HasValue)
+        {
+            using (var accountColor = ThemeManager.PushColor(ImGuiCol.Text, ThemeManager.Colors.TextSecondary))
+            {
+                ImGui.Text($"Account ID: {_cachedPlayer.AccountId.Value}");
+            }
+        }
+
         // Last seen info with colored indicator
         var lastSeenText = GetLastSeenText();
         var statusColor = GetStatusColor();
@@ -214,7 +223,16 @@ public class PlayerDetailsWindow : BaseModernWindow
         if (ImGui.CollapsingHeader("Basic Information", ImGuiTreeNodeFlags.DefaultOpen))
         {
             DrawInfoRow("Name", _cachedPlayer.Name);
-            
+
+            if (_cachedPlayer.AccountId.HasValue)
+            {
+                DrawInfoRow("Account ID", _cachedPlayer.AccountId.Value.ToString());
+            }
+            else
+            {
+                DrawInfoRow("Account ID", "Unknown");
+            }
+
             // World information - always show separate fields
             var homeWorldName = _cachedPlayer.HomeWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.HomeWorldId.Value) : "Unknown";
             var currentWorldName = _cachedPlayer.CurrentWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.CurrentWorldId.Value) : "Unknown";
@@ -258,9 +276,27 @@ public class PlayerDetailsWindow : BaseModernWindow
                 ImGui.SetClipboardText(homeWorldName);
                 ShowNotification("Home world copied to clipboard!");
             }
-            
+
             ImGui.SameLine();
-            
+
+            if (_cachedPlayer.AccountId.HasValue)
+            {
+                if (ImGui.Button("Copy Account ID"))
+                {
+                    ImGui.SetClipboardText(_cachedPlayer.AccountId.Value.ToString());
+                    ShowNotification("Account ID copied to clipboard!");
+                }
+            }
+            else
+            {
+                using (ImRaii.Disabled(true))
+                {
+                    ImGui.Button("Copy Account ID");
+                }
+            }
+
+            ImGui.SameLine();
+
             if (ImGui.Button("Search Similar"))
             {
                 ShowComingSoon("Similar player search");
@@ -1148,6 +1184,7 @@ public class PlayerDetailsWindow : BaseModernWindow
             var currentWorldName = _cachedPlayer.CurrentWorldId.HasValue ? Utils.GetWorldName(_cachedPlayer.CurrentWorldId.Value) : "Unknown";
             
             var exportData = $"Player: {_cachedPlayer.Name}\n" +
+                           $"Account ID: {_cachedPlayer.AccountId?.ToString() ?? "Unknown"}\n" +
                            $"Home World: {homeWorldName}\n" +
                            $"Current World: {currentWorldName}\n" +
                            $"Last Seen: {GetLastSeenText()}\n" +
