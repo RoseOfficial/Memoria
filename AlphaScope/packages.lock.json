@@ -1,7 +1,7 @@
 {
   "version": 1,
   "dependencies": {
-    "net9.0-windows7.0": {
+    "net10.0-windows7.0": {
       "Dalamud.Extensions.MicrosoftLogging": {
         "type": "Direct",
         "requested": "[4.0.1, )",
@@ -13,9 +13,9 @@
       },
       "DalamudPackager": {
         "type": "Direct",
-        "requested": "[13.0.0, )",
-        "resolved": "13.0.0",
-        "contentHash": "Mb3cUDSK/vDPQ8gQIeuCw03EMYrej1B4J44a1AvIJ9C759p9XeqdU9Hg4WgOmlnlPe0G7ILTD32PKSUpkQNa8w=="
+        "requested": "[14.0.1, )",
+        "resolved": "14.0.1",
+        "contentHash": "y0WWyUE6dhpGdolK3iKgwys05/nZaVf4ZPtIjpLhJBZvHxkkiE23zYRo7K7uqAgoK/QvK5cqF6l3VG5AbgC6KA=="
       },
       "DotNet.ReproducibleBuilds": {
         "type": "Direct",
@@ -52,8 +52,7 @@
           "Microsoft.Extensions.Configuration.Abstractions": "9.0.0",
           "Microsoft.Extensions.DependencyModel": "9.0.0",
           "Microsoft.Extensions.Logging": "9.0.0",
-          "Mono.TextTemplating": "3.0.0",
-          "System.Text.Json": "9.0.0"
+          "Mono.TextTemplating": "3.0.0"
         }
       },
       "Microsoft.EntityFrameworkCore.Sqlite": {
@@ -68,8 +67,7 @@
           "Microsoft.Extensions.DependencyModel": "9.0.0",
           "Microsoft.Extensions.Logging": "9.0.0",
           "SQLitePCLRaw.bundle_e_sqlite3": "2.1.10",
-          "SQLitePCLRaw.core": "2.1.10",
-          "System.Text.Json": "9.0.0"
+          "SQLitePCLRaw.core": "2.1.10"
         }
       },
       "NetStone": {
@@ -148,10 +146,7 @@
         "resolved": "4.8.0",
         "contentHash": "/jR+e/9aT+BApoQJABlVCKnnggGQbvGh7BKq2/wI1LamxC+LbzhcLj4Vj7gXCofl1n4E521YfF9w0WcASGg/KA==",
         "dependencies": {
-          "Microsoft.CodeAnalysis.Analyzers": "3.3.4",
-          "System.Collections.Immutable": "7.0.0",
-          "System.Reflection.Metadata": "7.0.0",
-          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
+          "Microsoft.CodeAnalysis.Analyzers": "3.3.4"
         }
       },
       "Microsoft.CodeAnalysis.CSharp": {
@@ -181,9 +176,7 @@
           "Humanizer.Core": "2.14.1",
           "Microsoft.Bcl.AsyncInterfaces": "7.0.0",
           "Microsoft.CodeAnalysis.Common": "[4.8.0]",
-          "System.Composition": "7.0.0",
-          "System.IO.Pipelines": "7.0.0",
-          "System.Threading.Channels": "7.0.0"
+          "System.Composition": "7.0.0"
         }
       },
       "Microsoft.CodeAnalysis.Workspaces.MSBuild": {
@@ -193,8 +186,7 @@
         "dependencies": {
           "Microsoft.Build.Framework": "16.10.0",
           "Microsoft.CodeAnalysis.Common": "[4.8.0]",
-          "Microsoft.CodeAnalysis.Workspaces.Common": "[4.8.0]",
-          "System.Text.Json": "7.0.3"
+          "Microsoft.CodeAnalysis.Workspaces.Common": "[4.8.0]"
         }
       },
       "Microsoft.Data.Sqlite.Core": {
@@ -237,8 +229,7 @@
           "Microsoft.Extensions.Configuration.Abstractions": "9.0.0",
           "Microsoft.Extensions.DependencyModel": "9.0.0",
           "Microsoft.Extensions.Logging": "9.0.0",
-          "SQLitePCLRaw.core": "2.1.10",
-          "System.Text.Json": "9.0.0"
+          "SQLitePCLRaw.core": "2.1.10"
         }
       },
       "Microsoft.Extensions.Caching.Abstractions": {
@@ -339,10 +330,7 @@
       "SQLitePCLRaw.core": {
         "type": "Transitive",
         "resolved": "2.1.10",
-        "contentHash": "Ii8JCbC7oiVclaE/mbDEK000EFIJ+ShRPwAvvV89GOZhQ+ZLtlnSWl6ksCNMKu/VGXA4Nfi2B7LhN/QFN9oBcw==",
-        "dependencies": {
-          "System.Memory": "4.5.3"
-        }
+        "contentHash": "Ii8JCbC7oiVclaE/mbDEK000EFIJ+ShRPwAvvV89GOZhQ+ZLtlnSWl6ksCNMKu/VGXA4Nfi2B7LhN/QFN9oBcw=="
       },
       "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "Transitive",
@@ -361,11 +349,6 @@
         "type": "Transitive",
         "resolved": "6.0.0",
         "contentHash": "CPc6tWO1LAer3IzfZufDBRL+UZQcj5uS207NHALQzP84Vp/z6wF0Aa0YZImOQY8iStY0A2zI/e3ihKNPfUm8XA=="
-      },
-      "System.Collections.Immutable": {
-        "type": "Transitive",
-        "resolved": "7.0.0",
-        "contentHash": "dQPcs0U1IKnBdRDBkrCTi1FoajSTBzLcVTpjO4MBCMC7f4pDOIPzgBoX8JjG7X6uZRJ8EBxsi8+DR1JuwjnzOQ=="
       },
       "System.Composition": {
         "type": "Transitive",
@@ -414,42 +397,9 @@
           "System.Composition.Hosting": "7.0.0",
           "System.Composition.Runtime": "7.0.0"
         }
-      },
-      "System.IO.Pipelines": {
-        "type": "Transitive",
-        "resolved": "7.0.0",
-        "contentHash": "jRn6JYnNPW6xgQazROBLSfpdoczRw694vO5kKvMcNnpXuolEixUyw6IBuBs2Y2mlSX/LdLvyyWmfXhaI3ND1Yg=="
-      },
-      "System.Memory": {
-        "type": "Transitive",
-        "resolved": "4.5.3",
-        "contentHash": "3oDzvc/zzetpTKWMShs1AADwZjQ/36HnsufHRPcOjyRAAMLDlu2iD33MBI2opxnezcVUtXyqDXXjoFMOU9c7SA=="
-      },
-      "System.Reflection.Metadata": {
-        "type": "Transitive",
-        "resolved": "7.0.0",
-        "contentHash": "MclTG61lsD9sYdpNz9xsKBzjsmsfCtcMZYXz/IUr2zlhaTaABonlr1ESeompTgM+Xk+IwtGYU7/voh3YWB/fWw==",
-        "dependencies": {
-          "System.Collections.Immutable": "7.0.0"
-        }
-      },
-      "System.Runtime.CompilerServices.Unsafe": {
-        "type": "Transitive",
-        "resolved": "6.0.0",
-        "contentHash": "/iUeP3tq1S0XdNNoMz5C9twLSrM/TH+qElHkXWaPvuNOt+99G75NrV0OS2EqHx5wMN7popYjpc8oTjC1y16DLg=="
-      },
-      "System.Text.Json": {
-        "type": "Transitive",
-        "resolved": "9.0.0",
-        "contentHash": "js7+qAu/9mQvnhA4EfGMZNEzXtJCDxgkgj8ohuxq/Qxv+R56G+ljefhiJHOxTNiw54q8vmABCWUwkMulNdlZ4A=="
-      },
-      "System.Threading.Channels": {
-        "type": "Transitive",
-        "resolved": "7.0.0",
-        "contentHash": "qmeeYNROMsONF6ndEZcIQ+VxR4Q/TX/7uIVLJqtwIWL7dDWeh0l1UIqgo4wYyjG//5lUNhwkLDSFl+pAWO6oiA=="
       }
     },
-    "net9.0-windows7.0/win-x64": {
+    "net10.0-windows7.0/win-x64": {
       "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "Transitive",
         "resolved": "2.1.10",
