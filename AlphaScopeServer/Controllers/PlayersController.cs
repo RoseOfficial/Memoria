@@ -121,7 +121,17 @@ namespace AlphaScopeServer.Controllers
                         AccountId = p.AccountId,
                         AvatarLink = p.AvatarLink,
                         CurrentJobId = p.CurrentJobId,
-                        CurrentJobLevel = p.CurrentJobLevel
+                        CurrentJobLevel = p.CurrentJobLevel,
+                        HomeWorldId = p.HomeWorldId,
+                        LastScannedAt = p.LastScannedAt,
+                        LodestoneJobData = p.LodestoneJobData,
+                        MainJobId = p.MainJobId,
+                        MainJobLevel = p.MainJobLevel,
+                        LastJobDataUpdate = p.LastJobDataUpdate,
+                        LodestoneMinionsData = p.LodestoneMinionsData,
+                        LastMinionsDataUpdate = p.LastMinionsDataUpdate,
+                        LodestoneMountsData = p.LodestoneMountsData,
+                        LastMountsDataUpdate = p.LastMountsDataUpdate,
                     })
                     .ToListAsync();
 
