@@ -14,28 +14,33 @@ builder.Services.AddControllers()
         options.SerializerSettings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
     });
 
-// Configure Entity Framework with performance optimizations
-builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
+// Configure Entity Framework. In the Testing environment the test harness registers
+// its own (InMemory) DbContext so we skip the Npgsql registration here — adding both
+// providers to the same service provider makes EF Core throw "multiple providers".
+if (!builder.Environment.IsEnvironment("Testing"))
 {
-    var raw = builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? throw new InvalidOperationException(
-            "ConnectionStrings:DefaultConnection is not configured. " +
-            "Set it via user-secrets, environment variable, or appsettings.json.");
-
-    // Neon's dashboard hands out postgresql:// URIs by default; Npgsql expects
-    // key-value. Convert transparently so operators can paste either form.
-    var connectionString = ConnectionStringHelper.NormalizeForNpgsql(raw);
-
-    options.UseNpgsql(connectionString, npgsql =>
+    builder.Services.AddDbContext<AlphaScopeDbContext>(options =>
     {
-        npgsql.CommandTimeout(10);
-        npgsql.MigrationsAssembly("AlphaScopeServer");
-    });
+        var raw = builder.Configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException(
+                "ConnectionStrings:DefaultConnection is not configured. " +
+                "Set it via user-secrets, environment variable, or appsettings.json.");
 
-    options.EnableSensitiveDataLogging(false);
-    options.EnableServiceProviderCaching();
-    options.EnableDetailedErrors(false);
-}, ServiceLifetime.Scoped);
+        // Neon's dashboard hands out postgresql:// URIs by default; Npgsql expects
+        // key-value. Convert transparently so operators can paste either form.
+        var connectionString = ConnectionStringHelper.NormalizeForNpgsql(raw);
+
+        options.UseNpgsql(connectionString, npgsql =>
+        {
+            npgsql.CommandTimeout(10);
+            npgsql.MigrationsAssembly("AlphaScopeServer");
+        });
+
+        options.EnableSensitiveDataLogging(false);
+        options.EnableServiceProviderCaching();
+        options.EnableDetailedErrors(false);
+    }, ServiceLifetime.Scoped);
+}
 
 // Configure CORS. No wildcard origins — the Dalamud plugin calls via RestSharp (not a browser),
 // so CORS does not apply to it. Browser-based clients must be explicitly allowlisted via
@@ -80,20 +85,30 @@ builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Information);
 var app = builder.Build();
 
 // Apply EF Core migrations at startup. Fail fast if they don't apply — starting
-// the server with an out-of-sync schema is worse than refusing to start.
-using (var scope = app.Services.CreateScope())
+// the server with an out-of-sync schema is worse than refusing to start. Skipped
+// in the Testing environment because the test harness swaps the DbContext to
+// InMemory (which doesn't support Migrate) AFTER this code has already run.
+if (!app.Environment.IsEnvironment("Testing"))
 {
+    using var scope = app.Services.CreateScope();
     var context = scope.ServiceProvider.GetRequiredService<AlphaScopeDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    try
+    if (context.Database.IsRelational())
     {
-        context.Database.Migrate();
-        logger.LogInformation("Database migrations applied successfully");
+        try
+        {
+            context.Database.Migrate();
+            logger.LogInformation("Database migrations applied successfully");
+        }
+        catch (Exception ex)
+        {
+            logger.LogCritical(ex, "Database migration failed — server cannot start");
+            throw;
+        }
     }
-    catch (Exception ex)
+    else
     {
-        logger.LogCritical(ex, "Database migration failed — server cannot start");
-        throw;
+        logger.LogInformation("DbContext is non-relational (provider: {Provider}); skipping migrations", context.Database.ProviderName);
     }
 }
 

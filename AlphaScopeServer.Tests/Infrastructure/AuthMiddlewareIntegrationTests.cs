@@ -9,11 +9,11 @@ namespace AlphaScopeServer.Tests.Infrastructure;
 /// Verifies that the API key middleware, when wired into Program.cs, rejects unauthenticated
 /// callers on protected routes and lets them through on the exempted routes.
 /// </summary>
-public class AuthMiddlewareIntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+public class AuthMiddlewareIntegrationTests : IClassFixture<TestAppFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestAppFactory _factory;
 
-    public AuthMiddlewareIntegrationTests(WebApplicationFactory<Program> factory)
+    public AuthMiddlewareIntegrationTests(TestAppFactory factory)
     {
         _factory = factory;
     }
