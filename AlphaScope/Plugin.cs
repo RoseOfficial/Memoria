@@ -49,7 +49,9 @@ public sealed class Plugin : IDalamudPlugin
     /// Dalamud command manager for handling chat commands
     /// </summary>
     private readonly ICommandManager _commandManager;
-    
+    private readonly Action _openMainUiHandler;
+    private readonly Action _openConfigUiHandler;
+
     /// <summary>
     /// Dalamud context menu service for adding right-click menu options
     /// </summary>
@@ -277,13 +279,15 @@ public sealed class Plugin : IDalamudPlugin
 
         // Register UI drawing and event handlers
         pluginInterface.UiBuilder.Draw += ws.Draw;
-        pluginInterface.UiBuilder.OpenMainUi += delegate { MainWindow.OpenDefault(); };
-        pluginInterface.UiBuilder.OpenConfigUi += delegate
+        _openMainUiHandler = () => MainWindow.OpenDefault();
+        _openConfigUiHandler = () =>
         {
             MainWindow.OpenDefault();
-            // TODO: land on Settings tab when invoked from "Plugin Configuration"
-            // (SlimMainWindow has no public setter for the active tab; add one if needed)
+            // TODO: When SlimMainWindow exposes OpenAt(Tab.Settings), call that here so
+            // "Plugin Configuration" lands on the Settings tab instead of Recent.
         };
+        pluginInterface.UiBuilder.OpenMainUi += _openMainUiHandler;
+        pluginInterface.UiBuilder.OpenConfigUi += _openConfigUiHandler;
 
         // Register chat command for opening the plugin
         _commandManager.AddHandler("/alpha", new CommandInfo(ProcessCommand)
@@ -499,8 +503,8 @@ public sealed class Plugin : IDalamudPlugin
 
         // Unregister UI event handlers
         _pluginInterface.UiBuilder.Draw -= ws.Draw;
-        _pluginInterface.UiBuilder.OpenMainUi -= delegate { MainWindow.OpenDefault(); };
-        _pluginInterface.UiBuilder.OpenConfigUi -= delegate { MainWindow.OpenDefault(); };
+        _pluginInterface.UiBuilder.OpenMainUi -= _openMainUiHandler;
+        _pluginInterface.UiBuilder.OpenConfigUi -= _openConfigUiHandler;
 
     }
 
