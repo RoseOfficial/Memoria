@@ -87,9 +87,7 @@ internal sealed class LodestoneRefreshService : IDisposable
         _minionDataService = minionDataService;
         _mountDataService = mountDataService;
         
-        _logger.LogInformation("LodestoneRefreshService initialized - NetStone client will be created on first use");
-        _logger.LogInformation("MinionDataService initialized with {MinionCount} minions mapped", _minionDataService.MinionCount);
-        _logger.LogInformation("MountDataService initialized with {MountCount} mounts mapped", _mountDataService.MountCount);
+        // Counts are already logged by the data services themselves; no need to re-emit here.
     }
     
     /// <summary>
@@ -100,7 +98,7 @@ internal sealed class LodestoneRefreshService : IDisposable
         if (_lodestoneClient == null)
         {
             _lodestoneClient = await LodestoneClient.GetClientAsync();
-            _logger.LogInformation("NetStone client initialized successfully");
+            _logger.LogDebug("NetStone client initialized");
         }
         return _lodestoneClient;
     }
@@ -123,10 +121,7 @@ internal sealed class LodestoneRefreshService : IDisposable
             return;
         }
 
-        _logger.LogInformation($"Configuration - Enabled: {Config.LodestoneRefreshEnabled}, " +
-                             $"Processing: 1 player per second, " +
-                             $"Stale Threshold: {Config.LodestoneStaleThresholdHours}h, " +
-                             $"Idle Delay: {Config.LodestoneRefreshIdleDelaySeconds}s");
+        _logger.LogDebug($"Lodestone refresh config — enabled={Config.LodestoneRefreshEnabled}, staleThreshold={Config.LodestoneStaleThresholdHours}h, idleDelay={Config.LodestoneRefreshIdleDelaySeconds}s");
         
         try
         {
@@ -243,18 +238,13 @@ internal sealed class LodestoneRefreshService : IDisposable
         try
         {
             var staleThreshold = DateTime.UtcNow.AddHours(-Config.LodestoneStaleThresholdHours);
-            _logger.LogInformation($"PopulateInitialQueue: Stale threshold is {staleThreshold} (older than {Config.LodestoneStaleThresholdHours}h)");
-
             var totalPlayers = PersistenceContext._playerCache.Count;
-            _logger.LogInformation($"PopulateInitialQueue: Total players in cache: {totalPlayers}");
 
             var playersToRefresh = PersistenceContext._playerCache
                 .Where(kvp => kvp.Value.LastScannedAt == null || kvp.Value.LastScannedAt < staleThreshold)
                 .OrderBy(kvp => kvp.Value.LastScannedAt ?? DateTime.MinValue)
                 .Select(kvp => kvp.Key)
                 .ToList();
-
-            _logger.LogInformation($"PopulateInitialQueue: Found {playersToRefresh.Count} players needing refresh");
 
             var queuedCount = 0;
             foreach (var contentId in playersToRefresh)
@@ -266,7 +256,11 @@ internal sealed class LodestoneRefreshService : IDisposable
                 }
             }
 
-            _logger.LogInformation($"PopulateInitialQueue: Successfully populated refresh queue with {queuedCount} players needing updates");
+            // Only emit a startup line if there's actually something to do.
+            if (queuedCount > 0)
+                _logger.LogInformation("Lodestone refresh queue seeded: {Queued} of {Total} cached players need refresh", queuedCount, totalPlayers);
+            else
+                _logger.LogDebug("Lodestone refresh queue empty on startup ({Total} players in cache)", totalPlayers);
         }
         catch (Exception ex)
         {
@@ -424,13 +418,16 @@ internal sealed class LodestoneRefreshService : IDisposable
                 _logger.LogWarning($"Could not extract job data for player {cached.Name}");
             }
 
+            var minionUpdateCount = 0;
+            var mountUpdateCount = 0;
+
             if (minionsData != null && minionsData.Count > 0)
             {
                 var minionsDataJson = JsonSerializer.Serialize(minionsData);
                 if (minionsDataJson != cached.LodestoneMinionsData)
                 {
                     PersistenceContext.UpdateCachedPlayerMinionsData(contentId, minionsDataJson, DateTime.UtcNow);
-                    _logger.LogInformation($"Updated minion data for {cached.Name} with {minionsData.Count} minions");
+                    minionUpdateCount = minionsData.Count;
                     hasUpdates = true;
                 }
             }
@@ -445,7 +442,7 @@ internal sealed class LodestoneRefreshService : IDisposable
                 if (mountsDataJson != cached.LodestoneMountsData)
                 {
                     PersistenceContext.UpdateCachedPlayerMountsData(contentId, mountsDataJson, DateTime.UtcNow);
-                    _logger.LogInformation($"Updated mount data for {cached.Name} with {mountsData.Count} mounts");
+                    mountUpdateCount = mountsData.Count;
                     hasUpdates = true;
                 }
             }
@@ -457,6 +454,10 @@ internal sealed class LodestoneRefreshService : IDisposable
             // Always update LastScannedAt to track when we attempted refresh
             PersistenceContext.UpdateCachedPlayerLastScannedAt(contentId, DateTime.UtcNow);
             hasUpdates = true;
+
+            // One summary line per refresh instead of two (minion + mount).
+            if (minionUpdateCount > 0 || mountUpdateCount > 0)
+                _logger.LogInformation("Refreshed Lodestone for {Name}: {Minions} minions, {Mounts} mounts", cached.Name, minionUpdateCount, mountUpdateCount);
 
             return hasUpdates;
         }

@@ -341,9 +341,7 @@ public sealed class Plugin : IDalamudPlugin
         serviceProvider.GetRequiredService<GameHooks>();
         
         // Start background Lodestone refresh service
-        Log.Information("Plugin: Initializing LodestoneRefreshService...");
         _lodestoneRefreshService = serviceProvider.GetRequiredService<LodestoneRefreshService>();
-        Log.Information("Plugin: LodestoneRefreshService instance created, starting background task...");
         
         // Start the service immediately in a fire-and-forget manner
         var startTask = _lodestoneRefreshService.StartAsync();
@@ -351,7 +349,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             if (task.IsCompletedSuccessfully)
             {
-                Log.Information("Plugin: LodestoneRefreshService.StartAsync() completed successfully");
+                // Successful start is the common case; don't log it.
             }
             else if (task.IsFaulted)
             {
