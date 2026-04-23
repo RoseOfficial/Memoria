@@ -1,7 +1,10 @@
 using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
 using Dalamud.Interface.Windowing;
+using AlphaScope.GUI.Modern.Base;
 using AlphaScope.Handlers;
 using AlphaScope.Utilities;
 
@@ -81,7 +84,8 @@ internal sealed class MicroCardWindow : Window
         var config = Plugin.Instance.Configuration;
         var favKey = (long)_targetContentId;
         var isFavorite = config.FavoritedPlayer.ContainsKey(favKey);
-        if (ImGui.Button(isFavorite ? "Unfavorite" : "Add to favorites"))
+        ImGui.PushStyleColor(ImGuiCol.Text, isFavorite ? ThemeManager.Colors.Error : ThemeManager.Colors.TextMuted);
+        if (ImGuiComponents.IconButton(FontAwesomeIcon.Heart))
         {
             if (isFavorite)
             {
@@ -92,12 +96,15 @@ internal sealed class MicroCardWindow : Window
                 config.FavoritedPlayer[favKey] = new Configuration.CachedFavoritedPlayer
                 {
                     Name = player.Name,
-                    AccountId = player.AccountId ?? 0,
-                    Note = string.Empty
+                    AccountId = player.AccountId,
+                    Note = string.Empty,
                 };
             }
-            Plugin.Instance._pluginInterface.SavePluginConfig(config);
+            config.Save();
         }
+        ImGui.PopStyleColor();
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(isFavorite ? "Remove from favorites" : "Add to favorites");
 
         ImGui.SameLine();
         var worldUnknown = string.IsNullOrEmpty(worldName) || worldName == "—" || worldName == "Unknown";
