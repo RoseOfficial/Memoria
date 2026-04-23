@@ -220,7 +220,9 @@ public sealed class CollectiblesApiService : ICollectiblesAcquisitionService, ID
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to fetch data from FFXIVCollect API, using fallback data");
+                // Don't dump the full stack — FFXIVCollect changes their JSON schema periodically
+                // and we have a static fallback. Short warning is enough signal.
+                _logger.LogWarning("Failed to fetch data from FFXIVCollect API ({Error}); using fallback data", ex.Message);
                 
                 // Use static data as fallback
                 acquisitionData.IsFromApi = false;
