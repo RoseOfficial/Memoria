@@ -1,10 +1,12 @@
 using System;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Components;
 using AlphaScope.GUI.Modern.Base;
+using AlphaScope.Handlers;
 
 namespace AlphaScope.GUI.Modern.Components;
 
@@ -24,12 +26,23 @@ internal static class PlayerListRow
 
         ImGui.BeginGroup();
 
-        // Avatar slot — placeholder for now; actual texture wiring lives in MicroCardWindow.
-        // Reserves vertical space so all rows align.
+        // Avatar slot — real texture when available, fallback rectangle while loading.
         var avatarSize = new Vector2(36, 36);
-        var pos = ImGui.GetCursorScreenPos();
-        ImGui.GetWindowDrawList().AddRectFilled(pos, pos + avatarSize, ImGui.GetColorU32(ImGuiCol.FrameBg), 4f);
-        ImGui.Dummy(avatarSize);
+        nint textureHandle = 0;
+        if (!string.IsNullOrEmpty(item.AvatarLink))
+            textureHandle = Plugin.AvatarCacheManager.GetAvatarHandle(item.AvatarLink);
+
+        if (textureHandle != 0)
+        {
+            var texId = NintToImTextureId(textureHandle);
+            ImGui.Image(texId, avatarSize);
+        }
+        else
+        {
+            var pos = ImGui.GetCursorScreenPos();
+            ImGui.GetWindowDrawList().AddRectFilled(pos, pos + avatarSize, ImGui.GetColorU32(ImGuiCol.FrameBg), 4f);
+            ImGui.Dummy(avatarSize);
+        }
         ImGui.SameLine();
 
         // Name + world stack
@@ -77,6 +90,17 @@ internal static class PlayerListRow
 
         ImGui.EndGroup();
 
+        // Double-click anywhere on the row opens the profile (same as clicking the info icon).
+        if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+        {
+            openClicked = true;
+        }
+
         return openClicked;
+    }
+
+    private static ImTextureID NintToImTextureId(nint handle)
+    {
+        return MemoryMarshal.Cast<nint, ImTextureID>(MemoryMarshal.CreateSpan(ref handle, 1))[0];
     }
 }

@@ -8,10 +8,10 @@ public class PlayerListProviderTests
 {
     private static Dictionary<ulong, PersistenceContext.CachedPlayer> SampleCache() => new()
     {
-        [1] = new PersistenceContext.CachedPlayer { Name = "Alice Andrews", AccountId = null, HomeWorldId = 73, LastScannedAt = DateTime.FromFileTimeUtc(1_000) },
-        [2] = new PersistenceContext.CachedPlayer { Name = "Bob Berkeley",  AccountId = null, HomeWorldId = 73, LastScannedAt = DateTime.FromFileTimeUtc(3_000) },
-        [3] = new PersistenceContext.CachedPlayer { Name = "Carla Cortez",  AccountId = null, HomeWorldId = 74, LastScannedAt = DateTime.FromFileTimeUtc(2_000) },
-        [4] = new PersistenceContext.CachedPlayer { Name = "Dale Diaz",     AccountId = null, HomeWorldId = 74, LastScannedAt = DateTime.FromFileTimeUtc(4_000) },
+        [1] = new PersistenceContext.CachedPlayer { Name = "Alice Andrews", AccountId = null, HomeWorldId = 73, LastScannedAt = DateTime.FromFileTimeUtc(1_000), AvatarLink = null },
+        [2] = new PersistenceContext.CachedPlayer { Name = "Bob Berkeley",  AccountId = null, HomeWorldId = 73, LastScannedAt = DateTime.FromFileTimeUtc(3_000), AvatarLink = null },
+        [3] = new PersistenceContext.CachedPlayer { Name = "Carla Cortez",  AccountId = null, HomeWorldId = 74, LastScannedAt = DateTime.FromFileTimeUtc(2_000), AvatarLink = null },
+        [4] = new PersistenceContext.CachedPlayer { Name = "Dale Diaz",     AccountId = null, HomeWorldId = 74, LastScannedAt = DateTime.FromFileTimeUtc(4_000), AvatarLink = null },
     };
 
     [Fact]
@@ -85,8 +85,8 @@ public class PlayerListProviderTests
     {
         var cache = new Dictionary<ulong, PersistenceContext.CachedPlayer>
         {
-            [1] = new PersistenceContext.CachedPlayer { Name = "Alice", AccountId = null, HomeWorldId = 73, LastScannedAt = null },
-            [2] = new PersistenceContext.CachedPlayer { Name = "Bob",   AccountId = null, HomeWorldId = 73, LastScannedAt = null },
+            [1] = new PersistenceContext.CachedPlayer { Name = "Alice", AccountId = null, HomeWorldId = 73, LastScannedAt = null, AvatarLink = null },
+            [2] = new PersistenceContext.CachedPlayer { Name = "Bob",   AccountId = null, HomeWorldId = 73, LastScannedAt = null, AvatarLink = null },
         };
 
         var result = PlayerListProvider.GetRecent(cache, limit: 10);

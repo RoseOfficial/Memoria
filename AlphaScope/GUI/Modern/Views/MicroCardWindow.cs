@@ -1,9 +1,11 @@
 using System;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.Windowing;
+using Lumina.Excel.Sheets;
 using AlphaScope.GUI.Modern.Base;
 using AlphaScope.Handlers;
 using AlphaScope.Utilities;
@@ -23,8 +25,8 @@ internal sealed class MicroCardWindow : Window
     {
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(360, 220),
-            MaximumSize = new Vector2(480, 320),
+            MinimumSize = new Vector2(420, 260),
+            MaximumSize = new Vector2(540, 360),
         };
         RespectCloseHotkey = true;
     }
@@ -58,12 +60,56 @@ internal sealed class MicroCardWindow : Window
             ? Utils.GetWorldName(wid)
             : "—";
 
-        ImGui.TextUnformatted(player.Name);
-        ImGui.TextUnformatted($"World: {worldName}");
-
         var lastSeenText = player.LastScannedAt is { } dt
             ? Tools.ToTimeSinceString((int)((DateTimeOffset)dt).ToUnixTimeSeconds())
             : "—";
+
+        // Header: avatar on the left, identity stack on the right
+        ImGui.BeginGroup();
+
+        var avatarSize = new Vector2(96, 96);
+        nint textureHandle = 0;
+        if (!string.IsNullOrEmpty(player.AvatarLink))
+            textureHandle = Plugin.AvatarCacheManager.GetAvatarHandle(player.AvatarLink);
+
+        if (textureHandle != 0)
+        {
+            var texId = NintToImTextureId(textureHandle);
+            ImGui.Image(texId, avatarSize);
+        }
+        else
+        {
+            var pos = ImGui.GetCursorScreenPos();
+            ImGui.GetWindowDrawList().AddRectFilled(pos, pos + avatarSize, ImGui.GetColorU32(ImGuiCol.FrameBg), 6f);
+            ImGui.Dummy(avatarSize);
+        }
+
+        ImGui.SameLine();
+        ImGui.BeginGroup();
+
+        ImGui.TextUnformatted(player.Name);
+
+        // World line — include traveling indicator when current world differs from home
+        string worldLine;
+        if (player.CurrentWorldId is { } curWid && curWid != 0
+            && player.HomeWorldId is { } homeWid && homeWid != 0
+            && curWid != homeWid)
+        {
+            worldLine = $"{Utils.GetWorldName(homeWid)} (traveling on {Utils.GetWorldName(curWid)})";
+        }
+        else
+        {
+            worldLine = worldName;
+        }
+        ImGui.TextUnformatted($"World: {worldLine}");
+
+        // Main job + level if known
+        if (player.MainJobId is { } jobId && jobId != 0 && player.MainJobLevel is { } jobLevel)
+        {
+            var jobAbbr = ResolveJobAbbreviation(jobId);
+            ImGui.TextUnformatted($"Job: {jobAbbr} {jobLevel}");
+        }
+
         ImGui.TextUnformatted($"Last seen: {lastSeenText}");
 
         // Alts teaser (count only, names live on the web per Tier 3 privacy model)
@@ -77,6 +123,9 @@ internal sealed class MicroCardWindow : Window
                 ImGui.PopStyleColor();
             }
         }
+
+        ImGui.EndGroup();
+        ImGui.EndGroup();
 
         ImGui.Separator();
 
@@ -119,5 +168,25 @@ internal sealed class MicroCardWindow : Window
             Dalamud.Utility.Util.OpenLink(url);
         }
         ImGui.EndDisabled();
+    }
+
+    private static string ResolveJobAbbreviation(byte jobId)
+    {
+        if (jobId == 0) return "???";
+        try
+        {
+            var sheet = Plugin.DataManager.GetExcelSheet<ClassJob>();
+            if (sheet?.GetRow(jobId) is not { } row) return "???";
+            return row.Abbreviation.ExtractText();
+        }
+        catch
+        {
+            return "???";
+        }
+    }
+
+    private static ImTextureID NintToImTextureId(nint handle)
+    {
+        return MemoryMarshal.Cast<nint, ImTextureID>(MemoryMarshal.CreateSpan(ref handle, 1))[0];
     }
 }

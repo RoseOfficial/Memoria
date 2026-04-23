@@ -233,32 +233,9 @@ internal sealed class SlimMainWindow : Window
         var config = Plugin.Instance.Configuration;
         var changed = false;
 
-        ImGui.TextDisabled("Server");
-        var serverUrl = config.BaseUrl ?? string.Empty;
-        ImGui.SetNextItemWidth(360);
-        if (ImGui.InputText("Server URL", ref serverUrl, 200))
-        {
-            config.BaseUrl = serverUrl;
-            changed = true;
-        }
-
+        DrawUploadStatus();
         ImGui.Spacing();
-        ImGui.TextDisabled("Web app");
-        var webBase = config.WebBaseUrl ?? string.Empty;
-        ImGui.SetNextItemWidth(360);
-        if (ImGui.InputText("Web base URL", ref webBase, 200))
-        {
-            config.WebBaseUrl = webBase;
-            changed = true;
-        }
-        ImGui.SameLine();
-        if (ImGui.SmallButton("Reset"))
-        {
-            config.WebBaseUrl = "https://alphascope.app";
-            changed = true;
-        }
 
-        ImGui.Spacing();
         if (ImGui.Button("Browse my contributions on the web →") && !string.IsNullOrWhiteSpace(config.WebBaseUrl))
         {
             Dalamud.Utility.Util.OpenLink(WebUrls.MeUrl(config.WebBaseUrl));
@@ -281,9 +258,64 @@ internal sealed class SlimMainWindow : Window
             changed = true;
         }
 
+        ImGui.Spacing();
+
+        if (ImGui.CollapsingHeader("Advanced", ImGuiTreeNodeFlags.None))
+        {
+            ImGui.TextDisabled("Server");
+            var serverUrl = config.BaseUrl ?? string.Empty;
+            ImGui.SetNextItemWidth(360);
+            if (ImGui.InputText("Server URL", ref serverUrl, 200))
+            {
+                config.BaseUrl = serverUrl;
+                changed = true;
+            }
+
+            ImGui.Spacing();
+            ImGui.TextDisabled("Web app");
+            var webBase = config.WebBaseUrl ?? string.Empty;
+            ImGui.SetNextItemWidth(360);
+            if (ImGui.InputText("Web base URL", ref webBase, 200))
+            {
+                config.WebBaseUrl = webBase;
+                changed = true;
+            }
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Reset"))
+            {
+                config.WebBaseUrl = "https://alphascope.app";
+                changed = true;
+            }
+        }
+
         if (changed)
         {
             config.Save();
+        }
+    }
+
+    private static void DrawUploadStatus()
+    {
+        ImGui.TextDisabled("Upload status");
+        var queued = PersistenceContext._UploadPlayers.Count;
+        var lastUpload = PersistenceContext.LastSuccessfulUploadAt;
+
+        if (queued == 0 && lastUpload is null)
+        {
+            ImGui.TextUnformatted("Nothing scanned yet. Walk past a player in-game.");
+        }
+        else
+        {
+            ImGui.TextUnformatted($"Queued: {queued}");
+            if (lastUpload is { } last)
+            {
+                var agoText = Tools.ToTimeSinceString((int)((System.DateTimeOffset)last).ToUnixTimeSeconds());
+                ImGui.TextUnformatted($"Last upload: {agoText}");
+            }
+            else
+            {
+                ImGui.TextUnformatted("Last upload: never");
+            }
         }
     }
 }

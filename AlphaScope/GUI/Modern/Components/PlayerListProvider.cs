@@ -61,6 +61,7 @@ internal static class PlayerListProvider
         Name = kvp.Value.Name,
         HomeWorldId = kvp.Value.HomeWorldId,
         LastScannedAt = kvp.Value.LastScannedAt,
+        AvatarLink = kvp.Value.AvatarLink,
     };
 }
 
@@ -71,4 +72,5 @@ internal sealed record PlayerListItem
     public required string Name { get; init; }
     public required ushort? HomeWorldId { get; init; }
     public required DateTime? LastScannedAt { get; init; }
+    public string? AvatarLink { get; init; }
 }

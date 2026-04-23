@@ -103,6 +103,9 @@ internal sealed class PersistenceContext
     /// </summary>
     public static ConcurrentDictionary<ulong, (CachedPlayer Player, long ScannedAt)> _recentlyScannedPlayers = new();
 
+    /// <summary>UTC timestamp of the last successful batch upload. Null if none yet. Exposed for the Settings status panel.</summary>
+    public static DateTime? LastSuccessfulUploadAt;
+
     /// <summary>
     /// Durable write-ahead log for pending uploads. Survives plugin crashes so scans are not
     /// lost between capture and successful POST to the server.
@@ -443,7 +446,7 @@ internal sealed class PersistenceContext
             enrichedItemsToUpload.Add(enrichedItem);
         }
         
-        //_logger.LogInformation($"Uploading {enrichedItemsToUpload.Count} Player items. TotalCount: {_UploadPlayers.Count}");
+        _logger.LogInformation($"Uploading {enrichedItemsToUpload.Count} Player items. TotalCount: {_UploadPlayers.Count}");
 
         int retryCount = 0;
         bool uploadSuccess = false;
@@ -465,6 +468,7 @@ internal sealed class PersistenceContext
                 }
                 // Drop successfully-uploaded entries from the durable outbox.
                 _outbox?.Remove(uploadedKeys);
+                LastSuccessfulUploadAt = DateTime.UtcNow;
                 uploadSuccess = true;
             }
             else if (uploadResult.AuthenticationFailure)
