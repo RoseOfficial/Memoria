@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using AlphaScopeServer.Controllers;
 using AlphaScopeServer.Data;
+using AlphaScopeServer.Models.DTOs;
 using AlphaScopeServer.Models.Entities;
 using AlphaScopeServer.Services.Auth;
 using AlphaScopeServer.Tests.Infrastructure;
@@ -197,5 +198,70 @@ public class AuthControllerTests
         var resp = await client.GetAsync($"/v1/auth/discord/callback?code=testcode&state={Uri.EscapeDataString(state)}");
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+    }
+
+    // Direct-controller helpers and tests for GenerateLinkCode
+
+    private static AuthController CreateAuthController(AlphaScopeDbContext ctx)
+    {
+        var logger = Substitute.For<ILogger<AuthController>>();
+        var discordOpts = Options.Create(new DiscordOptions
+        {
+            ClientId = "test-client-id",
+            ClientSecret = "test-client-secret",
+            GuildId = "999888777",
+            StateSigningKey = "ZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzLWxvbmctYmFzZTY0",
+        });
+        var stateSigner = new OAuthStateSigner("ZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzLWxvbmctYmFzZTY0");
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        var config = Substitute.For<IConfiguration>();
+        config["ServerBaseUrl"].Returns("https://api.example.com");
+        config["Cors:AllowedOrigins"].Returns("https://app.example.com");
+
+        var controller = new AuthController(ctx, logger, discordOpts, stateSigner, httpClientFactory, config);
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
+        return controller;
+    }
+
+    [Fact]
+    public async Task GenerateLinkCode_CreatesRowWith15MinTtl()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var user = new ApplicationUser { Name = "Plugin", ApiKey = "PLUGKEY", GameAccountId = 12345, PrimaryCharacterLocalContentId = 0 };
+        ctx.Users.Add(user);
+        ctx.SaveChanges();
+
+        var controller = CreateAuthController(ctx);
+        controller.ControllerContext.HttpContext.Items["User"] = user;
+
+        var result = await controller.GenerateLinkCode(CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>();
+        var body = ((OkObjectResult)result).Value.Should().BeOfType<LinkGenerateResponse>().Subject;
+        body.Code.Should().StartWith("AL-");
+        (body.ExpiresAt - DateTime.UtcNow).TotalMinutes.Should().BeApproximately(15, 0.5);
+
+        ctx.AccountLinkCodes.Single().ApplicationUserId.Should().Be(user.Id);
+    }
+
+    [Fact]
+    public async Task GenerateLinkCode_WithoutUser_Returns401()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var controller = CreateAuthController(ctx);
+        // No HttpContext.Items["User"] set
+
+        var result = await controller.GenerateLinkCode(CancellationToken.None);
+
+        result.Should().BeOfType<UnauthorizedResult>();
     }
 }

@@ -170,6 +170,25 @@ namespace AlphaScopeServer.Controllers
             return Redirect(returnTo);
         }
 
+        [HttpPost("link/generate")]
+        public async Task<IActionResult> GenerateLinkCode(CancellationToken ct)
+        {
+            if (HttpContext.Items["User"] is not ApplicationUser user)
+                return Unauthorized();
+
+            var code = ClaimCodeGenerator.GenerateLinkCode();
+            var row = new AccountLinkCode
+            {
+                ApplicationUserId = user.Id,
+                Code = code,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+            };
+            _context.AccountLinkCodes.Add(row);
+            await _context.SaveChangesAsync(ct);
+
+            return Ok(new AlphaScopeServer.Models.DTOs.LinkGenerateResponse(code, row.ExpiresAt));
+        }
+
         [HttpPost("logout")]
         public IActionResult Logout()
         {
