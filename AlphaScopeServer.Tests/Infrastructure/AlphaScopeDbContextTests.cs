@@ -510,6 +510,31 @@ public class AlphaScopeDbContextTests : IDisposable
     }
 
     [Fact]
+    public void ClaimAttempt_ShouldRejectDuplicate_ForSameUserAndPlayer()
+    {
+        // EF InMemory does not enforce unique index constraints at runtime (known provider
+        // limitation), so we assert on the compiled model instead: the composite unique index
+        // on (UserId, PlayerLocalContentId) must be configured so that a real database
+        // (SQLite/SQL Server) will reject duplicates and the upsert logic in PlayersController
+        // can rely on it.
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var entityType = ctx.Model.FindEntityType(typeof(ClaimAttempt))!;
+        var compositeUniqueIndex = entityType.GetIndexes()
+            .FirstOrDefault(ix =>
+                ix.IsUnique &&
+                ix.Properties.Count == 2 &&
+                ix.Properties.Any(p => p.Name == nameof(ClaimAttempt.UserId)) &&
+                ix.Properties.Any(p => p.Name == nameof(ClaimAttempt.PlayerLocalContentId)));
+
+        compositeUniqueIndex.Should().NotBeNull(
+            "ClaimAttempt requires a unique index on (UserId, PlayerLocalContentId) so that " +
+            "real databases reject duplicate claim rows for the same (user, player) pair");
+    }
+
+    [Fact]
     public void Player_ShouldExposeOwnershipAndPrivacyColumns()
     {
         var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
