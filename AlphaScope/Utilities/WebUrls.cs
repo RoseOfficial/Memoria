@@ -6,6 +6,7 @@ namespace AlphaScope.Utilities;
 /// Builds deep-link URLs into the AlphaScope web app.
 /// </summary>
 /// <remarks>
+/// All URLs follow the format described in docs/superpowers/specs/2026-04-22-ui-redesign-design.md.
 /// Pass the base URL from <c>Configuration.WebBaseUrl</c> on every call so dev/staging overrides work.
 /// </remarks>
 public static class WebUrls

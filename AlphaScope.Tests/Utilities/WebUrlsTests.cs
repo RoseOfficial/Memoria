@@ -1,7 +1,7 @@
 using FluentAssertions;
 using AlphaScope.Utilities;
 
-namespace AlphaScope.Tests.Utils;
+namespace AlphaScope.Tests.Utilities;
 
 public class WebUrlsTests
 {
