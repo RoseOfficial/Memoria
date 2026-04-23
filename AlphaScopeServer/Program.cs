@@ -44,6 +44,12 @@ if (!builder.Environment.IsEnvironment("Testing"))
     }, ServiceLifetime.Scoped);
 }
 
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddSingleton<AlphaScopeServer.Services.Lodestone.ILodestoneBioFetcher,
+                                   AlphaScopeServer.Services.Lodestone.NetStoneLodestoneBioFetcher>();
+}
+
 // Configure CORS. No wildcard origins — the Dalamud plugin calls via RestSharp (not a browser),
 // so CORS does not apply to it. Browser-based clients must be explicitly allowlisted via
 // the `Cors:AllowedOrigins` config key (comma-separated). Unset = no browser origins allowed.
