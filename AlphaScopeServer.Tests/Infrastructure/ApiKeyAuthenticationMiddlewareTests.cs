@@ -93,7 +93,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         // Assert
         await _mockNext.DidNotReceive().Invoke(Arg.Any<HttpContext>());
         context.Response.StatusCode.Should().Be(401);
-        
+
         var responseBody = await GetResponseBody(context);
         responseBody.Should().Be("API key is required");
     }
@@ -112,9 +112,11 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         // Assert
         await _mockNext.DidNotReceive().Invoke(Arg.Any<HttpContext>());
         context.Response.StatusCode.Should().Be(401);
-        
+
         var responseBody = await GetResponseBody(context);
-        responseBody.Should().Be("Invalid API key format");
+        // Whitespace is treated as non-empty by the header parser; it becomes a candidate
+        // key that doesn't match any user, so the response is "Invalid API key".
+        responseBody.Should().Be("Invalid API key");
     }
 
     [Theory]
@@ -123,7 +125,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     [InlineData("key-abc")]
     [InlineData("key-")]
     [InlineData("multiple-dash-key-123")]
-    public async Task InvokeAsync_ShouldReturn401WhenApiKeyFormatInvalid(string apiKey)
+    public async Task InvokeAsync_ShouldReturn401WhenApiKeyNotFound(string apiKey)
     {
         // Arrange
         var context = CreateHttpContext();
@@ -136,9 +138,59 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         // Assert
         await _mockNext.DidNotReceive().Invoke(Arg.Any<HttpContext>());
         context.Response.StatusCode.Should().Be(401);
-        
+
         var responseBody = await GetResponseBody(context);
-        responseBody.Should().Be("Invalid API key format");
+        // Any non-empty key is a candidate; if it doesn't match a stored key exactly it's rejected.
+        responseBody.Should().Be("Invalid API key");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ShouldAuthenticate_WithOpaqueKeyNoAccountIdSuffix()
+    {
+        var webUser = new ApplicationUser
+        {
+            Name = "WebUser",
+            ApiKey = "OPAQUEBASE32KEY12345",
+            GameAccountId = null,
+            DiscordUserId = 111,
+            PrimaryCharacterLocalContentId = 0,
+        };
+        _dbContext.Users.Add(webUser);
+        await _dbContext.SaveChangesAsync();
+
+        var context = CreateHttpContext();
+        context.Request.Path = "/v1/players";
+        context.Request.Headers["api-key"] = "OPAQUEBASE32KEY12345";
+
+        await _middleware.InvokeAsync(context, _dbContext);
+
+        await _mockNext.Received(1).Invoke(context);
+        context.Response.StatusCode.Should().Be(200);
+        (context.Items["User"] as ApplicationUser)!.Id.Should().Be(webUser.Id);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ShouldAuthenticate_WithCookieSourcedKey()
+    {
+        var webUser = new ApplicationUser
+        {
+            Name = "WebUser",
+            ApiKey = "OPAQUECOOKIEKEY123",
+            GameAccountId = null,
+            PrimaryCharacterLocalContentId = 0,
+        };
+        _dbContext.Users.Add(webUser);
+        await _dbContext.SaveChangesAsync();
+
+        var context = CreateHttpContext();
+        context.Request.Path = "/v1/players";
+        context.Request.Headers["Cookie"] = "__Host-alpha=OPAQUECOOKIEKEY123";
+
+        await _middleware.InvokeAsync(context, _dbContext);
+
+        await _mockNext.Received(1).Invoke(context);
+        context.Response.StatusCode.Should().Be(200);
+        (context.Items["User"] as ApplicationUser)!.Id.Should().Be(webUser.Id);
     }
 
     [Theory]

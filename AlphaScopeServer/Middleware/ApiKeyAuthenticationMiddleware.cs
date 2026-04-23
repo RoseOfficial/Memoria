@@ -6,9 +6,10 @@ namespace AlphaScopeServer.Middleware
 {
     /// <summary>
     /// Custom authentication middleware for AlphaScope API key validation.
-    /// Handles authentication using the {UserKey}-{AccountId} format API keys,
-    /// validates users against the database, creates claims-based identity,
-    /// and provides user context for downstream request processing.
+    /// Resolves the API key from the <c>api-key</c> header first, then falls back to the
+    /// <c>__Host-alpha</c> cookie. Performs an exact opaque string match against
+    /// <see cref="AlphaScopeServer.Models.Entities.ApplicationUser.ApiKey"/> so both
+    /// plugin-issued keys and web-issued keys are supported without a fixed format.
     /// </summary>
     public class ApiKeyAuthenticationMiddleware
     {
@@ -49,15 +50,16 @@ namespace AlphaScopeServer.Middleware
                 return;
             }
 
-            // Check for API key header
-            if (!context.Request.Headers.TryGetValue("api-key", out var apiKeyValues))
+            // Resolve API key from header first, then fall back to the __Host-alpha cookie.
+            var apiKey = context.Request.Headers.TryGetValue("api-key", out var headerValues)
+                ? headerValues.FirstOrDefault()
+                : null;
+
+            if (string.IsNullOrEmpty(apiKey))
             {
-                context.Response.StatusCode = 401;
-                await context.Response.WriteAsync("API key is required");
-                return;
+                apiKey = context.Request.Cookies["__Host-alpha"];
             }
 
-            var apiKey = apiKeyValues.FirstOrDefault();
             if (string.IsNullOrEmpty(apiKey))
             {
                 context.Response.StatusCode = 401;
@@ -65,22 +67,9 @@ namespace AlphaScopeServer.Middleware
                 return;
             }
 
-            // Parse API key format: {userKey}-{accountId}
-            var keyParts = apiKey.Split('-');
-            if (keyParts.Length != 2 || !int.TryParse(keyParts[1], out var accountId))
-            {
-                context.Response.StatusCode = 401;
-                await context.Response.WriteAsync("Invalid API key format");
-                return;
-            }
-
-            var userKey = keyParts[0];
-
             try
             {
-                // Find user by API key components
-                var user = await dbContext.Users
-                    .FirstOrDefaultAsync(u => u.ApiKey.StartsWith(userKey) && u.GameAccountId == accountId);
+                var user = await dbContext.Users.FirstOrDefaultAsync(u => u.ApiKey == apiKey);
 
                 if (user == null)
                 {
@@ -89,25 +78,25 @@ namespace AlphaScopeServer.Middleware
                     return;
                 }
 
-                // Create claims for the authenticated user
                 var claims = new List<Claim>
                 {
                     new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new(ClaimTypes.Name, user.Name),
-                    new("GameAccountId", user.GameAccountId?.ToString() ?? string.Empty),
-                    new("LocalContentId", user.PrimaryCharacterLocalContentId.ToString()),
-                    new("AppRoleId", user.AppRoleId.ToString())
+                    new("AppRoleId", user.AppRoleId.ToString()),
                 };
+                if (user.GameAccountId.HasValue)
+                    claims.Add(new Claim("GameAccountId", user.GameAccountId.Value.ToString()));
+                if (user.DiscordUserId.HasValue)
+                    claims.Add(new Claim("DiscordUserId", user.DiscordUserId.Value.ToString()));
+                claims.Add(new Claim("LocalContentId", user.PrimaryCharacterLocalContentId.ToString()));
 
                 var identity = new ClaimsIdentity(claims, "ApiKey");
                 context.User = new ClaimsPrincipal(identity);
 
-                // Store user info in context for easy access
                 context.Items["User"] = user;
                 context.Items["UserId"] = user.Id;
                 context.Items["GameAccountId"] = user.GameAccountId;
 
-                // Update last login time only if it's been more than 5 minutes since last update
                 var timeSinceLastLogin = DateTime.UtcNow - user.LastLoginAt;
                 if (timeSinceLastLogin.TotalMinutes > 5)
                 {
