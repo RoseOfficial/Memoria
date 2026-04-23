@@ -53,7 +53,6 @@ public class AlphaScopeDbContextTests : IDisposable
         // Assert - User entities
         _context.Users.Should().NotBeNull();
         _context.UserCharacters.Should().NotBeNull();
-        _context.UserLodestoneCharacters.Should().NotBeNull();
     }
 
     [Fact]

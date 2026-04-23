@@ -51,8 +51,6 @@ namespace AlphaScopeServer.Data
         public DbSet<ApplicationUser> Users { get; set; }
         /// <summary>Links between users and their FFXIV characters</summary>
         public DbSet<UserCharacter> UserCharacters { get; set; }
-        /// <summary>Links between users and their claimed Lodestone characters</summary>
-        public DbSet<UserLodestoneCharacter> UserLodestoneCharacters { get; set; }
 
         /// <summary>
         /// Configures entity relationships, constraints, and database schema.
@@ -159,15 +157,6 @@ namespace AlphaScopeServer.Data
                 entity.HasIndex(e => e.UserId);
             });
 
-            modelBuilder.Entity<UserLodestoneCharacter>(entity =>
-            {
-                entity.HasOne(e => e.User)
-                    .WithMany(u => u.LodestoneCharacters)
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                entity.HasIndex(e => e.LodestoneId).IsUnique();
-                entity.HasIndex(e => e.UserId);
-            });
         }
 
         /// <summary>

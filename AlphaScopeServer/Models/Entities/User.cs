@@ -42,7 +42,6 @@ namespace AlphaScopeServer.Models.Entities
         
         // Navigation properties
         public virtual ICollection<UserCharacter> Characters { get; set; } = new List<UserCharacter>();
-        public virtual ICollection<UserLodestoneCharacter> LodestoneCharacters { get; set; } = new List<UserLodestoneCharacter>();
     }
 
     [Table("UserCharacters")]
@@ -75,31 +74,6 @@ namespace AlphaScopeServer.Models.Entities
         // Profile visit stats
         public int ProfileTotalVisitCount { get; set; } = 0;
         public DateTime? LastProfileVisitDate { get; set; }
-        
-        [ForeignKey(nameof(UserId))]
-        public virtual ApplicationUser User { get; set; } = null!;
-    }
-
-    [Table("UserLodestoneCharacters")]
-    public class UserLodestoneCharacter
-    {
-        [Key]
-        public int Id { get; set; }
-        
-        [Required]
-        public int UserId { get; set; }
-        
-        [Required]
-        public int LodestoneId { get; set; }
-        
-        [Required]
-        [MaxLength(200)]
-        public string NameAndWorld { get; set; } = string.Empty;
-        
-        [MaxLength(500)]
-        public string AvatarLink { get; set; } = string.Empty;
-        
-        public DateTime VerifiedAt { get; set; } = DateTime.UtcNow;
         
         [ForeignKey(nameof(UserId))]
         public virtual ApplicationUser User { get; set; } = null!;

@@ -11,7 +11,6 @@ namespace AlphaScopeServer.Models.DTOs
         [JsonProperty("4")] public int AppRoleId { get; set; }
         [JsonProperty("5")] public List<UserCharacterDto> Characters { get; set; } = new();
         [JsonProperty("6")] public UserNetworkStatsDto NetworkStats { get; set; } = new();
-        [JsonProperty("7")] public List<UserLodestoneCharacterDto> LodestoneCharacters { get; set; } = new();
         // Emitted on the Login response so the plugin can persist its API key after first registration.
         [JsonProperty("ApiKey")] public string? ApiKey { get; set; }
     }
@@ -52,11 +51,4 @@ namespace AlphaScopeServer.Models.DTOs
         [JsonProperty("7")] public int LastSyncedTime { get; set; } = 0;
     }
 
-    public class UserLodestoneCharacterDto
-    {
-        [JsonProperty("1")] public int LodestoneId { get; set; }
-        [JsonProperty("2")] public string NameAndWorld { get; set; } = string.Empty;
-        [JsonProperty("3")] public string AvatarLink { get; set; } = string.Empty;
-        [JsonProperty("4")] public int VerifiedAt { get; set; } = 0;
-    }
 }
