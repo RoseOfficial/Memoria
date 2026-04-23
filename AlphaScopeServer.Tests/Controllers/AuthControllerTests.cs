@@ -1,12 +1,7 @@
-using FluentAssertions;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using NSubstitute;
 using AlphaScopeServer.Controllers;
 using AlphaScopeServer.Data;
-using AlphaScopeServer.Models.Entities;
 using TestUtilities;
 
 namespace AlphaScopeServer.Tests.Controllers;
