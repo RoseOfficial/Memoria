@@ -63,11 +63,6 @@ internal sealed class PersistenceContext
     public static IClientState _clientState = null!;
 
     /// <summary>
-    /// Dalamud player state service for accessing the local player's ContentId
-    /// </summary>
-    public static IPlayerState? _playerState;
-
-    /// <summary>
     /// Service provider for dependency injection and database access
     /// </summary>
     public static IServiceProvider _serviceProvider = null!;
@@ -157,7 +152,7 @@ internal sealed class PersistenceContext
     /// <param name="serviceProvider">Service provider for dependency injection</param>
     /// <param name="data">Dalamud data manager service</param>
     public PersistenceContext(ILogger<PersistenceContext> logger, IClientState clientState,
-        IPlayerState playerState, IServiceProvider serviceProvider, IDataManager data)
+        IServiceProvider serviceProvider, IDataManager data)
     {
         if (_instance == null)
         {
@@ -166,7 +161,6 @@ internal sealed class PersistenceContext
 
         _logger = logger;
         _clientState = clientState;
-        _playerState = playerState;
         _serviceProvider = serviceProvider;
 
         // Force clear all static caches immediately on startup
@@ -358,23 +352,8 @@ internal sealed class PersistenceContext
 
     public static void AddPlayerUploadData(IEnumerable<PostPlayerRequest> requests)
     {
-        var config = Plugin.Instance?.Configuration;
-        var optOut = config?.OptOutContributingScans ?? false;
-        ulong selfContentId = _playerState?.ContentId ?? 0;
-
         foreach (var request in requests)
         {
-            // When the user has opted out of contributing scans, skip every character
-            // that is not the local player. Self-data (own character) is always uploaded.
-            // selfContentId == 0 means no one is logged in; treat as "not self" so
-            // zero-id scans are also suppressed while the opt-out is active.
-            if (optOut)
-            {
-                var isSelf = selfContentId != 0 && selfContentId == request.LocalContentId;
-                if (!isSelf)
-                    continue;
-            }
-
             UpdateCacheIfNeeded(request.LocalContentId, request, _UploadPlayers, _UploadedPlayersCache);
             // Only append to the outbox when the request actually landed in the upload queue.
             // UpdateCacheIfNeeded short-circuits on stationary players to avoid flooding the log

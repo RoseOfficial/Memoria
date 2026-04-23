@@ -39,7 +39,7 @@ namespace AlphaScope
         /// <summary>
         /// Configuration version for handling config schema updates.
         /// Version 3: Added encrypted API key storage and security enhancements.
-        /// Version 4: Added WebBaseUrl and opt-out settings.
+        /// Version 4: Added WebBaseUrl and OptOutInGamePopups.
         /// </summary>
         public int Version { get; set; } = 4;
         
@@ -205,13 +205,6 @@ namespace AlphaScope
         /// The right-click context menu entry remains; the user just has to click it.
         /// </summary>
         public bool OptOutInGamePopups { get; set; } = false;
-
-        /// <summary>
-        /// When true, the plugin still scans for the local user's data but suppresses upload of
-        /// scans of OTHER characters. Lets a user run the plugin for personal scans without
-        /// contributing to the network.
-        /// </summary>
-        public bool OptOutContributingScans { get; set; } = false;
 
         // ========== LODESTONE REFRESH SERVICE SETTINGS ==========
         

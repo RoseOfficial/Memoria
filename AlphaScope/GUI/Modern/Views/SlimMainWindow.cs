@@ -251,43 +251,6 @@ internal sealed class SlimMainWindow : Window
             changed = true;
         }
 
-        var optOutContrib = config.OptOutContributingScans;
-        if (ImGui.Checkbox("Don't contribute scans of OTHER characters to the network", ref optOutContrib))
-        {
-            config.OptOutContributingScans = optOutContrib;
-            changed = true;
-        }
-
-        ImGui.Spacing();
-
-        if (ImGui.CollapsingHeader("Advanced", ImGuiTreeNodeFlags.None))
-        {
-            ImGui.TextDisabled("Server");
-            var serverUrl = config.BaseUrl ?? string.Empty;
-            ImGui.SetNextItemWidth(360);
-            if (ImGui.InputText("Server URL", ref serverUrl, 200))
-            {
-                config.BaseUrl = serverUrl;
-                changed = true;
-            }
-
-            ImGui.Spacing();
-            ImGui.TextDisabled("Web app");
-            var webBase = config.WebBaseUrl ?? string.Empty;
-            ImGui.SetNextItemWidth(360);
-            if (ImGui.InputText("Web base URL", ref webBase, 200))
-            {
-                config.WebBaseUrl = webBase;
-                changed = true;
-            }
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Reset"))
-            {
-                config.WebBaseUrl = "https://alphascope.app";
-                changed = true;
-            }
-        }
-
         if (changed)
         {
             config.Save();

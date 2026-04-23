@@ -153,12 +153,10 @@ public sealed class Plugin : IDalamudPlugin
     /// <param name="pluginLog">Logging service for debugging and diagnostics</param>
     /// <param name="contextMenu">Service for adding context menu items</param>
     /// <param name="textureProvider">Service for loading UI textures and images</param>
-    /// <param name="playerState">Service for accessing local player state information</param>
     public Plugin(
         IDalamudPluginInterface pluginInterface,
         IFramework framework,
         IClientState clientState,
-        IPlayerState playerState,
         IGameGui gameGui,
         IChatGui chatGui,
         IGameInteropProvider gameInteropProvider,
@@ -189,7 +187,6 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton(pluginInterface);
         serviceCollection.AddSingleton(framework);
         serviceCollection.AddSingleton(clientState);
-        serviceCollection.AddSingleton(playerState);
         serviceCollection.AddSingleton(gameGui);
         serviceCollection.AddSingleton(chatGui);
         serviceCollection.AddSingleton(gameInteropProvider);
@@ -552,7 +549,6 @@ public sealed class Plugin : IDalamudPlugin
         {
             Configuration.WebBaseUrl = "https://alphascope.app";
             Configuration.OptOutInGamePopups = false;
-            Configuration.OptOutContributingScans = false;
             Configuration.Version = 4;
             needsSave = true;
 
