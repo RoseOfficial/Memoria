@@ -33,17 +33,17 @@ public class PlayerListProviderTests
     [Fact]
     public void GetFavorites_ReturnsOnlyContentIdsInFavorites()
     {
-        var favorites = new HashSet<ulong> { 1, 3 };
+        var favorites = new HashSet<long> { 1L, 3L };
 
         var result = PlayerListProvider.GetFavorites(SampleCache(), favorites);
 
-        result.Select(r => r.Name).Should().BeEquivalentTo(new[] { "Alice Andrews", "Carla Cortez" });
+        result.Select(r => r.Name).Should().Equal("Carla Cortez", "Alice Andrews");
     }
 
     [Fact]
     public void GetFavorites_EmptyFavoritesReturnsEmpty()
     {
-        var result = PlayerListProvider.GetFavorites(SampleCache(), new HashSet<ulong>());
+        var result = PlayerListProvider.GetFavorites(SampleCache(), new HashSet<long>());
 
         result.Should().BeEmpty();
     }
@@ -78,5 +78,19 @@ public class PlayerListProviderTests
         var result = PlayerListProvider.Search(SampleCache(), "   ");
 
         result.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void GetRecent_AllNullLastScannedAt_DoesNotThrowAndReturnsAll()
+    {
+        var cache = new Dictionary<ulong, PersistenceContext.CachedPlayer>
+        {
+            [1] = new PersistenceContext.CachedPlayer { Name = "Alice", AccountId = null, HomeWorldId = 73, LastScannedAt = null },
+            [2] = new PersistenceContext.CachedPlayer { Name = "Bob",   AccountId = null, HomeWorldId = 73, LastScannedAt = null },
+        };
+
+        var result = PlayerListProvider.GetRecent(cache, limit: 10);
+
+        result.Should().HaveCount(2);
     }
 }

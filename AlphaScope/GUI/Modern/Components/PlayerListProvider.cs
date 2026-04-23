@@ -31,10 +31,10 @@ internal static class PlayerListProvider
     /// <summary>Return players whose ContentId is in <paramref name="favoriteContentIds"/>.</summary>
     public static IReadOnlyList<PlayerListItem> GetFavorites(
         IReadOnlyDictionary<ulong, PersistenceContext.CachedPlayer> cache,
-        IReadOnlySet<ulong> favoriteContentIds)
+        IReadOnlySet<long> favoriteContentIds)
     {
         return cache
-            .Where(kvp => favoriteContentIds.Contains(kvp.Key))
+            .Where(kvp => favoriteContentIds.Contains((long)kvp.Key))
             .OrderByDescending(kvp => kvp.Value.LastScannedAt ?? DateTime.MinValue)
             .Select(ToItem)
             .ToList();
