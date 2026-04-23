@@ -3,6 +3,7 @@ using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
 using AlphaScope.Handlers;
+using AlphaScope.Utilities;
 
 namespace AlphaScope.GUI.Modern.Views;
 
@@ -29,6 +30,10 @@ internal sealed class MicroCardWindow : Window
     public void OpenFor(ulong contentId)
     {
         _targetContentId = contentId;
+        if (PersistenceContext._playerCache.TryGetValue(contentId, out var p) && !string.IsNullOrEmpty(p.Name))
+            WindowName = $"{p.Name}##MicroCard";
+        else
+            WindowName = "Player##MicroCard";
         IsOpen = true;
     }
 
@@ -61,10 +66,11 @@ internal sealed class MicroCardWindow : Window
         ImGui.Separator();
 
         var worldUnknown = string.IsNullOrEmpty(worldName) || worldName == "—" || worldName == "Unknown";
-        ImGui.BeginDisabled(worldUnknown);
+        var canOpenProfile = !string.IsNullOrWhiteSpace(player.Name) && !worldUnknown;
+        ImGui.BeginDisabled(!canOpenProfile);
         if (ImGui.Button("Open full profile in browser"))
         {
-            var url = AlphaScope.Utilities.WebUrls.ProfileUrl(
+            var url = WebUrls.ProfileUrl(
                 Plugin.Instance.Configuration.WebBaseUrl,
                 player.Name,
                 worldName);
