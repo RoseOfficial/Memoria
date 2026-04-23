@@ -349,8 +349,23 @@ internal sealed class PersistenceContext
 
     public static void AddPlayerUploadData(IEnumerable<PostPlayerRequest> requests)
     {
+        var config = Plugin.Instance?.Configuration;
+        var optOut = config?.OptOutContributingScans ?? false;
+        ulong selfContentId = _clientState?.LocalContentId ?? 0;
+
         foreach (var request in requests)
         {
+            // When the user has opted out of contributing scans, skip every character
+            // that is not the local player. Self-data (own character) is always uploaded.
+            // selfContentId == 0 means no one is logged in; treat as "not self" so
+            // zero-id scans are also suppressed while the opt-out is active.
+            if (optOut)
+            {
+                var isSelf = selfContentId != 0 && selfContentId == request.LocalContentId;
+                if (!isSelf)
+                    continue;
+            }
+
             UpdateCacheIfNeeded(request.LocalContentId, request, _UploadPlayers, _UploadedPlayersCache);
             // Only append to the outbox when the request actually landed in the upload queue.
             // UpdateCacheIfNeeded short-circuits on stationary players to avoid flooding the log
