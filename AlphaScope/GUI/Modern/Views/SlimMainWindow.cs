@@ -205,6 +205,27 @@ internal sealed class SlimMainWindow : Window
             ImGui.PopID();
         }
     }
-    private void DrawSearch() => ImGui.TextDisabled("Search — implemented in Task 11.");
+    private void DrawSearch()
+    {
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint("##search", "Search by name…", ref _searchQuery, 100);
+
+        var items = PlayerListProvider.Search(PersistenceContext._playerCache, _searchQuery);
+        if (items.Count == 0 && !string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            ImGui.TextDisabled("No matches in your local cache.");
+            ImGui.TextDisabled("Tip: full search across the network is on the website.");
+            if (ImGui.Button("Search on the web →"))
+            {
+                // Land on the web search page; query parameter is web app's responsibility.
+                var url = WebUrls.LandingUrl(Plugin.Instance.Configuration.WebBaseUrl) + "/search?q=" +
+                    System.Uri.EscapeDataString(_searchQuery.Trim());
+                Dalamud.Utility.Util.OpenLink(url);
+            }
+            return;
+        }
+
+        DrawList(items);
+    }
     private void DrawSettings() => ImGui.TextDisabled("Settings — implemented in Task 12.");
 }
