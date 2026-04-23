@@ -11,7 +11,7 @@ using System.Web;
 namespace AlphaScopeServer.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("v1/[controller]")]
     public class AuthController : ControllerBase
     {
         private readonly AlphaScopeDbContext _context;

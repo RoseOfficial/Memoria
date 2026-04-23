@@ -32,7 +32,7 @@ public class AuthControllerTests : IDisposable
         var factory = new AuthControllerOAuthFactory();
         var client = factory.CreateClient(new() { AllowAutoRedirect = false });
 
-        var resp = await client.GetAsync("/auth/discord/start?return_to=https://app.example.com/me");
+        var resp = await client.GetAsync("/v1/auth/discord/start?return_to=https://app.example.com/me");
 
         resp.StatusCode.Should().Be(HttpStatusCode.Redirect);
         var location = resp.Headers.Location!.ToString();
@@ -52,7 +52,7 @@ public class AuthControllerTests : IDisposable
         var factory = new AuthControllerOAuthFactory();
         var client = factory.CreateClient(new() { AllowAutoRedirect = false });
 
-        var resp = await client.GetAsync("/auth/discord/start?return_to=https://evil.example.com");
+        var resp = await client.GetAsync("/v1/auth/discord/start?return_to=https://evil.example.com");
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -73,18 +73,21 @@ public class AuthControllerTests : IDisposable
         // URL-encoded so ASP.NET model binding decodes it back to the same raw value.
         client.DefaultRequestHeaders.Add("Cookie", $"__alpha_oauth_state={state}");
 
-        var resp = await client.GetAsync($"/auth/discord/callback?code=testcode&state={Uri.EscapeDataString(state)}");
+        var resp = await client.GetAsync($"/v1/auth/discord/callback?code=testcode&state={Uri.EscapeDataString(state)}");
 
         resp.StatusCode.Should().Be(HttpStatusCode.Redirect);
         resp.Headers.Location!.ToString().Should().Be("https://app.example.com/me");
 
-        // Verify the session cookie was issued — presence of __Host-alpha in Set-Cookie proves
-        // the upsert completed and an ApiKey was assigned. The WebApplicationFactory test-server
-        // service provider shares the InMemory DB singleton with request scopes, but querying
-        // the DB directly from a test-side scope is unreliable with child factories; checking
-        // the response cookie is the authoritative proof that the write succeeded.
+        // Extract the issued ApiKey from the Set-Cookie header and verify its shape.
+        // Convert.ToHexString(RandomNumberGenerator.GetBytes(24)) always produces 48 hex chars.
+        // Proving the cookie is present and well-formed is sufficient: if SaveChangesAsync had
+        // thrown, the response would have been 500, not 302 with a Set-Cookie. A round-trip
+        // authenticated request would be ideal but child-factory InMemory DBs don't share
+        // state across request scopes, so the ApiKey length check is the cleanest proof here.
         resp.Headers.TryGetValues("Set-Cookie", out var cookies).Should().BeTrue();
-        cookies!.Should().Contain(c => c.StartsWith("__Host-alpha="));
+        var alphaCookie = cookies!.First(c => c.StartsWith("__Host-alpha="));
+        var apiKey = alphaCookie.Split(';')[0]["__Host-alpha=".Length..];
+        apiKey.Should().HaveLength(48); // 24 random bytes → 48 uppercase hex chars
     }
 
     [Fact]
@@ -96,7 +99,7 @@ public class AuthControllerTests : IDisposable
         var client = factory.CreateClient(new() { AllowAutoRedirect = false });
 
         client.DefaultRequestHeaders.Add("Cookie", "__alpha_oauth_state=not-a-valid-state");
-        var resp = await client.GetAsync($"/auth/discord/callback?code=testcode&state=some-other-state");
+        var resp = await client.GetAsync($"/v1/auth/discord/callback?code=testcode&state=some-other-state");
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
@@ -115,7 +118,7 @@ public class AuthControllerTests : IDisposable
         // Cookie raw, query param URL-encoded — model binding decodes to same value.
         client.DefaultRequestHeaders.Add("Cookie", $"__alpha_oauth_state={state}");
 
-        var resp = await client.GetAsync($"/auth/discord/callback?code=testcode&state={Uri.EscapeDataString(state)}");
+        var resp = await client.GetAsync($"/v1/auth/discord/callback?code=testcode&state={Uri.EscapeDataString(state)}");
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadGateway);
     }
