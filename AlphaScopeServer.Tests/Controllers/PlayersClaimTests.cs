@@ -7,6 +7,8 @@ using AlphaScopeServer.Controllers;
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.DTOs;
 using AlphaScopeServer.Models.Entities;
+using AlphaScopeServer.Services.Lodestone;
+using AlphaScopeServer.Tests.TestDoubles;
 using TestUtilities;
 
 namespace AlphaScopeServer.Tests.Controllers;
@@ -133,5 +135,207 @@ public class PlayersClaimTests : IDisposable
         var result = await controller.StartClaim(1004);
 
         result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers for verify tests
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Seeds a Player + PlayerLodestone, creates a ClaimAttempt for _user, and returns a
+    /// PlayersController wired with the given bio fetcher and the shared _user HttpContext.
+    /// </summary>
+    private (PlayersController controller, Player player, ClaimAttempt attempt) CreateVerifyFixture(
+        long localContentId,
+        int lodestoneId,
+        ILodestoneBioFetcher fetcher,
+        string code = "AS-TESTCODE",
+        int attemptsAlready = 0,
+        DateTime? expiresAt = null,
+        string playerName = "VerifyAlt",
+        short homeWorldId = 74)
+    {
+        var player = new Player { LocalContentId = localContentId, Name = playerName, HomeWorldId = homeWorldId };
+        _context.Players.Add(player);
+        _context.SaveChanges();
+
+        _context.PlayerLodestones.Add(new PlayerLodestone
+        {
+            PlayerLocalContentId = localContentId,
+            LodestoneId = lodestoneId
+        });
+
+        var attempt = new ClaimAttempt
+        {
+            UserId = _user.Id,
+            PlayerLocalContentId = localContentId,
+            Code = code,
+            ExpiresAt = expiresAt ?? DateTime.UtcNow.AddHours(24),
+            Attempts = attemptsAlready
+        };
+        _context.ClaimAttempts.Add(attempt);
+        _context.SaveChanges();
+
+        var controller = new PlayersController(_context, _mockLogger);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Items["User"] = _user;
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        return (controller, player, attempt);
+    }
+
+    // -----------------------------------------------------------------------
+    // Verify tests
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Verify_Success_SetsClaimFieldsAndDeletesAttempt()
+    {
+        const long id = 2001;
+        const int lodestoneId = 2001;
+        const string code = "AS-VERIFYOK";
+        var bio = $"Hello world, my code is {code} yes.";
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?> { { lodestoneId, bio } });
+        var (controller, _, attempt) = CreateVerifyFixture(id, lodestoneId, fetcher, code);
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+        var body = ok.Value.Should().BeOfType<ClaimVerifyResponse>().Subject;
+        body.Claimed.Should().BeTrue();
+        body.CharacterName.Should().Be("VerifyAlt");
+        body.HomeWorldId.Should().Be(74);
+
+        var player = await _context.Players.FindAsync(id);
+        player!.ClaimedByUserId.Should().Be(_user.Id);
+        player.ClaimedAt.Should().NotBeNull();
+        player.ClaimVerifiedAt.Should().NotBeNull();
+
+        var deleted = await _context.ClaimAttempts.FindAsync(attempt.Id);
+        deleted.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Verify_CaseInsensitiveMatch()
+    {
+        const long id = 2002;
+        const int lodestoneId = 2002;
+        const string code = "AS-CASECODE";
+        var bio = code.ToLowerInvariant(); // all-lowercase version of the code
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?> { { lodestoneId, bio } });
+        var (controller, _, _) = CreateVerifyFixture(id, lodestoneId, fetcher, code);
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<ClaimVerifyResponse>()
+            .Which.Claimed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Verify_WrongCode_IncrementsAttempts()
+    {
+        const long id = 2003;
+        const int lodestoneId = 2003;
+        const string code = "AS-MYCODE";
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?> { { lodestoneId, "nothing here" } });
+        var (controller, _, attempt) = CreateVerifyFixture(id, lodestoneId, fetcher, code, attemptsAlready: 0);
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        result.Should().BeOfType<BadRequestObjectResult>();
+
+        var refreshed = await _context.ClaimAttempts.FindAsync(attempt.Id);
+        refreshed.Should().NotBeNull();
+        refreshed!.Attempts.Should().Be(1);
+
+        var body = result.Should().BeOfType<BadRequestObjectResult>().Subject
+            .Value.Should().BeOfType<ClaimVerifyResponse>().Subject;
+        body.Claimed.Should().BeFalse();
+        body.AttemptsLeft.Should().Be(4); // 5 - 1
+    }
+
+    [Fact]
+    public async Task Verify_FifthFailure_Deletes_Returns429()
+    {
+        const long id = 2004;
+        const int lodestoneId = 2004;
+        const string code = "AS-FIFTHFAIL";
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?> { { lodestoneId, "wrong" } });
+        // Already at 4 attempts — the next failure is the 5th.
+        var (controller, _, attempt) = CreateVerifyFixture(id, lodestoneId, fetcher, code, attemptsAlready: 4);
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(429);
+
+        var deleted = await _context.ClaimAttempts.FindAsync(attempt.Id);
+        deleted.Should().BeNull("attempt should be deleted after 5 failures");
+    }
+
+    [Fact]
+    public async Task Verify_Expired_Returns410AndDeletes()
+    {
+        const long id = 2005;
+        const int lodestoneId = 2005;
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?> { { lodestoneId, "AS-EXPIREDCODE" } });
+        var pastExpiry = DateTime.UtcNow.AddHours(-1);
+        var (controller, _, attempt) = CreateVerifyFixture(id, lodestoneId, fetcher, "AS-EXPIREDCODE", expiresAt: pastExpiry);
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(410);
+
+        var deleted = await _context.ClaimAttempts.FindAsync(attempt.Id);
+        deleted.Should().BeNull("expired attempt should be deleted");
+    }
+
+    [Fact]
+    public async Task Verify_TransferPreservesClaimedAt()
+    {
+        const long id = 2006;
+        const int lodestoneId = 2006;
+        const string code = "AS-TRANSFER";
+        var bio = code;
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?> { { lodestoneId, bio } });
+        var (controller, player, _) = CreateVerifyFixture(id, lodestoneId, fetcher, code);
+
+        // Pre-claim by another user, with a known ClaimedAt timestamp.
+        var originalClaimedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        player.ClaimedByUserId = 999; // some other user id
+        player.ClaimedAt = originalClaimedAt;
+        await _context.SaveChangesAsync();
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>()
+            .Which.Value.Should().BeOfType<ClaimVerifyResponse>()
+            .Which.Claimed.Should().BeTrue();
+
+        var refreshed = await _context.Players.FindAsync(id);
+        refreshed!.ClaimedByUserId.Should().Be(_user.Id, "claim transfers to the verifying user");
+        refreshed.ClaimedAt.Should().Be(originalClaimedAt, "original ClaimedAt must be preserved");
+        refreshed.ClaimVerifiedAt.Should().NotBeNull();
+        refreshed.ClaimVerifiedAt.Should().NotBe(originalClaimedAt, "ClaimVerifiedAt is the new timestamp");
+    }
+
+    [Fact]
+    public async Task Verify_LodestoneFailure_Returns503_DoesNotIncrement()
+    {
+        const long id = 2007;
+        const int lodestoneId = 2007;
+        var fetcher = FakeLodestoneBioFetcher.AlwaysFailsWith("timeout");
+        var (controller, _, attempt) = CreateVerifyFixture(id, lodestoneId, fetcher, "AS-ANYCODE", attemptsAlready: 2);
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(503);
+
+        var refreshed = await _context.ClaimAttempts.FindAsync(attempt.Id);
+        refreshed.Should().NotBeNull();
+        refreshed!.Attempts.Should().Be(2, "Lodestone failures must not count against the user");
     }
 }

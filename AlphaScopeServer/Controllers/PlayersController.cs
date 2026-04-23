@@ -846,6 +846,70 @@ namespace AlphaScopeServer.Controllers
                 "Paste this code anywhere in your Lodestone character's bio, then return here and click Verify."));
         }
 
+        [HttpPost("{localContentId:long}/claim/verify")]
+        public async Task<IActionResult> VerifyClaim(
+            long localContentId,
+            [FromServices] AlphaScopeServer.Services.Lodestone.ILodestoneBioFetcher bioFetcher,
+            CancellationToken ct)
+        {
+            if (HttpContext.Items["User"] is not ApplicationUser user)
+                return Unauthorized();
+
+            var attempt = await _context.ClaimAttempts
+                .FirstOrDefaultAsync(a => a.UserId == user.Id && a.PlayerLocalContentId == localContentId, ct);
+            if (attempt is null)
+                return NotFound("Start a claim first.");
+
+            if (attempt.ExpiresAt < DateTime.UtcNow)
+            {
+                _context.ClaimAttempts.Remove(attempt);
+                await _context.SaveChangesAsync(ct);
+                return StatusCode(StatusCodes.Status410Gone, "Code expired — start again.");
+            }
+
+            var player = await _context.Players
+                .Include(p => p.Lodestone)
+                .FirstOrDefaultAsync(p => p.LocalContentId == localContentId, ct);
+            if (player?.Lodestone?.LodestoneId is null)
+                return StatusCode(StatusCodes.Status412PreconditionFailed,
+                    "Character's Lodestone profile link was lost between start and verify.");
+
+            var fetch = await bioFetcher.FetchBioAsync(player.Lodestone.LodestoneId.Value, ct);
+            if (!fetch.Success)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable,
+                    $"Lodestone is unreachable right now — try again in a moment ({fetch.ErrorReason}).");
+
+            var bio = fetch.Bio ?? string.Empty;
+            var matches = bio.Contains(attempt.Code, StringComparison.OrdinalIgnoreCase);
+
+            if (matches)
+            {
+                var now = DateTime.UtcNow;
+                player.ClaimedByUserId = user.Id;
+                player.ClaimedAt ??= now;
+                player.ClaimVerifiedAt = now;
+                _context.ClaimAttempts.Remove(attempt);
+                await _context.SaveChangesAsync(ct);
+                return Ok(new ClaimVerifyResponse(
+                    Claimed: true,
+                    CharacterName: player.Name,
+                    HomeWorldId: player.HomeWorldId));
+            }
+
+            attempt.Attempts++;
+            if (attempt.Attempts >= 5)
+            {
+                _context.ClaimAttempts.Remove(attempt);
+                await _context.SaveChangesAsync(ct);
+                return StatusCode(StatusCodes.Status429TooManyRequests,
+                    "Too many failed attempts — start over with a fresh code.");
+            }
+            await _context.SaveChangesAsync(ct);
+            return BadRequest(new ClaimVerifyResponse(
+                Claimed: false,
+                AttemptsLeft: 5 - attempt.Attempts));
+        }
+
         [HttpPost("test-auto-link/{playerName}")]
         public async Task<IActionResult> TestAutoLink(string playerName)
         {
