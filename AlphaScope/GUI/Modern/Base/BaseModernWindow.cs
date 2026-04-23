@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
 using Dalamud.Interface.Utility;
@@ -12,11 +11,10 @@ namespace AlphaScope.GUI.Modern.Base;
 
 /// <summary>
 /// Modern base window class that provides enhanced functionality over standard Dalamud windows.
-/// Includes component management, theming, accessibility features, and modern UI patterns.
+/// Includes theming, accessibility features, and modern UI patterns.
 /// </summary>
 public abstract class BaseModernWindow : Window
 {
-    protected readonly List<BaseComponent> _components = [];
     protected bool _isInitialized = false;
     protected DateTime _lastUpdate = DateTime.UtcNow;
     private IDisposable? _windowStyle;
@@ -59,31 +57,6 @@ public abstract class BaseModernWindow : Window
     }
 
     /// <summary>
-    /// Adds a component to this window
-    /// </summary>
-    public void AddComponent(BaseComponent component)
-    {
-        if (component == null) throw new ArgumentNullException(nameof(component));
-        _components.Add(component);
-    }
-
-    /// <summary>
-    /// Removes a component from this window
-    /// </summary>
-    public void RemoveComponent(BaseComponent component)
-    {
-        _components.Remove(component);
-    }
-
-    /// <summary>
-    /// Gets a component by its ID
-    /// </summary>
-    public T? GetComponent<T>(string id) where T : BaseComponent
-    {
-        return _components.Find(c => c.Id == id) as T;
-    }
-
-    /// <summary>
     /// Pushes the AlphaScope window styling onto the ImGui stack before this window
     /// renders, so custom colours and rounding only affect this window. The push is
     /// unwound in PostDraw. Without this scoping, writing to the global ImGui style
@@ -119,15 +92,11 @@ public abstract class BaseModernWindow : Window
                 _isInitialized = true;
             }
 
-            // Update components
+            // Update hook
             var now = DateTime.UtcNow;
             if ((now - _lastUpdate).TotalMilliseconds > 16) // ~60 FPS
             {
                 OnUpdate();
-                foreach (var component in _components)
-                {
-                    component.Update();
-                }
                 _lastUpdate = now;
             }
 
@@ -155,14 +124,7 @@ public abstract class BaseModernWindow : Window
     /// <summary>
     /// Override this method to implement window-specific drawing
     /// </summary>
-    protected virtual void OnDraw()
-    {
-        // Render all components
-        foreach (var component in _components)
-        {
-            component.Render();
-        }
-    }
+    protected virtual void OnDraw() { }
 
     /// <summary>
     /// Called once when the window is first drawn
@@ -245,12 +207,5 @@ public abstract class BaseModernWindow : Window
     {
         base.OnClose();
         OnWindowClose();
-        
-        // Dispose components
-        foreach (var component in _components)
-        {
-            component.Dispose();
-        }
-        _components.Clear();
     }
 }
