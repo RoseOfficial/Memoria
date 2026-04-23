@@ -130,7 +130,7 @@ app.UseCors("AlphaScopePolicy");
 
 // API key authentication — required for all endpoints except the paths the middleware
 // explicitly skips (GET /server, /users/login, /users/create-test-user, /auth/*,
-// /waitforlogin, /swagger/*, /health).
+// /swagger/*, /health).
 app.UseMiddleware<ApiKeyAuthenticationMiddleware>();
 
 // Add routing and controllers
