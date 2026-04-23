@@ -889,7 +889,15 @@ namespace AlphaScopeServer.Controllers
                 player.ClaimedAt ??= now;
                 player.ClaimVerifiedAt = now;
                 _context.ClaimAttempts.Remove(attempt);
-                await _context.SaveChangesAsync(ct);
+                try
+                {
+                    await _context.SaveChangesAsync(ct);
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    // Concurrent verify by the same user — the other caller's delete already won.
+                    // Player claim fields are already set by whichever save committed first; just return 200.
+                }
                 return Ok(new ClaimVerifyResponse(
                     Claimed: true,
                     CharacterName: player.Name,
@@ -904,7 +912,22 @@ namespace AlphaScopeServer.Controllers
                 return StatusCode(StatusCodes.Status429TooManyRequests,
                     "Too many failed attempts — start over with a fresh code.");
             }
-            await _context.SaveChangesAsync(ct);
+            try
+            {
+                await _context.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Concurrent verify — re-fetch to get the authoritative Attempts count.
+                var reloaded = await _context.ClaimAttempts.AsNoTracking()
+                    .FirstOrDefaultAsync(a => a.UserId == user.Id && a.PlayerLocalContentId == localContentId, ct);
+                if (reloaded is null)
+                    return StatusCode(StatusCodes.Status429TooManyRequests,
+                        "Too many failed attempts — start over with a fresh code.");
+                return BadRequest(new ClaimVerifyResponse(
+                    Claimed: false,
+                    AttemptsLeft: Math.Max(0, 5 - reloaded.Attempts)));
+            }
             return BadRequest(new ClaimVerifyResponse(
                 Claimed: false,
                 AttemptsLeft: 5 - attempt.Attempts));

@@ -205,6 +205,7 @@ public class PlayersClaimTests : IDisposable
         body.Claimed.Should().BeTrue();
         body.CharacterName.Should().Be("VerifyAlt");
         body.HomeWorldId.Should().Be(74);
+        body.AttemptsLeft.Should().BeNull();
 
         var player = await _context.Players.FindAsync(id);
         player!.ClaimedByUserId.Should().Be(_user.Id);
@@ -337,5 +338,41 @@ public class PlayersClaimTests : IDisposable
         var refreshed = await _context.ClaimAttempts.FindAsync(attempt.Id);
         refreshed.Should().NotBeNull();
         refreshed!.Attempts.Should().Be(2, "Lodestone failures must not count against the user");
+    }
+
+    [Fact]
+    public async Task Verify_NoUserInContext_Returns401()
+    {
+        var controller = new PlayersController(_context, _mockLogger);
+        controller.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?>());
+
+        var result = await controller.VerifyClaim(9999, fetcher, CancellationToken.None);
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public async Task Verify_NoAttempt_Returns404()
+    {
+        const long id = 2008;
+        const int lodestoneId = 2008;
+        var player = new Player { LocalContentId = id, Name = "NoAttemptAlt" };
+        _context.Players.Add(player);
+        _context.SaveChanges();
+        _context.PlayerLodestones.Add(new PlayerLodestone { PlayerLocalContentId = id, LodestoneId = lodestoneId });
+        _context.SaveChanges();
+        // No ClaimAttempt row seeded.
+
+        var fetcher = new FakeLodestoneBioFetcher(new Dictionary<int, string?>());
+        var controller = new PlayersController(_context, _mockLogger);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Items["User"] = _user;
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var result = await controller.VerifyClaim(id, fetcher, CancellationToken.None);
+
+        var notFound = result.Should().BeOfType<NotFoundObjectResult>().Subject;
+        notFound.Value.Should().Be("Start a claim first.");
     }
 }
