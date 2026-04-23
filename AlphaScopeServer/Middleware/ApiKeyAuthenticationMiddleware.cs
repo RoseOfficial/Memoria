@@ -95,6 +95,8 @@ namespace AlphaScopeServer.Middleware
 
                 context.Items["User"] = user;
                 context.Items["UserId"] = user.Id;
+                // Stored as int? since ApplicationUser.GameAccountId is nullable for web-first users.
+                // Consumers should cast to `int?`, not `int`.
                 context.Items["GameAccountId"] = user.GameAccountId;
 
                 var timeSinceLastLogin = DateTime.UtcNow - user.LastLoginAt;
