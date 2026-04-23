@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using AlphaScopeServer.Tests.TestDoubles;
 
 namespace AlphaScopeServer.Tests.Infrastructure;
 
@@ -34,6 +36,23 @@ public class AuthControllerOAuthFactory : TestAppFactory
         {
             services.AddSingleton(new AlphaScopeServer.Services.Auth.OAuthStateSigner(
                 "ZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzLWxvbmctYmFzZTY0"));
+        });
+    }
+
+    /// <summary>
+    /// Returns a factory variant that replaces the "DiscordAuth" named HttpClient with
+    /// one backed by the supplied stub handler. Returns the base WebApplicationFactory type
+    /// because WithWebHostBuilder does not preserve the subclass type.
+    /// </summary>
+    public WebApplicationFactory<Program> WithDiscordHandler(StubDiscordHttpHandler handler)
+    {
+        return WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddHttpClient("DiscordAuth")
+                        .ConfigurePrimaryHttpMessageHandler(() => handler);
+            });
         });
     }
 }
