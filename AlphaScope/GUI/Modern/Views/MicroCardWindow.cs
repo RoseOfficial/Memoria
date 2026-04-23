@@ -63,8 +63,43 @@ internal sealed class MicroCardWindow : Window
             : "—";
         ImGui.TextUnformatted($"Last seen: {lastSeenText}");
 
+        // Alts teaser (count only, names live on the web per Tier 3 privacy model)
+        if (player.AccountId is { } accountId && accountId != 0)
+        {
+            var alts = PersistenceContext.GetAccountAltCharacters(accountId, _targetContentId);
+            if (alts.Count > 0)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.788f, 0.663f, 0.380f, 1f)); // gold #c9a961
+                ImGui.TextUnformatted($"→ {alts.Count} known alt{(alts.Count == 1 ? "" : "s")}");
+                ImGui.PopStyleColor();
+            }
+        }
+
         ImGui.Separator();
 
+        // Favorite toggle
+        var config = Plugin.Instance.Configuration;
+        var favKey = (long)_targetContentId;
+        var isFavorite = config.FavoritedPlayer.ContainsKey(favKey);
+        if (ImGui.Button(isFavorite ? "Unfavorite" : "Add to favorites"))
+        {
+            if (isFavorite)
+            {
+                config.FavoritedPlayer.TryRemove(favKey, out _);
+            }
+            else
+            {
+                config.FavoritedPlayer[favKey] = new Configuration.CachedFavoritedPlayer
+                {
+                    Name = player.Name,
+                    AccountId = player.AccountId ?? 0,
+                    Note = string.Empty
+                };
+            }
+            Plugin.Instance._pluginInterface.SavePluginConfig(config);
+        }
+
+        ImGui.SameLine();
         var worldUnknown = string.IsNullOrEmpty(worldName) || worldName == "—" || worldName == "Unknown";
         var canOpenProfile = !string.IsNullOrWhiteSpace(player.Name) && !worldUnknown;
         ImGui.BeginDisabled(!canOpenProfile);
