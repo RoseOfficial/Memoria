@@ -58,4 +58,28 @@ public class WebUrlsTests
 
         act.Should().Throw<ArgumentException>();
     }
+
+    [Fact]
+    public void ProfileUrl_WithNullBaseUrl_Throws()
+    {
+        Action act = () => WebUrls.ProfileUrl(null!, "Kael Thalindor", "Gilgamesh");
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void MeUrl_WithEmptyBaseUrl_Throws()
+    {
+        Action act = () => WebUrls.MeUrl("");
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void LandingUrl_WithWhitespaceBaseUrl_Throws()
+    {
+        Action act = () => WebUrls.LandingUrl("   ");
+
+        act.Should().Throw<ArgumentException>();
+    }
 }
