@@ -4,6 +4,7 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Components;
+using AlphaScope.GUI.Modern.Base;
 
 namespace AlphaScope.GUI.Modern.Components;
 
@@ -17,10 +18,9 @@ internal static class PlayerListRow
     /// Draws a single row. Returns true if the user clicked the "open" button (caller
     /// should open MicroCardWindow for this player).
     /// </summary>
-    public static bool Draw(PlayerListItem item, bool isFavorite, Action<bool> onFavoriteToggled)
+    internal static bool Draw(PlayerListItem item, bool isFavorite, Action<bool> onFavoriteToggled)
     {
         var openClicked = false;
-        var rowId = $"##row-{item.ContentId}";
 
         ImGui.BeginGroup();
 
@@ -52,10 +52,18 @@ internal static class PlayerListRow
         var actionsWidth = 70f;
         ImGui.SameLine(0, Math.Max(0, availableWidth - actionsWidth));
 
-        ImGui.PushID(rowId);
+        ImGui.PushID((int)item.ContentId);
+        ImGui.PushStyleColor(ImGuiCol.Text, isFavorite
+            ? ThemeManager.Colors.Error
+            : ThemeManager.Colors.TextMuted);
         if (ImGuiComponents.IconButton(FontAwesomeIcon.Heart))
         {
             onFavoriteToggled(!isFavorite);
+        }
+        ImGui.PopStyleColor();
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(isFavorite ? "Remove from favorites" : "Add to favorites");
         }
         ImGui.SameLine();
         if (ImGuiComponents.IconButton(FontAwesomeIcon.InfoCircle))
