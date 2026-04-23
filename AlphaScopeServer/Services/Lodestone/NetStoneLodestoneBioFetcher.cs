@@ -24,7 +24,8 @@ namespace AlphaScopeServer.Services.Lodestone
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
 
-                var character = await _client.GetCharacter(lodestoneId.ToString());
+                var character = await _client.GetCharacter(lodestoneId.ToString())
+                    .WaitAsync(timeoutCts.Token);
                 if (character is null)
                     return new BioFetchResult(false, null, "character not found on Lodestone");
 
