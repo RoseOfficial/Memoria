@@ -48,6 +48,7 @@ if (!builder.Environment.IsEnvironment("Testing"))
 {
     builder.Services.AddSingleton<AlphaScopeServer.Services.Lodestone.ILodestoneBioFetcher,
                                    AlphaScopeServer.Services.Lodestone.NetStoneLodestoneBioFetcher>();
+    builder.Services.AddHostedService<AlphaScopeServer.Services.Maintenance.ClaimAttemptCleanupService>();
 }
 
 // Configure CORS. No wildcard origins — the Dalamud plugin calls via RestSharp (not a browser),
