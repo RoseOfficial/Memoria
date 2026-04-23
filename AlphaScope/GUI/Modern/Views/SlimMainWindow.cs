@@ -26,6 +26,16 @@ internal sealed class SlimMainWindow : Window
         SizeCondition = ImGuiCond.FirstUseEver;
     }
 
+    /// <summary>
+    /// Open the window on the default tab (Recent). Use this for /alpha and OpenMainUi —
+    /// not bare IsOpen = true, which would leave _active wherever it was last set.
+    /// </summary>
+    public void OpenDefault()
+    {
+        _active = Tab.Recent;
+        IsOpen = true;
+    }
+
     /// <summary>Programmatic entry point for "open at search tab with this query."</summary>
     public void OpenAtSearch(string prepopulatedQuery)
     {
@@ -48,7 +58,7 @@ internal sealed class SlimMainWindow : Window
         ImGui.SameLine();
         var available = ImGui.GetContentRegionAvail().X;
         var btnText = "Open AlphaScope on the web →";
-        var btnWidth = ImGui.CalcTextSize(btnText).X + 16;
+        var btnWidth = ImGui.CalcTextSize(btnText).X + ImGui.GetStyle().FramePadding.X * 2;
         ImGui.SameLine(0, available - btnWidth);
         if (ImGui.Button(btnText))
         {
@@ -67,14 +77,14 @@ internal sealed class SlimMainWindow : Window
 
             // Push Settings to the bottom
             var avail = ImGui.GetContentRegionAvail().Y;
-            ImGui.Dummy(new Vector2(0, avail - 36));
+            ImGui.Dummy(new Vector2(0, System.Math.Max(0, avail - ImGui.GetTextLineHeightWithSpacing())));
             DrawNavItem(Tab.Settings, "Settings");
         }
         ImGui.EndChild();
 
         ImGui.SameLine();
 
-        if (ImGui.BeginChild("##body", new Vector2(0, 0), true))
+        if (ImGui.BeginChild("##body", new Vector2(0, 0), false))
         {
             switch (_active)
             {
