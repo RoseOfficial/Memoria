@@ -1,6 +1,9 @@
+using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
+using AlphaScope.GUI.Modern.Components;
+using AlphaScope.Handlers;
 using AlphaScope.Utilities;
 
 namespace AlphaScope.GUI.Modern.Views;
@@ -107,8 +110,52 @@ internal sealed class SlimMainWindow : Window
         }
     }
 
+    private void DrawRecent()
+    {
+        var items = PlayerListProvider.GetRecent(PersistenceContext._playerCache, limit: 50);
+        if (items.Count == 0)
+        {
+            ImGui.TextDisabled("No recent encounters yet. Walk past some players in-game.");
+            return;
+        }
+
+        DrawList(items);
+    }
+
+    private void DrawList(IReadOnlyList<PlayerListItem> items)
+    {
+        var config = Plugin.Instance.Configuration;
+        foreach (var item in items)
+        {
+            var favKey = (long)item.ContentId;
+            var isFav = config.FavoritedPlayer.ContainsKey(favKey);
+            var openClicked = PlayerListRow.Draw(item, isFav, newFav =>
+            {
+                if (newFav)
+                {
+                    ulong? accountId = null;
+                    if (PersistenceContext._playerCache.TryGetValue(item.ContentId, out var cachedPlayer))
+                        accountId = cachedPlayer.AccountId;
+                    config.FavoritedPlayer[favKey] = new Configuration.CachedFavoritedPlayer
+                    {
+                        Name = item.Name,
+                        AccountId = accountId,
+                        Note = string.Empty,
+                    };
+                }
+                else
+                {
+                    config.FavoritedPlayer.TryRemove(favKey, out _);
+                }
+                config.Save();
+            });
+
+            if (openClicked)
+                _microCardWindow.OpenFor(item.ContentId);
+        }
+    }
+
     // Stubs for subsequent tasks
-    private void DrawRecent() => ImGui.TextDisabled("Recent — implemented in Task 8.");
     private void DrawFavorites() => ImGui.TextDisabled("Favorites — implemented in Task 9.");
     private void DrawNotes() => ImGui.TextDisabled("Notes — implemented in Task 10.");
     private void DrawSearch() => ImGui.TextDisabled("Search — implemented in Task 11.");
