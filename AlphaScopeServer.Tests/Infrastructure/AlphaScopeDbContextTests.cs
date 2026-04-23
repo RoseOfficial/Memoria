@@ -461,9 +461,7 @@ public class AlphaScopeDbContextTests : IDisposable
     [Fact]
     public void Player_ShouldExposeOwnershipAndPrivacyColumns()
     {
-        var options = new DbContextOptionsBuilder<AlphaScopeDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
         using var ctx = new AlphaScopeDbContext(options);
         ctx.Database.EnsureCreated();
 
@@ -486,5 +484,7 @@ public class AlphaScopeDbContextTests : IDisposable
         reloaded.HideEncounters.Should().BeTrue();
         reloaded.HideEntirely.Should().BeTrue();
         reloaded.ClaimedByUserId.Should().BeNull();
+        reloaded.ClaimedAt.Should().BeNull();
+        reloaded.ClaimVerifiedAt.Should().BeNull();
     }
 }
