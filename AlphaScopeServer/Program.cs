@@ -132,6 +132,7 @@ app.UseCors("AlphaScopePolicy");
 // explicitly skips (GET /server, /users/login, /users/create-test-user, /auth/*,
 // /swagger/*, /health).
 app.UseMiddleware<ApiKeyAuthenticationMiddleware>();
+app.UseMiddleware<TierResolutionMiddleware>();
 
 // Add routing and controllers
 app.UseRouting();
