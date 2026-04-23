@@ -52,7 +52,10 @@ internal static class PlayerListRow
         var actionsWidth = 70f;
         ImGui.SameLine(0, Math.Max(0, availableWidth - actionsWidth));
 
-        ImGui.PushID((int)item.ContentId);
+        // Use the full 64-bit ContentId as the ID. (int) truncation could collide
+        // when two characters share the low 32 bits but differ in the upper bits
+        // — FFXIV ContentIds are ~48-bit and the upper 16 vary by datacenter.
+        ImGui.PushID(item.ContentId.ToString());
         ImGui.PushStyleColor(ImGuiCol.Text, isFavorite
             ? ThemeManager.Colors.Error
             : ThemeManager.Colors.TextMuted);
