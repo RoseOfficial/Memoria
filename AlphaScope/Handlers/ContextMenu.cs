@@ -101,8 +101,8 @@ public class ContextMenu
         }
         ulong? targetCId = menuTargetDefault.TargetContentId;
 
-        // Open modern UI instead
-        Plugin.Instance.ModernMainWindow.IsOpen = true;
+        // Open main window (Task 15 will refine this to MicroCard.OpenFor(targetCId))
+        Plugin.Instance.MainWindow.OpenDefault();
         Plugin.Log.Info($"Opening details for player {targetCId} - Details view coming soon in modern UI");
     }
 
@@ -128,8 +128,8 @@ public class ContextMenu
             targetName = menuTargetDefault.TargetName;
         }
 
-        // Open modern UI for search
-        Plugin.Instance.ModernMainWindow.IsOpen = true;
+        // Open main window (Task 15 will refine this to MainWindow.OpenAtSearch(targetName))
+        Plugin.Instance.MainWindow.OpenDefault();
         Plugin.Log.Info($"Searching for player {targetName} - Search functionality coming soon in modern UI");
     }
 

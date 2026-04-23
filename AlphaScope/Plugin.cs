@@ -96,10 +96,11 @@ public sealed class Plugin : IDalamudPlugin
     public ApiClient ApiClient { get; set; }
     
 
-    /// <summary>
-    /// Modern main window with advanced features and dockable layout
-    /// </summary>
-    public GUI.Modern.Views.ModernMainWindow ModernMainWindow;
+    /// <summary>The new slim in-game lookup window. Replaces the old ModernMainWindow.</summary>
+    internal GUI.Modern.Views.SlimMainWindow MainWindow = null!;
+
+    /// <summary>Floating micro-card window for the right-click "View in AlphaScope" use case.</summary>
+    internal GUI.Modern.Views.MicroCardWindow MicroCard = null!;
 
     /// <summary>
     /// Dalamud window system for managing all plugin windows
@@ -257,12 +258,13 @@ public sealed class Plugin : IDalamudPlugin
         DataManager = dataManager;
         _gameGui = gameGui;
 
-        // Initialize UI window system and create modern plugin window
+        // Initialize UI window system and create slim plugin windows
         ws = new();
-        ModernMainWindow = new();
-        
-        // Register modern window with the window system
-        ws.AddWindow(ModernMainWindow);
+        MicroCard = new GUI.Modern.Views.MicroCardWindow();
+        MainWindow = new GUI.Modern.Views.SlimMainWindow(MicroCard);
+
+        ws.AddWindow(MainWindow);
+        ws.AddWindow(MicroCard);
         
         // Initialize avatar caching system
         AvatarCacheManager = new AvatarCacheManager();
@@ -275,8 +277,13 @@ public sealed class Plugin : IDalamudPlugin
 
         // Register UI drawing and event handlers
         pluginInterface.UiBuilder.Draw += ws.Draw;
-        pluginInterface.UiBuilder.OpenMainUi += delegate { ModernMainWindow.IsOpen = true; };
-        pluginInterface.UiBuilder.OpenConfigUi += delegate { ModernMainWindow.IsOpen = true; };
+        pluginInterface.UiBuilder.OpenMainUi += delegate { MainWindow.OpenDefault(); };
+        pluginInterface.UiBuilder.OpenConfigUi += delegate
+        {
+            MainWindow.OpenDefault();
+            // TODO: land on Settings tab when invoked from "Plugin Configuration"
+            // (SlimMainWindow has no public setter for the active tab; add one if needed)
+        };
 
         // Register chat command for opening the plugin
         _commandManager.AddHandler("/alpha", new CommandInfo(ProcessCommand)
@@ -318,7 +325,7 @@ public sealed class Plugin : IDalamudPlugin
             }
             else
             {
-                ModernMainWindow.IsOpen = true;
+                MainWindow.OpenDefault();
             }
         }
     }
@@ -492,8 +499,8 @@ public sealed class Plugin : IDalamudPlugin
 
         // Unregister UI event handlers
         _pluginInterface.UiBuilder.Draw -= ws.Draw;
-        _pluginInterface.UiBuilder.OpenMainUi -= delegate { ModernMainWindow.IsOpen = true; };
-        _pluginInterface.UiBuilder.OpenConfigUi -= delegate { ModernMainWindow.IsOpen = true; };
+        _pluginInterface.UiBuilder.OpenMainUi -= delegate { MainWindow.OpenDefault(); };
+        _pluginInterface.UiBuilder.OpenConfigUi -= delegate { MainWindow.OpenDefault(); };
 
     }
 
