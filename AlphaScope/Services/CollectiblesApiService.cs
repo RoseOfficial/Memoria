@@ -49,21 +49,14 @@ public sealed class CollectiblesApiService : ICollectiblesAcquisitionService, ID
         // Don't set Accept header explicitly - let it default to */*
         // FFXIVCollect returns 406 with explicit application/json Accept header
         
-        _logger.LogInformation("CollectiblesApiService initialized with base URL: {BaseUrl}", BaseUrl);
-        
-        // Start background initialization to pre-populate cache
-        _ = Task.Run(async () => 
+        _logger.LogDebug("CollectiblesApiService initialized with base URL: {BaseUrl}", BaseUrl);
+
+        // Start background initialization to pre-populate cache. Silent in the happy path; if
+        // fetching fails the catch block inside GetCachedAcquisitionDataAsync already warns once.
+        _ = Task.Run(async () =>
         {
-            try
-            {
-                _logger.LogInformation("Starting background initialization of collectibles data...");
-                await GetCachedAcquisitionDataAsync();
-                _logger.LogInformation("Background initialization of collectibles data completed");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to initialize collectibles data in background");
-            }
+            try { await GetCachedAcquisitionDataAsync(); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to initialize collectibles data in background"); }
         });
     }
     
@@ -175,7 +168,7 @@ public sealed class CollectiblesApiService : ICollectiblesAcquisitionService, ID
                 return cachedData;
             }
             
-            _logger.LogInformation("Fetching fresh acquisition data from FFXIVCollect API");
+            _logger.LogDebug("Fetching fresh acquisition data from FFXIVCollect API");
             
             var acquisitionData = new CachedAcquisitionData
             {
@@ -417,7 +410,7 @@ public sealed class CollectiblesApiService : ICollectiblesAcquisitionService, ID
     {
         // This would ideally use reflection to get the static data from Utils,
         // but for now we'll leave it empty and let the individual methods fall back
-        _logger.LogInformation("Using fallback to static acquisition data");
+        _logger.LogDebug("Using fallback to static acquisition data");
     }
     
     /// <summary>

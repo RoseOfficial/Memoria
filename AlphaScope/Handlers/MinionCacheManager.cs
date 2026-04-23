@@ -92,15 +92,18 @@ namespace AlphaScope.Handlers
                         }
                         else
                         {
-                            Plugin.Log.Warning($"Failed to download/create texture for minion icon: {iconUrl}");
-                            // Track failed downloads
+                            // Only log the FIRST failure per URL — after that the entry is cached
+                            // in _failedDownloads and the UI keeps asking, so repeated logging
+                            // spams the user's log for a single bad icon.
+                            if (!_failedDownloads.ContainsKey(iconUrl))
+                                Plugin.Log.Warning($"Failed to download/create texture for minion icon: {iconUrl}");
                             _failedDownloads.AddOrUpdate(iconUrl, 1, (key, oldValue) => oldValue + 1);
                         }
                     }
-                    catch (Exception ex) 
+                    catch (Exception ex)
                     {
-                        Plugin.Log.Error($"Unexpected error in minion icon download task for {iconUrl}: {ex.Message}");
-                        // Track failed downloads
+                        if (!_failedDownloads.ContainsKey(iconUrl))
+                            Plugin.Log.Error($"Unexpected error in minion icon download task for {iconUrl}: {ex.Message}");
                         _failedDownloads.AddOrUpdate(iconUrl, 1, (key, oldValue) => oldValue + 1);
                     }
                     finally
@@ -136,16 +139,16 @@ namespace AlphaScope.Handlers
 
                 return texture;
             }
-            catch (HttpRequestException httpEx) 
+            catch (HttpRequestException httpEx)
             {
-                Plugin.Log.Error($"HTTP error downloading minion icon from {iconUrl}: {httpEx.Message}");
-                // Track failed downloads
+                if (!_failedDownloads.ContainsKey(iconUrl))
+                    Plugin.Log.Warning($"Minion icon download failed ({httpEx.StatusCode}): {iconUrl}");
                 _failedDownloads.AddOrUpdate(iconUrl, 1, (key, oldValue) => oldValue + 1);
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
-                Plugin.Log.Error($"Error downloading minion icon from {iconUrl}: {ex.Message}");
-                // Track failed downloads
+                if (!_failedDownloads.ContainsKey(iconUrl))
+                    Plugin.Log.Error($"Error downloading minion icon from {iconUrl}: {ex.Message}");
                 _failedDownloads.AddOrUpdate(iconUrl, 1, (key, oldValue) => oldValue + 1);
             }
             return null;

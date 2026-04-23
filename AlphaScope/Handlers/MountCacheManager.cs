@@ -92,15 +92,17 @@ namespace AlphaScope.Handlers
                         }
                         else
                         {
-                            Plugin.Log.Warning($"Failed to download/create texture for mount icon: {iconUrl}");
-                            // Track failed downloads
+                            // Only log the FIRST failure per URL — retries for the same dead URL
+                            // would spam the log for a single bad icon.
+                            if (!_failedDownloads.ContainsKey(iconUrl))
+                                Plugin.Log.Warning($"Failed to download/create texture for mount icon: {iconUrl}");
                             _failedDownloads.AddOrUpdate(iconUrl, 1, (key, oldValue) => oldValue + 1);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Plugin.Log.Error(ex, $"Error downloading mount icon from {iconUrl}");
-                        // Track failed downloads
+                        if (!_failedDownloads.ContainsKey(iconUrl))
+                            Plugin.Log.Error(ex, $"Error downloading mount icon from {iconUrl}");
                         _failedDownloads.AddOrUpdate(iconUrl, 1, (key, oldValue) => oldValue + 1);
                     }
                     finally
