@@ -82,7 +82,7 @@ namespace AlphaScopeServer.Controllers
                 var userDto = new User
                 {
                     BaseUrl = user.BaseUrl ?? "https://localhost:5001/v1/",
-                    GameAccountId = user.GameAccountId,
+                    GameAccountId = user.GameAccountId ?? 0,
                     LocalContentId = user.PrimaryCharacterLocalContentId,
                     Name = user.Name,
                     AppRoleId = user.AppRoleId,
@@ -167,7 +167,7 @@ namespace AlphaScopeServer.Controllers
                 var userDto = new User
                 {
                     BaseUrl = user.BaseUrl ?? "https://localhost:5001/v1/",
-                    GameAccountId = user.GameAccountId,
+                    GameAccountId = user.GameAccountId ?? 0,
                     LocalContentId = user.PrimaryCharacterLocalContentId,
                     Name = user.Name,
                     AppRoleId = user.AppRoleId,

@@ -94,7 +94,7 @@ namespace AlphaScopeServer.Middleware
                 {
                     new(ClaimTypes.NameIdentifier, user.Id.ToString()),
                     new(ClaimTypes.Name, user.Name),
-                    new("GameAccountId", user.GameAccountId.ToString()),
+                    new("GameAccountId", user.GameAccountId?.ToString() ?? string.Empty),
                     new("LocalContentId", user.PrimaryCharacterLocalContentId.ToString()),
                     new("AppRoleId", user.AppRoleId.ToString())
                 };

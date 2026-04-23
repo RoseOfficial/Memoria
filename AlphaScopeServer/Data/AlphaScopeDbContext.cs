@@ -153,6 +153,9 @@ namespace AlphaScopeServer.Data
                 entity.HasIndex(e => e.GameAccountId).IsUnique();
                 entity.HasIndex(e => e.ApiKey).IsUnique();
                 entity.HasIndex(e => e.PrimaryCharacterLocalContentId);
+                entity.HasIndex(e => e.DiscordUserId)
+                      .IsUnique()
+                      .HasFilter("\"DiscordUserId\" IS NOT NULL");
             });
 
             modelBuilder.Entity<UserCharacter>(entity =>

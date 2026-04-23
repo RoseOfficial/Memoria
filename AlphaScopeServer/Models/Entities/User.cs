@@ -9,9 +9,10 @@ namespace AlphaScopeServer.Models.Entities
         [Key]
         public int Id { get; set; }
         
-        [Required]
-        public int GameAccountId { get; set; }
-        
+        // Nullable: web-first users created via Discord OAuth have no GameAccountId until
+        // they redeem an account-link code from the plugin.
+        public int? GameAccountId { get; set; }
+
         [Required]
         public long PrimaryCharacterLocalContentId { get; set; }
         
@@ -30,7 +31,12 @@ namespace AlphaScopeServer.Models.Entities
         
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime LastLoginAt { get; set; } = DateTime.UtcNow;
-        
+
+        // Discord identity (set by OAuth callback in Plan 0a).
+        public long? DiscordUserId { get; set; }
+        public bool IsGuildMember { get; set; } = false;
+        public DateTime? GuildMembershipCheckedAt { get; set; }
+
         // Statistics
         public int UploadedPlayersCount { get; set; } = 0;
         public int UploadedPlayerInfoCount { get; set; } = 0;

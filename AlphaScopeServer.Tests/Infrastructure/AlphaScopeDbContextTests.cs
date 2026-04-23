@@ -459,6 +459,32 @@ public class AlphaScopeDbContextTests : IDisposable
     }
 
     [Fact]
+    public void ApplicationUser_ShouldExposeDiscordIdentityColumns()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var user = new ApplicationUser
+        {
+            Name = "Test",
+            ApiKey = "opaque-key-123",
+            GameAccountId = null,
+            DiscordUserId = 123456789012345678L,
+            IsGuildMember = true,
+            GuildMembershipCheckedAt = DateTime.UtcNow,
+            PrimaryCharacterLocalContentId = 42,
+        };
+        ctx.Users.Add(user);
+        ctx.SaveChanges();
+
+        var reloaded = ctx.Users.Single(u => u.DiscordUserId == 123456789012345678L);
+        reloaded.GameAccountId.Should().BeNull();
+        reloaded.IsGuildMember.Should().BeTrue();
+        reloaded.GuildMembershipCheckedAt.Should().NotBeNull();
+    }
+
+    [Fact]
     public void Player_ShouldExposeOwnershipAndPrivacyColumns()
     {
         var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
