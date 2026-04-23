@@ -153,6 +153,7 @@ public sealed class Plugin : IDalamudPlugin
     /// <param name="pluginLog">Logging service for debugging and diagnostics</param>
     /// <param name="contextMenu">Service for adding context menu items</param>
     /// <param name="textureProvider">Service for loading UI textures and images</param>
+    /// <param name="playerState">Service for reading local player state (ContentId, world, etc.)</param>
     public Plugin(
         IDalamudPluginInterface pluginInterface,
         IFramework framework,
@@ -168,7 +169,8 @@ public sealed class Plugin : IDalamudPlugin
         IMarketBoard marketBoard,
         IPluginLog pluginLog,
         IContextMenu contextMenu,
-        ITextureProvider textureProvider)
+        ITextureProvider textureProvider,
+        IPlayerState playerState)
     {
         // Set up singleton instance and logging
         Instance = this;
@@ -197,7 +199,8 @@ public sealed class Plugin : IDalamudPlugin
         serviceCollection.AddSingleton(objectTable);
         serviceCollection.AddSingleton(marketBoard);
         serviceCollection.AddSingleton(textureProvider);
-        
+        serviceCollection.AddSingleton(playerState);
+
         // Add memory cache for API caching
         serviceCollection.AddMemoryCache();
 
@@ -387,6 +390,8 @@ public sealed class Plugin : IDalamudPlugin
 
             var clientState = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IClientState>();
             var framework = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IFramework>();
+            var objectTable = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IObjectTable>();
+            var playerState = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IPlayerState>();
 
             // Reads of IClientState members must happen on the framework thread; touching them
             // from the thread-pool throws "Not on main thread!". We marshal each poll and the
@@ -398,10 +403,10 @@ public sealed class Plugin : IDalamudPlugin
             {
                 snapshot = await framework.RunOnFrameworkThread(() =>
                 {
-                    if (!clientState.IsLoggedIn || clientState.LocalPlayer is null)
+                    if (!clientState.IsLoggedIn || objectTable.LocalPlayer is null)
                         return ((string?)null, 0, 0L);
 
-                    var lp = clientState.LocalPlayer;
+                    var lp = objectTable.LocalPlayer;
                     var name = lp.Name.TextValue;
                     int accountId = 0;
                     unsafe
@@ -410,7 +415,7 @@ public sealed class Plugin : IDalamudPlugin
                         if (chr != null && chr->AccountId != 0)
                             accountId = unchecked((int)chr->AccountId);
                     }
-                    return (name, accountId, (long)clientState.LocalContentId);
+                    return (name, accountId, (long)playerState.ContentId);
                 });
 
                 if (snapshot is { } s && !string.IsNullOrEmpty(s.Name) && s.AccountId != 0)

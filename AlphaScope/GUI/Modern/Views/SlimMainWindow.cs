@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -21,6 +22,19 @@ internal sealed class SlimMainWindow : Window
     private string _searchQuery = string.Empty;
 
     private readonly MicroCardWindow _microCardWindow;
+
+    // Per-tab list caches — refreshed at most once per RefreshInterval to avoid rebuilding
+    // LINQ queries on every frame (~60fps) when a tab is visible.
+    private IReadOnlyList<PlayerListItem>? _cachedRecent;
+    private DateTime _cachedRecentAt;
+
+    private IReadOnlyList<PlayerListItem>? _cachedFavorites;
+    private DateTime _cachedFavoritesAt;
+
+    private IReadOnlyList<PlayerListItem>? _cachedNotes;
+    private DateTime _cachedNotesAt;
+
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(500);
 
     public SlimMainWindow(MicroCardWindow microCardWindow)
         : base("AlphaScope##Main", ImGuiWindowFlags.NoCollapse)
@@ -111,9 +125,59 @@ internal sealed class SlimMainWindow : Window
         }
     }
 
+    // ── List cache helpers ──────────────────────────────────────────────────────────────────
+
+    private IReadOnlyList<PlayerListItem> GetRecentCached()
+    {
+        if (_cachedRecent is null || DateTime.UtcNow - _cachedRecentAt > RefreshInterval)
+        {
+            _cachedRecent = PlayerListProvider.GetRecent(PersistenceContext._playerCache, limit: 50);
+            _cachedRecentAt = DateTime.UtcNow;
+        }
+        return _cachedRecent;
+    }
+
+    private IReadOnlyList<PlayerListItem> GetFavoritesCached()
+    {
+        if (_cachedFavorites is null || DateTime.UtcNow - _cachedFavoritesAt > RefreshInterval)
+        {
+            var favSet = new HashSet<long>(Plugin.Instance.Configuration.FavoritedPlayer.Keys);
+            _cachedFavorites = PlayerListProvider.GetFavorites(PersistenceContext._playerCache, favSet);
+            _cachedFavoritesAt = DateTime.UtcNow;
+        }
+        return _cachedFavorites;
+    }
+
+    private IReadOnlyList<PlayerListItem> GetNotesCached()
+    {
+        if (_cachedNotes is null || DateTime.UtcNow - _cachedNotesAt > RefreshInterval)
+        {
+            var withNotes = new HashSet<long>(
+                Plugin.Instance.Configuration.FavoritedPlayer
+                    .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value.Note))
+                    .Select(kvp => kvp.Key));
+            _cachedNotes = PlayerListProvider.GetFavorites(PersistenceContext._playerCache, withNotes);
+            _cachedNotesAt = DateTime.UtcNow;
+        }
+        return _cachedNotes;
+    }
+
+    /// <summary>
+    /// Expires all three list caches so the next frame re-builds them. Call after any mutation
+    /// that should be immediately visible (favorite toggle, note edit).
+    /// </summary>
+    private void InvalidateListCaches()
+    {
+        _cachedRecentAt = DateTime.MinValue;
+        _cachedFavoritesAt = DateTime.MinValue;
+        _cachedNotesAt = DateTime.MinValue;
+    }
+
+    // ── Tab draw methods ────────────────────────────────────────────────────────────────────
+
     private void DrawRecent()
     {
-        var items = PlayerListProvider.GetRecent(PersistenceContext._playerCache, limit: 50);
+        var items = GetRecentCached();
         if (items.Count == 0)
         {
             ImGui.TextDisabled("No recent encounters yet. Walk past some players in-game.");
@@ -149,6 +213,7 @@ internal sealed class SlimMainWindow : Window
                     config.FavoritedPlayer.TryRemove(favKey, out _);
                 }
                 config.Save();
+                InvalidateListCaches();
             });
 
             if (openClicked)
@@ -158,9 +223,7 @@ internal sealed class SlimMainWindow : Window
 
     private void DrawFavorites()
     {
-        var config = Plugin.Instance.Configuration;
-        var favSet = new HashSet<long>(config.FavoritedPlayer.Keys);
-        var items = PlayerListProvider.GetFavorites(PersistenceContext._playerCache, favSet);
+        var items = GetFavoritesCached();
         if (items.Count == 0)
         {
             ImGui.TextDisabled("No favorites yet. Open a player and click \"Add to favorites.\"");
@@ -173,12 +236,7 @@ internal sealed class SlimMainWindow : Window
     private void DrawNotes()
     {
         var config = Plugin.Instance.Configuration;
-        var withNotes = new HashSet<long>(
-            config.FavoritedPlayer
-                .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value.Note))
-                .Select(kvp => kvp.Key));
-
-        var items = PlayerListProvider.GetFavorites(PersistenceContext._playerCache, withNotes);
+        var items = GetNotesCached();
         if (items.Count == 0)
         {
             ImGui.TextDisabled("No player notes yet. Open a favorite and edit its note.");
@@ -200,6 +258,7 @@ internal sealed class SlimMainWindow : Window
             {
                 entry.Note = note;
                 config.Save();
+                InvalidateListCaches();
             }
             ImGui.Separator();
             ImGui.PopID();
@@ -275,7 +334,7 @@ internal sealed class SlimMainWindow : Window
             ImGui.TextUnformatted($"Queued: {queued}");
             if (lastUpload is { } last)
             {
-                var agoText = Tools.ToTimeSinceString((int)((System.DateTimeOffset)last).ToUnixTimeSeconds());
+                var agoText = Tools.ToTimeSinceString(Tools.ToUnixSecondsUtc(last));
                 ImGui.TextUnformatted($"Last upload: {agoText}");
             }
             else

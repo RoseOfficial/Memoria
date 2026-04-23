@@ -202,8 +202,8 @@ public static class ThemeManager
     /// <summary>
     /// Pushes the current theme's window-chrome styling (colors + style vars) onto the
     /// ImGui stack. Scoped to the caller: dispose the returned handle in PostDraw to pop
-    /// them all back off. Intended to be called in BaseModernWindow.PreDraw so only
-    /// AlphaScope windows see the custom styling — other plugins are unaffected.
+    /// them all back off. Call in a Window's PreDraw override so only AlphaScope windows
+    /// see the custom styling — other plugins are unaffected.
     /// </summary>
     public static IDisposable PushWindowStyle()
     {

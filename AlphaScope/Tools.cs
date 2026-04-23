@@ -82,6 +82,16 @@ namespace AlphaScope
             return DateTimeOffset.FromUnixTimeSeconds(unixTime!.Value).ToLocalTime().DateTime.ToString();
         }
 
+        /// <summary>
+        /// Convert a DateTime to Unix seconds, treating the DateTime as UTC regardless of Kind.
+        /// Write sites always use DateTime.UtcNow; this centralizes the read-side assumption.
+        /// </summary>
+        public static int ToUnixSecondsUtc(DateTime dt)
+        {
+            var utc = dt.Kind == DateTimeKind.Utc ? dt : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+            return (int)((DateTimeOffset)utc).ToUnixTimeSeconds();
+        }
+
         public static TerritoryType? GetTerritory(ushort territoryId) => new ExcelResolver<TerritoryType>(territoryId).GameData;
 
         public static string GetTerritoryName(ushort territoryId) =>

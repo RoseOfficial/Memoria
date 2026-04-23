@@ -457,43 +457,6 @@ namespace AlphaScope
             }
         }
 
-        /// <summary>
-        /// Migrates configuration from older versions to current version.
-        /// Handles encryption of previously plaintext API keys.
-        /// </summary>
-        public void MigrateConfiguration()
-        {
-            if (Version < 3)
-            {
-                // Version 3 migration: Encrypt existing plaintext API keys
-                MigrateToVersion3();
-                Version = 3;
-            }
-        }
-
-        /// <summary>
-        /// Migrates configuration to version 3 by encrypting plaintext API keys.
-        /// This handles the old "Key" property that was stored in plaintext.
-        /// </summary>
-        private void MigrateToVersion3()
-        {
-            try
-            {
-                // Check if we have an old plaintext key in the JSON that wasn't processed yet
-                // Since we've overridden the Key property, we need to handle this migration carefully
-                
-                // If EncryptedKey is empty but we had a plaintext key loaded, it means we need to encrypt it
-                // This will be handled automatically by the Key property setter when the configuration is loaded
-                
-                Plugin.Log?.Information("Configuration migrated to version 3 with encrypted API key storage");
-            }
-            catch (Exception ex)
-            {
-                Plugin.Log?.Error($"Failed to migrate configuration to version 3: {ex.GetType().Name}");
-                // Clear the API key if migration fails for security
-                ClearApiKey();
-            }
-        }
     }
 
 }

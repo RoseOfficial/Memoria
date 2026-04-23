@@ -63,6 +63,11 @@ internal sealed class PersistenceContext
     public static IClientState _clientState = null!;
 
     /// <summary>
+    /// Dalamud player state service for reading local player ContentId and world without deprecated IClientState members
+    /// </summary>
+    public static IPlayerState _playerState = null!;
+
+    /// <summary>
     /// Service provider for dependency injection and database access
     /// </summary>
     public static IServiceProvider _serviceProvider = null!;
@@ -151,8 +156,9 @@ internal sealed class PersistenceContext
     /// <param name="clientState">Dalamud client state service</param>
     /// <param name="serviceProvider">Service provider for dependency injection</param>
     /// <param name="data">Dalamud data manager service</param>
+    /// <param name="playerState">Dalamud player state service for ContentId and world reads</param>
     public PersistenceContext(ILogger<PersistenceContext> logger, IClientState clientState,
-        IServiceProvider serviceProvider, IDataManager data)
+        IServiceProvider serviceProvider, IDataManager data, IPlayerState playerState)
     {
         if (_instance == null)
         {
@@ -161,6 +167,7 @@ internal sealed class PersistenceContext
 
         _logger = logger;
         _clientState = clientState;
+        _playerState = playerState;
         _serviceProvider = serviceProvider;
 
         // Force clear all static caches immediately on startup
@@ -526,7 +533,7 @@ internal sealed class PersistenceContext
 
     public static uint? GetCurrentWorld()
     {
-        uint currentWorld = _clientState.LocalPlayer?.CurrentWorld.RowId ?? 0;
+        uint currentWorld = _playerState.CurrentWorld.RowId;
         if (currentWorld == 0)
             return null;
         return currentWorld;

@@ -50,7 +50,7 @@ internal static class PlayerListRow
             ? Utils.GetWorldName(wid)
             : "—";
         var lastSeenText = item.LastScannedAt is { } dt
-            ? Tools.ToTimeSinceString((int)((DateTimeOffset)dt).ToUnixTimeSeconds())
+            ? Tools.ToTimeSinceString(Tools.ToUnixSecondsUtc(dt))
             : "—";
 
         ImGui.BeginGroup();

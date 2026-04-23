@@ -61,7 +61,7 @@ internal sealed class MicroCardWindow : Window
             : "—";
 
         var lastSeenText = player.LastScannedAt is { } dt
-            ? Tools.ToTimeSinceString((int)((DateTimeOffset)dt).ToUnixTimeSeconds())
+            ? Tools.ToTimeSinceString(Tools.ToUnixSecondsUtc(dt))
             : "—";
 
         // Header: avatar on the left, identity stack on the right
