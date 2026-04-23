@@ -3,12 +3,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using NSubstitute;
 using AlphaScopeServer.Controllers;
 using AlphaScopeServer.Data;
+using AlphaScopeServer.Models.DTOs;
 using AlphaScopeServer.Models.Entities;
 using TestUtilities;
-using System.Net;
 
 namespace AlphaScopeServer.Tests.Controllers;
 
@@ -63,13 +62,11 @@ public class PlayersClaimTests : IDisposable
         var result = await _controller.StartClaim(1001);
 
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
-        var code = ok.Value!.GetType().GetProperty("Code")!.GetValue(ok.Value) as string;
-        var expiresAt = (DateTime)ok.Value!.GetType().GetProperty("ExpiresAt")!.GetValue(ok.Value)!;
-        var instructions = ok.Value!.GetType().GetProperty("Instructions")!.GetValue(ok.Value) as string;
+        var body = ok.Value.Should().BeOfType<ClaimStartResponse>().Subject;
 
-        code.Should().StartWith("AS-");
-        (expiresAt - DateTime.UtcNow).TotalHours.Should().BeApproximately(24, 0.1);
-        instructions.Should().NotBeNullOrEmpty();
+        body.Code.Should().StartWith("AS-");
+        (body.ExpiresAt - DateTime.UtcNow).TotalHours.Should().BeApproximately(24, 0.1);
+        body.Instructions.Should().NotBeNullOrEmpty();
     }
 
     [Fact]
@@ -82,17 +79,17 @@ public class PlayersClaimTests : IDisposable
         _context.SaveChanges();
 
         var r1 = await _controller.StartClaim(1002);
-        var ok1 = r1.Should().BeOfType<OkObjectResult>().Subject;
-        var code1 = ok1.Value!.GetType().GetProperty("Code")!.GetValue(ok1.Value) as string;
+        var body1 = r1.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<ClaimStartResponse>().Subject;
 
         var r2 = await _controller.StartClaim(1002);
-        var ok2 = r2.Should().BeOfType<OkObjectResult>().Subject;
-        var code2 = ok2.Value!.GetType().GetProperty("Code")!.GetValue(ok2.Value) as string;
+        var body2 = r2.Should().BeOfType<OkObjectResult>().Subject
+            .Value.Should().BeOfType<ClaimStartResponse>().Subject;
 
         // Each call should issue a fresh code.
-        code1.Should().StartWith("AS-");
-        code2.Should().StartWith("AS-");
-        code1.Should().NotBe(code2);
+        body1.Code.Should().StartWith("AS-");
+        body2.Code.Should().StartWith("AS-");
+        body1.Code.Should().NotBe(body2.Code);
 
         // Exactly one row in the ClaimAttempts table (upserted, not duplicated).
         var count = await _context.ClaimAttempts

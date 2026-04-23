@@ -806,7 +806,7 @@ namespace AlphaScopeServer.Controllers
                 return NotFound();
             if (player.Lodestone?.LodestoneId is null)
                 return StatusCode(412,
-                    "This character hasn't been linked to a Lodestone profile yet. Try again after more scans.");
+                    "This character hasn't been linked to a Lodestone profile yet. Once the profile is resolved you can begin the claim.");
 
             var existing = await _context.ClaimAttempts
                 .FirstOrDefaultAsync(a => a.UserId == user.Id && a.PlayerLocalContentId == localContentId);
@@ -828,14 +828,22 @@ namespace AlphaScopeServer.Controllers
                 existing.ExpiresAt = DateTime.UtcNow.AddHours(24);
                 existing.Attempts = 0;
             }
-            await _context.SaveChangesAsync();
-
-            return Ok(new
+            try
             {
-                Code = existing.Code,
-                ExpiresAt = existing.ExpiresAt,
-                Instructions = "Paste this code anywhere in your Lodestone character's bio, then return here and click Verify.",
-            });
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Concurrent insert by the same user — pick up the winner's row and return it.
+                existing = await _context.ClaimAttempts
+                    .AsNoTracking()
+                    .FirstAsync(a => a.UserId == user.Id && a.PlayerLocalContentId == localContentId);
+            }
+
+            return Ok(new ClaimStartResponse(
+                existing.Code,
+                existing.ExpiresAt,
+                "Paste this code anywhere in your Lodestone character's bio, then return here and click Verify."));
         }
 
         [HttpPost("test-auto-link/{playerName}")]
