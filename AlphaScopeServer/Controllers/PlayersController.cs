@@ -793,6 +793,51 @@ namespace AlphaScopeServer.Controllers
             return worldMap.TryGetValue(worldId.Value, out var worldName) ? worldName : null;
         }
 
+        [HttpPost("{localContentId:long}/claim/start")]
+        public async Task<IActionResult> StartClaim(long localContentId)
+        {
+            if (HttpContext.Items["User"] is not ApplicationUser user)
+                return Unauthorized();
+
+            var player = await _context.Players
+                .Include(p => p.Lodestone)
+                .FirstOrDefaultAsync(p => p.LocalContentId == localContentId);
+            if (player is null)
+                return NotFound();
+            if (player.Lodestone?.LodestoneId is null)
+                return StatusCode(412,
+                    "This character hasn't been linked to a Lodestone profile yet. Try again after more scans.");
+
+            var existing = await _context.ClaimAttempts
+                .FirstOrDefaultAsync(a => a.UserId == user.Id && a.PlayerLocalContentId == localContentId);
+            if (existing is null)
+            {
+                existing = new ClaimAttempt
+                {
+                    UserId = user.Id,
+                    PlayerLocalContentId = localContentId,
+                    Code = AlphaScopeServer.Services.Auth.ClaimCodeGenerator.GenerateClaimCode(),
+                    ExpiresAt = DateTime.UtcNow.AddHours(24),
+                    Attempts = 0,
+                };
+                _context.ClaimAttempts.Add(existing);
+            }
+            else
+            {
+                existing.Code = AlphaScopeServer.Services.Auth.ClaimCodeGenerator.GenerateClaimCode();
+                existing.ExpiresAt = DateTime.UtcNow.AddHours(24);
+                existing.Attempts = 0;
+            }
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                Code = existing.Code,
+                ExpiresAt = existing.ExpiresAt,
+                Instructions = "Paste this code anywhere in your Lodestone character's bio, then return here and click Verify.",
+            });
+        }
+
         [HttpPost("test-auto-link/{playerName}")]
         public async Task<IActionResult> TestAutoLink(string playerName)
         {
