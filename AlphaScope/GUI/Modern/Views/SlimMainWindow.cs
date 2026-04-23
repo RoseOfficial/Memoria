@@ -155,8 +155,21 @@ internal sealed class SlimMainWindow : Window
         }
     }
 
+    private void DrawFavorites()
+    {
+        var config = Plugin.Instance.Configuration;
+        var favSet = new HashSet<long>(config.FavoritedPlayer.Keys);
+        var items = PlayerListProvider.GetFavorites(PersistenceContext._playerCache, favSet);
+        if (items.Count == 0)
+        {
+            ImGui.TextDisabled("No favorites yet. Open a player and click \"Add to favorites.\"");
+            return;
+        }
+
+        DrawList(items);
+    }
+
     // Stubs for subsequent tasks
-    private void DrawFavorites() => ImGui.TextDisabled("Favorites — implemented in Task 9.");
     private void DrawNotes() => ImGui.TextDisabled("Notes — implemented in Task 10.");
     private void DrawSearch() => ImGui.TextDisabled("Search — implemented in Task 11.");
     private void DrawSettings() => ImGui.TextDisabled("Settings — implemented in Task 12.");
