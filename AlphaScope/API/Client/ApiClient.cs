@@ -617,7 +617,7 @@ namespace AlphaScope.API
                         
                         // ApiClient is now properly managed by dependency injection - no singleton cleanup needed
                         
-                        _logger?.LogInformation("ApiClient disposed successfully");
+                        _logger?.LogDebug("ApiClient disposed");
                     }
                 }
                 finally

@@ -385,7 +385,7 @@ internal sealed class PersistenceContext
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("PostPlayerData was canceled.");
+            _logger.LogDebug("PostPlayerData was canceled");
         }
         catch (HttpRequestException e)
         {
@@ -401,7 +401,7 @@ internal sealed class PersistenceContext
         if (_cancellationTokenSource != null && !_cancellationTokenSource.IsCancellationRequested)
         {
             _cancellationTokenSource.Cancel();
-            _logger.LogInformation("Upload tasks have been canceled.");
+            _logger.LogDebug("Upload tasks have been canceled");
         }
     }
     private static async Task ProcessPlayerUploadBatch(CancellationToken cancellationToken,

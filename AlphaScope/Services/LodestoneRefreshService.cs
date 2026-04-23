@@ -149,10 +149,8 @@ internal sealed class LodestoneRefreshService : IDisposable
             return;
         }
 
-        _logger.LogInformation("Stopping LodestoneRefreshService...");
-        
         _cancellationTokenSource.Cancel();
-        
+
         try
         {
             await _processingTask;
@@ -161,9 +159,9 @@ internal sealed class LodestoneRefreshService : IDisposable
         {
             // Expected when cancelling
         }
-        
+
         _processingTask = null;
-        _logger.LogInformation("LodestoneRefreshService stopped");
+        _logger.LogDebug("LodestoneRefreshService stopped");
     }
 
     /// <summary>
@@ -334,7 +332,7 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Processing loop cancelled");
+                _logger.LogDebug("Processing loop cancelled");
                 break;
             }
             catch (Exception ex)
@@ -344,7 +342,7 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
         }
         
-        _logger.LogInformation("Background refresh processing stopped");
+        _logger.LogDebug("Background refresh processing stopped");
     }
 
     /// <summary>
@@ -358,7 +356,9 @@ internal sealed class LodestoneRefreshService : IDisposable
         {
             if (!PersistenceContext._playerCache.TryGetValue(contentId, out var cached) || cached is null)
             {
-                _logger.LogWarning($"ProcessSinglePlayer: Player {contentId} not in cache during refresh processing");
+                // Benign startup race: the refresh queue is populated before the cache hydrates
+                // from the server. Skip silently; the player will be re-queued next scan.
+                _logger.LogDebug("ProcessSinglePlayer: Player {ContentId} not yet in cache; skipping this pass", contentId);
                 return;
             }
 
@@ -415,7 +415,9 @@ internal sealed class LodestoneRefreshService : IDisposable
             }
             else
             {
-                _logger.LogWarning($"Could not extract job data for player {cached.Name}");
+                // The deeper "Could not extract job data for X" warning from the fetcher already
+                // logged this with full exception context, so we stay quiet here.
+                _logger.LogDebug($"No job data available for {cached.Name}");
             }
 
             var minionUpdateCount = 0;
