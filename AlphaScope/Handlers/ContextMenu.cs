@@ -76,7 +76,7 @@ public class ContextMenu
                 {
                     PrefixColor = 15,
                     PrefixChar = 'P',
-                    Name = "See Detailed Info",
+                    Name = "View in AlphaScope",
                     OnClicked = SearchDetailedPlayerInfoById
                 });
             }
@@ -86,7 +86,7 @@ public class ContextMenu
                 {
                     PrefixColor = 15,
                     PrefixChar = 'P',
-                    Name = "Search Player By Name",
+                    Name = "View in AlphaScope",
                     OnClicked = SearchPlayerName
                 });
             }
@@ -95,42 +95,31 @@ public class ContextMenu
 
     private static void SearchDetailedPlayerInfoById(IMenuItemClickedArgs menuArgs)
     {
-        if (menuArgs.Target is not MenuTargetDefault menuTargetDefault)
+        if (menuArgs.Target is not MenuTargetDefault menuTargetDefault) return;
+        var targetCId = menuTargetDefault.TargetContentId;
+        if (targetCId == 0) return;
+
+        if (Plugin.Instance.Configuration.OptOutInGamePopups)
         {
+            Plugin.Instance.MainWindow.OpenAtSearch(menuTargetDefault.TargetName);
             return;
         }
-        ulong? targetCId = menuTargetDefault.TargetContentId;
 
-        // Open main window (Task 15 will refine this to MicroCard.OpenFor(targetCId))
-        Plugin.Instance.MainWindow.OpenDefault();
-        Plugin.Log.Info($"Opening details for player {targetCId} - Details view coming soon in modern UI");
+        Plugin.Instance.MicroCard.OpenFor(targetCId);
     }
 
     private static void SearchPlayerName(IMenuItemClickedArgs menuArgs)
     {
-        if (menuArgs.Target is not MenuTargetDefault menuTargetDefault)
-        {
-            return;
-        }
+        if (menuArgs.Target is not MenuTargetDefault menuTargetDefault) return;
 
-        var targetName = string.Empty;
+        var targetName = menuArgs.AddonName switch
+        {
+            "BlackList" => GetBlacklistSelectPlayerName(),
+            "MuteList"  => GetMuteListSelectFullName(),
+            _           => menuTargetDefault.TargetName,
+        };
 
-        if (menuArgs.AddonName == "BlackList")
-        {
-            targetName = GetBlacklistSelectPlayerName();
-        }
-        else if (menuArgs.AddonName == "MuteList")
-        {
-            targetName = GetMuteListSelectFullName();
-        }
-        else
-        {
-            targetName = menuTargetDefault.TargetName;
-        }
-
-        // Open main window (Task 15 will refine this to MainWindow.OpenAtSearch(targetName))
-        Plugin.Instance.MainWindow.OpenDefault();
-        Plugin.Log.Info($"Searching for player {targetName} - Search functionality coming soon in modern UI");
+        Plugin.Instance.MainWindow.OpenAtSearch(targetName);
     }
 
     private static unsafe string GetBlacklistSelectPlayerName()
