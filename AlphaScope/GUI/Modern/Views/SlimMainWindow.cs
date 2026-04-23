@@ -227,5 +227,62 @@ internal sealed class SlimMainWindow : Window
 
         DrawList(items);
     }
-    private void DrawSettings() => ImGui.TextDisabled("Settings — implemented in Task 12.");
+    private void DrawSettings()
+    {
+        var config = Plugin.Instance.Configuration;
+        var changed = false;
+
+        ImGui.TextDisabled("Server");
+        var serverUrl = config.BaseUrl ?? string.Empty;
+        ImGui.SetNextItemWidth(360);
+        if (ImGui.InputText("Server URL", ref serverUrl, 200))
+        {
+            config.BaseUrl = serverUrl;
+            changed = true;
+        }
+
+        ImGui.Spacing();
+        ImGui.TextDisabled("Web app");
+        var webBase = config.WebBaseUrl ?? string.Empty;
+        ImGui.SetNextItemWidth(360);
+        if (ImGui.InputText("Web base URL", ref webBase, 200))
+        {
+            config.WebBaseUrl = webBase;
+            changed = true;
+        }
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Reset"))
+        {
+            config.WebBaseUrl = "https://alphascope.app";
+            changed = true;
+        }
+
+        ImGui.Spacing();
+        if (ImGui.Button("Browse my contributions on the web →"))
+        {
+            Dalamud.Utility.Util.OpenLink(WebUrls.MeUrl(config.WebBaseUrl ?? "https://alphascope.app"));
+        }
+
+        ImGui.Spacing();
+        ImGui.TextDisabled("Privacy");
+
+        var optOutPopups = config.OptOutInGamePopups;
+        if (ImGui.Checkbox("Suppress in-game pop-ups (right-click context menu still works)", ref optOutPopups))
+        {
+            config.OptOutInGamePopups = optOutPopups;
+            changed = true;
+        }
+
+        var optOutContrib = config.OptOutContributingScans;
+        if (ImGui.Checkbox("Don't contribute scans of OTHER characters to the network", ref optOutContrib))
+        {
+            config.OptOutContributingScans = optOutContrib;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            config.Save();
+        }
+    }
 }
