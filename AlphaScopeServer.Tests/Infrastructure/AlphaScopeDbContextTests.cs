@@ -535,6 +535,42 @@ public class AlphaScopeDbContextTests : IDisposable
     }
 
     [Fact]
+    public void AccountLinkCode_ShouldPersist()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var user = new ApplicationUser { Name = "U", ApiKey = "k", PrimaryCharacterLocalContentId = 1 };
+        ctx.Users.Add(user);
+        ctx.SaveChanges();
+
+        ctx.AccountLinkCodes.Add(new AccountLinkCode
+        {
+            ApplicationUserId = user.Id,
+            Code = "AL-ABCD-EFGH",
+            ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+        });
+        ctx.SaveChanges();
+
+        ctx.AccountLinkCodes.Single().Code.Should().Be("AL-ABCD-EFGH");
+    }
+
+    [Fact]
+    public void AccountLinkCode_ShouldHaveUniqueCodeIndex()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+
+        var entityType = ctx.Model.FindEntityType(typeof(AccountLinkCode))!;
+        var codeIndex = entityType.GetIndexes()
+            .FirstOrDefault(i => i.Properties.Count == 1 && i.Properties[0].Name == nameof(AccountLinkCode.Code));
+
+        codeIndex.Should().NotBeNull("AccountLinkCode.Code must have a unique index");
+        codeIndex!.IsUnique.Should().BeTrue();
+    }
+
+    [Fact]
     public void Player_ShouldExposeOwnershipAndPrivacyColumns()
     {
         var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();

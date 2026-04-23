@@ -53,6 +53,8 @@ namespace AlphaScopeServer.Data
         public DbSet<UserCharacter> UserCharacters { get; set; }
         /// <summary>Pending character-claim verifications; one row per (user, player) pair</summary>
         public DbSet<ClaimAttempt> ClaimAttempts { get; set; }
+        /// <summary>One-time short-TTL codes used to link plugin accounts to web identities</summary>
+        public DbSet<AccountLinkCode> AccountLinkCodes { get; set; }
 
         /// <summary>
         /// Configures entity relationships, constraints, and database schema.
@@ -183,6 +185,16 @@ namespace AlphaScopeServer.Data
                 entity.HasOne(e => e.Player)
                       .WithMany()
                       .HasForeignKey(e => e.PlayerLocalContentId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<AccountLinkCode>(entity =>
+            {
+                entity.HasIndex(e => e.Code).IsUnique();
+
+                entity.HasOne(e => e.ApplicationUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.ApplicationUserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
