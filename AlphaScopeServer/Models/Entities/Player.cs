@@ -53,7 +53,19 @@ namespace AlphaScopeServer.Models.Entities
         // Privacy flags
         public bool IsPrivate { get; set; } = false;
         public bool HideInSearch { get; set; } = false;
-        
+
+        // Ownership + extended privacy (added in Plan 0a for web-app tier-gating)
+        public bool HideAlts { get; set; } = false;
+        public bool HideEncounters { get; set; } = false;
+        public bool HideEntirely { get; set; } = false;
+
+        public int? ClaimedByUserId { get; set; }
+        public DateTime? ClaimedAt { get; set; }
+        public DateTime? ClaimVerifiedAt { get; set; }
+
+        [ForeignKey(nameof(ClaimedByUserId))]
+        public virtual ApplicationUser? ClaimedByUser { get; set; }
+
         // Navigation properties
         public virtual ICollection<PlayerNameHistory> NameHistory { get; set; } = new List<PlayerNameHistory>();
         public virtual ICollection<PlayerWorldHistory> WorldHistory { get; set; } = new List<PlayerWorldHistory>();

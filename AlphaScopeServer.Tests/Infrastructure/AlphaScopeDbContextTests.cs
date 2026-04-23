@@ -457,4 +457,34 @@ public class AlphaScopeDbContextTests : IDisposable
         var savedPlayer = await _context.Players.FindAsync(player.LocalContentId);
         savedPlayer!.Name.Should().Be(playerName);
     }
+
+    [Fact]
+    public void Player_ShouldExposeOwnershipAndPrivacyColumns()
+    {
+        var options = new DbContextOptionsBuilder<AlphaScopeDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var player = new Player
+        {
+            LocalContentId = 1,
+            Name = "Test",
+            HideAlts = true,
+            HideEncounters = true,
+            HideEntirely = true,
+            ClaimedByUserId = null,
+            ClaimedAt = null,
+            ClaimVerifiedAt = null,
+        };
+        ctx.Players.Add(player);
+        ctx.SaveChanges();
+
+        var reloaded = ctx.Players.Find(1L);
+        reloaded!.HideAlts.Should().BeTrue();
+        reloaded.HideEncounters.Should().BeTrue();
+        reloaded.HideEntirely.Should().BeTrue();
+        reloaded.ClaimedByUserId.Should().BeNull();
+    }
 }

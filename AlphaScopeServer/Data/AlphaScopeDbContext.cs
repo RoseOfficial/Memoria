@@ -72,6 +72,14 @@ namespace AlphaScopeServer.Data
                 entity.HasIndex(e => e.HomeWorldId);
                 entity.HasIndex(e => e.CurrentWorldId);
                 entity.HasIndex(e => e.CreatedAt);
+
+                entity.HasIndex(e => e.ClaimedByUserId);
+                entity.HasIndex(e => e.HideEntirely);
+
+                entity.HasOne(e => e.ClaimedByUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.ClaimedByUserId)
+                      .OnDelete(DeleteBehavior.NoAction);
             });
 
             // Player history relationships
