@@ -42,7 +42,6 @@ namespace AlphaScopeServer.Middleware
                 path.Contains("/users/login") ||
                 path.Contains("/users/create-test-user") ||
                 path.Contains("/auth/") ||
-                path.Contains("/waitforlogin") ||
                 path.Contains("/swagger") ||
                 path.Contains("/health")))
             {

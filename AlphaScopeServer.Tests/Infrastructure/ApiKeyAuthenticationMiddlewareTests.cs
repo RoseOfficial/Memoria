@@ -43,7 +43,6 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     [InlineData("/users/login")]
     [InlineData("/users/create-test-user")]
     [InlineData("/auth/callback")]
-    [InlineData("/waitforlogin")]
     [InlineData("/swagger")]
     [InlineData("/health")]
     public async Task InvokeAsync_ShouldSkipAuthenticationForExemptPaths(string path)
