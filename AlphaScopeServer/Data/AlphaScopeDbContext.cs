@@ -154,7 +154,9 @@ namespace AlphaScopeServer.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.ApiKey).IsRequired().HasMaxLength(256);
-                entity.HasIndex(e => e.GameAccountId).IsUnique();
+                entity.HasIndex(e => e.GameAccountId)
+                      .IsUnique()
+                      .HasFilter("\"GameAccountId\" IS NOT NULL");
                 entity.HasIndex(e => e.ApiKey).IsUnique();
                 entity.HasIndex(e => e.PrimaryCharacterLocalContentId);
                 entity.HasIndex(e => e.DiscordUserId)

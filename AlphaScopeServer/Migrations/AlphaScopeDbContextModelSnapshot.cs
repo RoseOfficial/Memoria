@@ -22,6 +22,38 @@ namespace AlphaScopeServer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("AlphaScopeServer.Models.Entities.AccountLinkCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ApplicationUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationUserId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("AccountLinkCodes");
+                });
+
             modelBuilder.Entity("AlphaScopeServer.Models.Entities.ApplicationUser", b =>
                 {
                     b.Property<int>("Id")
@@ -45,11 +77,20 @@ namespace AlphaScopeServer.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long?>("DiscordUserId")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("FetchedPlayerInfoCount")
                         .HasColumnType("integer");
 
-                    b.Property<int>("GameAccountId")
+                    b.Property<int?>("GameAccountId")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("GuildMembershipCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsGuildMember")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
@@ -85,12 +126,57 @@ namespace AlphaScopeServer.Migrations
                     b.HasIndex("ApiKey")
                         .IsUnique();
 
+                    b.HasIndex("DiscordUserId")
+                        .IsUnique()
+                        .HasFilter("\"DiscordUserId\" IS NOT NULL");
+
                     b.HasIndex("GameAccountId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"GameAccountId\" IS NOT NULL");
 
                     b.HasIndex("PrimaryCharacterLocalContentId");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("AlphaScopeServer.Models.Entities.ClaimAttempt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("PlayerLocalContentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("PlayerLocalContentId");
+
+                    b.HasIndex("UserId", "PlayerLocalContentId")
+                        .IsUnique();
+
+                    b.ToTable("ClaimAttempts");
                 });
 
             modelBuilder.Entity("AlphaScopeServer.Models.Entities.Player", b =>
@@ -108,6 +194,15 @@ namespace AlphaScopeServer.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<DateTime?>("ClaimVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ClaimedByUserId")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -119,6 +214,15 @@ namespace AlphaScopeServer.Migrations
 
                     b.Property<short?>("CurrentWorldId")
                         .HasColumnType("smallint");
+
+                    b.Property<bool>("HideAlts")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HideEncounters")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("HideEntirely")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("HideInSearch")
                         .HasColumnType("boolean");
@@ -175,9 +279,13 @@ namespace AlphaScopeServer.Migrations
 
                     b.HasIndex("AccountId");
 
+                    b.HasIndex("ClaimedByUserId");
+
                     b.HasIndex("CreatedAt");
 
                     b.HasIndex("CurrentWorldId");
+
+                    b.HasIndex("HideEntirely");
 
                     b.HasIndex("HomeWorldId");
 
@@ -446,41 +554,44 @@ namespace AlphaScopeServer.Migrations
                     b.ToTable("UserCharacters");
                 });
 
-            modelBuilder.Entity("AlphaScopeServer.Models.Entities.UserLodestoneCharacter", b =>
+            modelBuilder.Entity("AlphaScopeServer.Models.Entities.AccountLinkCode", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                    b.HasOne("AlphaScopeServer.Models.Entities.ApplicationUser", "ApplicationUser")
+                        .WithMany()
+                        .HasForeignKey("ApplicationUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+                    b.Navigation("ApplicationUser");
+                });
 
-                    b.Property<string>("AvatarLink")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+            modelBuilder.Entity("AlphaScopeServer.Models.Entities.ClaimAttempt", b =>
+                {
+                    b.HasOne("AlphaScopeServer.Models.Entities.Player", "Player")
+                        .WithMany()
+                        .HasForeignKey("PlayerLocalContentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Property<int>("LodestoneId")
-                        .HasColumnType("integer");
+                    b.HasOne("AlphaScopeServer.Models.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Property<string>("NameAndWorld")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                    b.Navigation("Player");
 
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
+                    b.Navigation("User");
+                });
 
-                    b.Property<DateTime>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone");
+            modelBuilder.Entity("AlphaScopeServer.Models.Entities.Player", b =>
+                {
+                    b.HasOne("AlphaScopeServer.Models.Entities.ApplicationUser", "ClaimedByUser")
+                        .WithMany()
+                        .HasForeignKey("ClaimedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("LodestoneId")
-                        .IsUnique();
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserLodestoneCharacters");
+                    b.Navigation("ClaimedByUser");
                 });
 
             modelBuilder.Entity("AlphaScopeServer.Models.Entities.PlayerCustomizationHistory", b =>
@@ -560,22 +671,9 @@ namespace AlphaScopeServer.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("AlphaScopeServer.Models.Entities.UserLodestoneCharacter", b =>
-                {
-                    b.HasOne("AlphaScopeServer.Models.Entities.ApplicationUser", "User")
-                        .WithMany("LodestoneCharacters")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("AlphaScopeServer.Models.Entities.ApplicationUser", b =>
                 {
                     b.Navigation("Characters");
-
-                    b.Navigation("LodestoneCharacters");
                 });
 
             modelBuilder.Entity("AlphaScopeServer.Models.Entities.Player", b =>
