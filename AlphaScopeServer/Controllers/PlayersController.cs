@@ -933,6 +933,26 @@ namespace AlphaScopeServer.Controllers
                 AttemptsLeft: 5 - attempt.Attempts));
         }
 
+        [HttpDelete("{localContentId:long}/claim")]
+        public async Task<IActionResult> Unclaim(long localContentId, CancellationToken ct)
+        {
+            if (HttpContext.Items["User"] is not ApplicationUser user)
+                return Unauthorized();
+
+            var player = await _context.Players.FirstOrDefaultAsync(p => p.LocalContentId == localContentId, ct);
+            if (player is null)
+                return NotFound();
+
+            if (player.ClaimedByUserId != user.Id)
+                return StatusCode(StatusCodes.Status403Forbidden, "You do not own this claim.");
+
+            player.ClaimedByUserId = null;
+            player.ClaimedAt = null;
+            player.ClaimVerifiedAt = null;
+            await _context.SaveChangesAsync(ct);
+            return NoContent();
+        }
+
         [HttpPost("test-auto-link/{playerName}")]
         public async Task<IActionResult> TestAutoLink(string playerName)
         {

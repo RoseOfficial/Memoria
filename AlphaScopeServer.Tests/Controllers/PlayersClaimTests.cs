@@ -375,4 +375,66 @@ public class PlayersClaimTests : IDisposable
         var notFound = result.Should().BeOfType<NotFoundObjectResult>().Subject;
         notFound.Value.Should().Be("Start a claim first.");
     }
+
+    // -----------------------------------------------------------------------
+    // Delete (unclaim) tests
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task Delete_ByNonOwner_Returns403()
+    {
+        // User A claims player 3001; user B calls DELETE.
+        var userA = new ApplicationUser
+        {
+            Name = "UserA",
+            ApiKey = "KEYUSERА",
+            PrimaryCharacterLocalContentId = 0
+        };
+        _context.Users.Add(userA);
+        _context.SaveChanges();
+
+        var player = new Player
+        {
+            LocalContentId = 3001,
+            Name = "ClaimedByA",
+            ClaimedByUserId = userA.Id,
+            ClaimedAt = DateTime.UtcNow.AddDays(-1),
+            ClaimVerifiedAt = DateTime.UtcNow.AddDays(-1)
+        };
+        _context.Players.Add(player);
+        _context.SaveChanges();
+
+        // _controller is already wired with _user (user B) in the constructor.
+        var result = await _controller.Unclaim(3001, CancellationToken.None);
+
+        result.Should().BeOfType<ObjectResult>()
+            .Which.StatusCode.Should().Be(403);
+
+        var refreshed = await _context.Players.FindAsync(3001L);
+        refreshed!.ClaimedByUserId.Should().Be(userA.Id, "non-owner must not be able to unclaim");
+    }
+
+    [Fact]
+    public async Task Delete_ByOwner_ClearsFieldsReturns204()
+    {
+        var player = new Player
+        {
+            LocalContentId = 3002,
+            Name = "OwnedByUser",
+            ClaimedByUserId = _user.Id,
+            ClaimedAt = DateTime.UtcNow.AddDays(-7),
+            ClaimVerifiedAt = DateTime.UtcNow.AddDays(-7)
+        };
+        _context.Players.Add(player);
+        _context.SaveChanges();
+
+        var result = await _controller.Unclaim(3002, CancellationToken.None);
+
+        result.Should().BeOfType<NoContentResult>();
+
+        var refreshed = await _context.Players.FindAsync(3002L);
+        refreshed!.ClaimedByUserId.Should().BeNull();
+        refreshed.ClaimedAt.Should().BeNull();
+        refreshed.ClaimVerifiedAt.Should().BeNull();
+    }
 }
