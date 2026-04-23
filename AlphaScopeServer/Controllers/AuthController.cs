@@ -68,17 +68,20 @@ namespace AlphaScopeServer.Controllers
 
         [HttpGet("discord/callback")]
         public async Task<IActionResult> CallbackDiscordOAuth(
-            [FromQuery] string code,
+            [FromQuery] string? code,
             [FromQuery] string state,
             CancellationToken ct)
         {
+            if (string.IsNullOrWhiteSpace(code))
+                return BadRequest("OAuth authorization was denied or missing.");
+
             // 1. Validate state against cookie
             if (!Request.Cookies.TryGetValue("__alpha_oauth_state", out var cookieState) || cookieState != state)
                 return BadRequest("Invalid OAuth state cookie.");
 
             Response.Cookies.Delete("__alpha_oauth_state");
 
-            if (!_stateSigner.Verify(state, out var returnTo, out _))
+            if (!_stateSigner.Verify(state, out var returnTo, out _) || !IsAllowedReturnTo(returnTo))
                 return BadRequest("Invalid OAuth state signature.");
 
             var httpClient = _httpClientFactory.CreateClient("DiscordAuth");
@@ -106,17 +109,20 @@ namespace AlphaScopeServer.Controllers
                 return StatusCode(StatusCodes.Status502BadGateway, "Invalid Discord token response.");
 
             // 3. Fetch /users/@me
-            httpClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenJson.AccessToken);
-            var meResp = await httpClient.GetAsync("users/@me", ct);
+            var meReq = new HttpRequestMessage(HttpMethod.Get, "users/@me");
+            meReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenJson.AccessToken);
+            var meResp = await httpClient.SendAsync(meReq, ct);
             if (!meResp.IsSuccessStatusCode)
                 return StatusCode(StatusCodes.Status502BadGateway, "Discord /users/@me call failed.");
             var me = await meResp.Content.ReadFromJsonAsync<DiscordUser>(cancellationToken: ct);
             if (me?.Id is null || !long.TryParse(me.Id, out var discordUserId))
                 return StatusCode(StatusCodes.Status502BadGateway, "Invalid Discord user payload.");
 
-            // 4. Fetch /users/@me/guilds for membership check
-            var guildsResp = await httpClient.GetAsync("users/@me/guilds", ct);
+            // 4. Fetch /users/@me/guilds for membership check.
+            // Guild failure is non-fatal; user gets non-member access tier until next login refreshes the flag.
+            var guildsReq = new HttpRequestMessage(HttpMethod.Get, "users/@me/guilds");
+            guildsReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tokenJson.AccessToken);
+            var guildsResp = await httpClient.SendAsync(guildsReq, ct);
             var isGuildMember = false;
             if (guildsResp.IsSuccessStatusCode)
             {

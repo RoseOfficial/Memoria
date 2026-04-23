@@ -1,30 +1,15 @@
 using System.Net;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using AlphaScopeServer.Controllers;
-using AlphaScopeServer.Data;
 using AlphaScopeServer.Services.Auth;
 using AlphaScopeServer.Tests.Infrastructure;
 using AlphaScopeServer.Tests.TestDoubles;
-using TestUtilities;
 
 namespace AlphaScopeServer.Tests.Controllers;
 
-public class AuthControllerTests : IDisposable
+public class AuthControllerTests
 {
-    private readonly AlphaScopeDbContext _context;
-
-    public AuthControllerTests()
-    {
-        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
-        _context = new AlphaScopeDbContext(options);
-        _context.Database.EnsureCreated();
-    }
-
-    public void Dispose() => _context?.Dispose();
 
     [Fact]
     public async Task StartDiscordOAuth_Redirects_WithExpectedParams()
@@ -87,7 +72,33 @@ public class AuthControllerTests : IDisposable
         resp.Headers.TryGetValues("Set-Cookie", out var cookies).Should().BeTrue();
         var alphaCookie = cookies!.First(c => c.StartsWith("__Host-alpha="));
         var apiKey = alphaCookie.Split(';')[0]["__Host-alpha=".Length..];
-        apiKey.Should().HaveLength(48); // 24 random bytes → 48 uppercase hex chars
+        apiKey.Should().HaveLength(48).And.MatchRegex("^[0-9A-F]{48}$"); // 24 random bytes → 48 uppercase hex chars
+    }
+
+    [Fact]
+    public async Task CallbackDiscordOAuth_NonGuildMember_StillRedirectsAndSetsCookie()
+    {
+        var stub = new StubDiscordHttpHandler
+        {
+            GuildsResponse = """[{"id":"SomeOtherGuild","name":"Elsewhere"}]""",
+        };
+        var oauthFactory = new AuthControllerOAuthFactory();
+        WebApplicationFactory<Program> factory = oauthFactory.WithDiscordHandler(stub);
+        var client = factory.CreateClient(new() { AllowAutoRedirect = false });
+
+        using var scope = factory.Services.CreateScope();
+        var signer = scope.ServiceProvider.GetRequiredService<OAuthStateSigner>();
+        var state = signer.Sign("https://app.example.com/me", "nonce2");
+        client.DefaultRequestHeaders.Add("Cookie", $"__alpha_oauth_state={state}");
+
+        var resp = await client.GetAsync($"/v1/auth/discord/callback?code=testcode&state={Uri.EscapeDataString(state)}");
+
+        // Non-guild member should still get a session — IsGuildMember=false is set on the
+        // row, but the callback always completes with a redirect and a cookie.
+        resp.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        resp.Headers.Location!.ToString().Should().Be("https://app.example.com/me");
+        resp.Headers.TryGetValues("Set-Cookie", out var cookies).Should().BeTrue();
+        cookies!.Should().Contain(c => c.StartsWith("__Host-alpha="));
     }
 
     [Fact]
