@@ -64,7 +64,7 @@ internal sealed class SlimMainWindow : Window
         var btnText = "Open AlphaScope on the web →";
         var btnWidth = ImGui.CalcTextSize(btnText).X + ImGui.GetStyle().FramePadding.X * 2;
         ImGui.SameLine(0, available - btnWidth);
-        if (ImGui.Button(btnText))
+        if (ImGui.Button(btnText) && !string.IsNullOrWhiteSpace(config.WebBaseUrl))
         {
             Dalamud.Utility.Util.OpenLink(WebUrls.LandingUrl(config.WebBaseUrl));
         }
@@ -215,10 +215,11 @@ internal sealed class SlimMainWindow : Window
         {
             ImGui.TextDisabled("No matches in your local cache.");
             ImGui.TextDisabled("Tip: full search across the network is on the website.");
-            if (ImGui.Button("Search on the web →"))
+            var webBase = Plugin.Instance.Configuration.WebBaseUrl;
+            if (ImGui.Button("Search on the web →") && !string.IsNullOrWhiteSpace(webBase))
             {
                 // Land on the web search page; query parameter is web app's responsibility.
-                var url = WebUrls.LandingUrl(Plugin.Instance.Configuration.WebBaseUrl) + "/search?q=" +
+                var url = WebUrls.LandingUrl(webBase) + "/search?q=" +
                     System.Uri.EscapeDataString(_searchQuery.Trim());
                 Dalamud.Utility.Util.OpenLink(url);
             }
@@ -258,9 +259,9 @@ internal sealed class SlimMainWindow : Window
         }
 
         ImGui.Spacing();
-        if (ImGui.Button("Browse my contributions on the web →"))
+        if (ImGui.Button("Browse my contributions on the web →") && !string.IsNullOrWhiteSpace(config.WebBaseUrl))
         {
-            Dalamud.Utility.Util.OpenLink(WebUrls.MeUrl(config.WebBaseUrl ?? "https://alphascope.app"));
+            Dalamud.Utility.Util.OpenLink(WebUrls.MeUrl(config.WebBaseUrl));
         }
 
         ImGui.Spacing();
