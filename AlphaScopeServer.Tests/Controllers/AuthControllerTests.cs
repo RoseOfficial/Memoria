@@ -1,10 +1,20 @@
 using System.Net;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using NSubstitute;
+using AlphaScopeServer.Controllers;
+using AlphaScopeServer.Data;
+using AlphaScopeServer.Models.Entities;
 using AlphaScopeServer.Services.Auth;
 using AlphaScopeServer.Tests.Infrastructure;
 using AlphaScopeServer.Tests.TestDoubles;
+using TestUtilities;
 
 namespace AlphaScopeServer.Tests.Controllers;
 
@@ -113,6 +123,61 @@ public class AuthControllerTests
         var resp = await client.GetAsync($"/v1/auth/discord/callback?code=testcode&state=some-other-state");
 
         resp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // Direct-controller tests for Logout — used because InMemory DB isolation between
+    // factory seed scopes and request scopes prevents the integration pattern from working.
+
+    private static AuthController BuildAuthController(HttpContext httpContext)
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        var db = new AlphaScopeDbContext(options);
+        var logger = LoggerTestUtilities.CreateMockLogger<AuthController>();
+        var discordOptions = Options.Create(new DiscordOptions
+        {
+            ClientId = "x",
+            ClientSecret = "x",
+            GuildId = "x",
+            StateSigningKey = "ZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzLWxvbmctYmFzZTY0",
+        });
+        var signer = new OAuthStateSigner("ZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzLWxvbmctYmFzZTY0");
+        var httpClientFactory = Substitute.For<IHttpClientFactory>();
+        var config = Substitute.For<IConfiguration>();
+        var controller = new AuthController(db, logger, discordOptions, signer, httpClientFactory, config)
+        {
+            ControllerContext = new ControllerContext { HttpContext = httpContext },
+        };
+        return controller;
+    }
+
+    [Fact]
+    public void Logout_WithoutUser_Returns401()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new System.IO.MemoryStream();
+        var controller = BuildAuthController(httpContext);
+        // Items["User"] is not set — simulates unauthenticated request.
+
+        var result = controller.Logout();
+
+        result.Should().BeOfType<UnauthorizedResult>();
+    }
+
+    [Fact]
+    public void Logout_WithUser_Returns204_AndDeletesCookie()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new System.IO.MemoryStream();
+        var user = new ApplicationUser { Name = "U", ApiKey = "LOGOUT-KEY", PrimaryCharacterLocalContentId = 0 };
+        httpContext.Items["User"] = user;
+        var controller = BuildAuthController(httpContext);
+
+        var result = controller.Logout();
+
+        result.Should().BeOfType<NoContentResult>();
+        // Response.Cookies.Delete appends a Set-Cookie with an expired date.
+        httpContext.Response.Headers.TryGetValue("Set-Cookie", out var setCookie).Should().BeTrue();
+        setCookie.ToString().Should().Contain("__Host-alpha=");
     }
 
     [Fact]

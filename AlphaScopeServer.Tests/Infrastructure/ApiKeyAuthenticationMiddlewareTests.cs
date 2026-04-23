@@ -61,6 +61,22 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     }
 
     [Fact]
+    public async Task InvokeAsync_ShouldRequireAuth_ForAuthLogout()
+    {
+        // Arrange
+        var context = CreateHttpContext();
+        context.Request.Path = "/v1/auth/logout";
+        context.Request.Method = "POST";
+
+        // Act
+        await _middleware.InvokeAsync(context, _dbContext);
+
+        // Assert — no api-key header → 401, _next is never called
+        await _mockNext.DidNotReceive().Invoke(Arg.Any<HttpContext>());
+        context.Response.StatusCode.Should().Be(401);
+    }
+
+    [Fact]
     public async Task InvokeAsync_ShouldReturn401WhenApiKeyHeaderMissing()
     {
         // Arrange

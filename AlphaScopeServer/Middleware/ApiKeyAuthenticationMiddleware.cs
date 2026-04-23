@@ -42,7 +42,7 @@ namespace AlphaScopeServer.Middleware
                 path.Contains("/server") && context.Request.Method == "GET" ||
                 path.Contains("/users/login") ||
                 path.Contains("/users/create-test-user") ||
-                path.Contains("/auth/") ||
+                (path.Contains("/auth/") && !path.Contains("/auth/logout")) ||
                 path.Contains("/swagger") ||
                 path.Contains("/health")))
             {

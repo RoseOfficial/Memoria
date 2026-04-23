@@ -170,6 +170,21 @@ namespace AlphaScopeServer.Controllers
             return Redirect(returnTo);
         }
 
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            if (HttpContext.Items["User"] is not ApplicationUser)
+                return Unauthorized();
+
+            Response.Cookies.Delete("__Host-alpha", new CookieOptions
+            {
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+            });
+            return NoContent();
+        }
+
         private bool IsAllowedReturnTo(string url)
         {
             var originsCsv = _configuration["Cors:AllowedOrigins"];
