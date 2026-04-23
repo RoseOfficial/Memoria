@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
@@ -169,8 +170,41 @@ internal sealed class SlimMainWindow : Window
         DrawList(items);
     }
 
-    // Stubs for subsequent tasks
-    private void DrawNotes() => ImGui.TextDisabled("Notes — implemented in Task 10.");
+    private void DrawNotes()
+    {
+        var config = Plugin.Instance.Configuration;
+        var withNotes = new HashSet<long>(
+            config.FavoritedPlayer
+                .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value.Note))
+                .Select(kvp => kvp.Key));
+
+        var items = PlayerListProvider.GetFavorites(PersistenceContext._playerCache, withNotes);
+        if (items.Count == 0)
+        {
+            ImGui.TextDisabled("No player notes yet. Open a favorite and edit its note.");
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            var favKey = (long)item.ContentId;
+            if (!config.FavoritedPlayer.TryGetValue(favKey, out var entry)) continue;
+
+            ImGui.PushID($"note-{item.ContentId}");
+            ImGui.TextUnformatted(item.Name);
+            ImGui.SameLine();
+            var worldName = item.HomeWorldId is { } wid && wid != 0 ? Utils.GetWorldName(wid) : "—";
+            ImGui.TextDisabled($"({worldName})");
+            var note = entry.Note ?? string.Empty;
+            if (ImGui.InputTextMultiline("##note", ref note, 1000, new Vector2(-1, 60)))
+            {
+                entry.Note = note;
+                config.Save();
+            }
+            ImGui.Separator();
+            ImGui.PopID();
+        }
+    }
     private void DrawSearch() => ImGui.TextDisabled("Search — implemented in Task 11.");
     private void DrawSettings() => ImGui.TextDisabled("Settings — implemented in Task 12.");
 }
