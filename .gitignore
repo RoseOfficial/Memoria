@@ -442,6 +442,7 @@ settings.json
 # Local tool settings and notes
 .claude/settings.local.json
 CLAUDE.md
+.superpowers/
 .cursor/
 .windsurf/
 .aider*
