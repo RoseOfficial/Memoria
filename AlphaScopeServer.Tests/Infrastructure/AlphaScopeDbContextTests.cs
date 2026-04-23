@@ -485,6 +485,31 @@ public class AlphaScopeDbContextTests : IDisposable
     }
 
     [Fact]
+    public void ClaimAttempt_ShouldPersist()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var user = new ApplicationUser { Name = "U", ApiKey = "k", PrimaryCharacterLocalContentId = 1 };
+        var player = new Player { LocalContentId = 100, Name = "P" };
+        ctx.Users.Add(user);
+        ctx.Players.Add(player);
+        ctx.SaveChanges();
+
+        ctx.ClaimAttempts.Add(new ClaimAttempt
+        {
+            UserId = user.Id,
+            PlayerLocalContentId = 100,
+            Code = "AS-ABCD-EFGH",
+            ExpiresAt = DateTime.UtcNow.AddHours(24),
+        });
+        ctx.SaveChanges();
+
+        ctx.ClaimAttempts.Single().Code.Should().Be("AS-ABCD-EFGH");
+    }
+
+    [Fact]
     public void Player_ShouldExposeOwnershipAndPrivacyColumns()
     {
         var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();

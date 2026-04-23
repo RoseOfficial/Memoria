@@ -51,6 +51,8 @@ namespace AlphaScopeServer.Data
         public DbSet<ApplicationUser> Users { get; set; }
         /// <summary>Links between users and their FFXIV characters</summary>
         public DbSet<UserCharacter> UserCharacters { get; set; }
+        /// <summary>Pending character-claim verifications; one row per (user, player) pair</summary>
+        public DbSet<ClaimAttempt> ClaimAttempts { get; set; }
 
         /// <summary>
         /// Configures entity relationships, constraints, and database schema.
@@ -166,6 +168,22 @@ namespace AlphaScopeServer.Data
                     .OnDelete(DeleteBehavior.Cascade);
                 entity.HasIndex(e => e.LocalContentId);
                 entity.HasIndex(e => e.UserId);
+            });
+
+            modelBuilder.Entity<ClaimAttempt>(entity =>
+            {
+                entity.HasIndex(e => new { e.UserId, e.PlayerLocalContentId }).IsUnique();
+                entity.HasIndex(e => e.ExpiresAt);
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Player)
+                      .WithMany()
+                      .HasForeignKey(e => e.PlayerLocalContentId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
         }
