@@ -61,7 +61,12 @@ internal sealed class PersistenceContext
     /// Dalamud client state service for accessing current player information
     /// </summary>
     public static IClientState _clientState = null!;
-    
+
+    /// <summary>
+    /// Dalamud player state service for accessing the local player's ContentId
+    /// </summary>
+    public static IPlayerState? _playerState;
+
     /// <summary>
     /// Service provider for dependency injection and database access
     /// </summary>
@@ -149,7 +154,7 @@ internal sealed class PersistenceContext
     /// <param name="serviceProvider">Service provider for dependency injection</param>
     /// <param name="data">Dalamud data manager service</param>
     public PersistenceContext(ILogger<PersistenceContext> logger, IClientState clientState,
-        IServiceProvider serviceProvider, IDataManager data)
+        IPlayerState playerState, IServiceProvider serviceProvider, IDataManager data)
     {
         if (_instance == null)
         {
@@ -158,6 +163,7 @@ internal sealed class PersistenceContext
 
         _logger = logger;
         _clientState = clientState;
+        _playerState = playerState;
         _serviceProvider = serviceProvider;
 
         // Force clear all static caches immediately on startup
@@ -351,7 +357,7 @@ internal sealed class PersistenceContext
     {
         var config = Plugin.Instance?.Configuration;
         var optOut = config?.OptOutContributingScans ?? false;
-        ulong selfContentId = _clientState?.LocalContentId ?? 0;
+        ulong selfContentId = _playerState?.ContentId ?? 0;
 
         foreach (var request in requests)
         {
