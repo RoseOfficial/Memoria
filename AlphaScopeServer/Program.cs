@@ -78,6 +78,40 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Strongly-typed Discord OAuth options. Fail fast at boot if any field missing.
+builder.Services.Configure<AlphaScopeServer.Services.Auth.DiscordOptions>(
+    builder.Configuration.GetSection(AlphaScopeServer.Services.Auth.DiscordOptions.Section));
+
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    var discord = builder.Configuration.GetSection(AlphaScopeServer.Services.Auth.DiscordOptions.Section)
+        .Get<AlphaScopeServer.Services.Auth.DiscordOptions>()
+        ?? throw new InvalidOperationException("Discord config section missing.");
+
+    if (string.IsNullOrWhiteSpace(discord.ClientId) ||
+        string.IsNullOrWhiteSpace(discord.ClientSecret) ||
+        string.IsNullOrWhiteSpace(discord.GuildId) ||
+        string.IsNullOrWhiteSpace(discord.StateSigningKey))
+    {
+        throw new InvalidOperationException(
+            "Discord:ClientId, Discord:ClientSecret, Discord:GuildId, Discord:StateSigningKey are all required.");
+    }
+
+    var serverBaseUrl = builder.Configuration["ServerBaseUrl"]
+        ?? throw new InvalidOperationException("ServerBaseUrl config value is required.");
+    if (string.IsNullOrWhiteSpace(serverBaseUrl))
+        throw new InvalidOperationException("ServerBaseUrl cannot be empty.");
+
+    builder.Services.AddSingleton(new AlphaScopeServer.Services.Auth.OAuthStateSigner(discord.StateSigningKey));
+}
+
+// Named HttpClient for Discord API calls. Tests override with a stubbed HttpMessageHandler.
+builder.Services.AddHttpClient("DiscordAuth", c =>
+{
+    c.BaseAddress = new Uri("https://discord.com/api/");
+    c.DefaultRequestHeaders.Add("User-Agent", "AlphaScope/1.0");
+});
+
 // Add API Explorer and Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
