@@ -264,4 +264,91 @@ public class AuthControllerTests
 
         result.Should().BeOfType<UnauthorizedResult>();
     }
+
+    [Fact]
+    public async Task RedeemLinkCode_MergesIdentity_DeletesWebUser_ReissuesCookie()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var pluginUser = new ApplicationUser { Name = "Plugin", ApiKey = "PLUGIN-KEY", GameAccountId = 12345, PrimaryCharacterLocalContentId = 100 };
+        var webUser = new ApplicationUser { Name = "WebUser", ApiKey = "WEB-KEY", DiscordUserId = 999, IsGuildMember = true, GuildMembershipCheckedAt = DateTime.UtcNow, PrimaryCharacterLocalContentId = 0 };
+        ctx.Users.AddRange(pluginUser, webUser);
+        ctx.SaveChanges();
+
+        var code = ClaimCodeGenerator.GenerateLinkCode();
+        ctx.AccountLinkCodes.Add(new AccountLinkCode
+        {
+            ApplicationUserId = pluginUser.Id,
+            Code = code,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(15),
+        });
+        ctx.SaveChanges();
+
+        var controller = CreateAuthController(ctx);
+        controller.ControllerContext.HttpContext.Items["User"] = webUser;
+
+        var result = await controller.RedeemLinkCode(new LinkRedeemRequest(code), CancellationToken.None);
+
+        result.Should().BeOfType<OkObjectResult>();
+
+        // Cookie reissued with pluginUser's ApiKey
+        var setCookieValues = controller.Response.Headers["Set-Cookie"].ToString();
+        setCookieValues.Should().Contain("__Host-alpha=PLUGIN-KEY");
+
+        // DB state
+        ctx.Users.Should().HaveCount(1); // webUser deleted
+        var merged = ctx.Users.Single();
+        merged.Id.Should().Be(pluginUser.Id);
+        merged.DiscordUserId.Should().Be(999);
+        merged.IsGuildMember.Should().BeTrue();
+        ctx.AccountLinkCodes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RedeemLinkCode_Expired_Returns410()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var pluginUser = new ApplicationUser { Name = "Plugin", ApiKey = "PK2", GameAccountId = 1, PrimaryCharacterLocalContentId = 0 };
+        var webUser = new ApplicationUser { Name = "Web", ApiKey = "WK2", DiscordUserId = 888, PrimaryCharacterLocalContentId = 0 };
+        ctx.Users.AddRange(pluginUser, webUser);
+        ctx.SaveChanges();
+
+        ctx.AccountLinkCodes.Add(new AccountLinkCode { ApplicationUserId = pluginUser.Id, Code = "AL-OLD-CODE", ExpiresAt = DateTime.UtcNow.AddMinutes(-1) });
+        ctx.SaveChanges();
+
+        var controller = CreateAuthController(ctx);
+        controller.ControllerContext.HttpContext.Items["User"] = webUser;
+
+        var result = await controller.RedeemLinkCode(new LinkRedeemRequest("AL-OLD-CODE"), CancellationToken.None);
+
+        result.Should().BeOfType<ObjectResult>().Which.StatusCode.Should().Be(410);
+    }
+
+    [Fact]
+    public async Task RedeemLinkCode_AlreadyLinked_Returns409()
+    {
+        var options = DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>();
+        using var ctx = new AlphaScopeDbContext(options);
+        ctx.Database.EnsureCreated();
+
+        var pluginUser = new ApplicationUser { Name = "Plugin", ApiKey = "PK3", GameAccountId = 2, DiscordUserId = 42, PrimaryCharacterLocalContentId = 0 };
+        var webUser = new ApplicationUser { Name = "Web", ApiKey = "WK3", DiscordUserId = 777, PrimaryCharacterLocalContentId = 0 };
+        ctx.Users.AddRange(pluginUser, webUser);
+        ctx.SaveChanges();
+
+        ctx.AccountLinkCodes.Add(new AccountLinkCode { ApplicationUserId = pluginUser.Id, Code = "AL-BUSY-CODE", ExpiresAt = DateTime.UtcNow.AddMinutes(10) });
+        ctx.SaveChanges();
+
+        var controller = CreateAuthController(ctx);
+        controller.ControllerContext.HttpContext.Items["User"] = webUser;
+
+        var result = await controller.RedeemLinkCode(new LinkRedeemRequest("AL-BUSY-CODE"), CancellationToken.None);
+
+        result.Should().BeOfType<ConflictObjectResult>();
+    }
 }

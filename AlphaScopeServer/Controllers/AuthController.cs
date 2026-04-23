@@ -189,6 +189,59 @@ namespace AlphaScopeServer.Controllers
             return Ok(new AlphaScopeServer.Models.DTOs.LinkGenerateResponse(code, row.ExpiresAt));
         }
 
+        [HttpPost("link/redeem")]
+        public async Task<IActionResult> RedeemLinkCode([FromBody] AlphaScopeServer.Models.DTOs.LinkRedeemRequest request, CancellationToken ct)
+        {
+            if (HttpContext.Items["User"] is not ApplicationUser webUser)
+                return Unauthorized();
+
+            if (webUser.DiscordUserId is null)
+                return StatusCode(StatusCodes.Status403Forbidden, "Only Discord-authenticated users may redeem link codes.");
+
+            var code = await _context.AccountLinkCodes.FirstOrDefaultAsync(c => c.Code == request.code, ct);
+            if (code is null)
+                return NotFound();
+
+            if (code.ExpiresAt < DateTime.UtcNow)
+            {
+                _context.AccountLinkCodes.Remove(code);
+                await _context.SaveChangesAsync(ct);
+                return StatusCode(StatusCodes.Status410Gone, "Link code expired.");
+            }
+
+            var pluginUser = await _context.Users.FirstOrDefaultAsync(u => u.Id == code.ApplicationUserId, ct);
+            if (pluginUser is null)
+                return NotFound();
+
+            if (pluginUser.DiscordUserId is not null)
+                return Conflict("This plugin install is already linked to a Discord account.");
+
+            // Merge Discord identity onto the plugin user
+            pluginUser.DiscordUserId = webUser.DiscordUserId;
+            pluginUser.IsGuildMember = webUser.IsGuildMember;
+            pluginUser.GuildMembershipCheckedAt = webUser.GuildMembershipCheckedAt;
+
+            // Reassign any players claimed by the web user to the plugin user
+            var ownedByWeb = await _context.Players.Where(p => p.ClaimedByUserId == webUser.Id).ToListAsync(ct);
+            foreach (var p in ownedByWeb) p.ClaimedByUserId = pluginUser.Id;
+
+            _context.Users.Remove(webUser);
+            _context.AccountLinkCodes.Remove(code);
+            await _context.SaveChangesAsync(ct);
+
+            // Reissue the session cookie pointing at the plugin user's API key
+            Response.Cookies.Append("__Host-alpha", pluginUser.ApiKey, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                MaxAge = TimeSpan.FromDays(30),
+            });
+
+            return Ok(new { Linked = true });
+        }
+
         [HttpPost("logout")]
         public IActionResult Logout()
         {
