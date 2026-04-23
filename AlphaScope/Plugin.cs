@@ -533,6 +533,21 @@ public sealed class Plugin : IDalamudPlugin
             Log.Information("Configuration migration to version 2 completed");
         }
         
+        // Migrate from version 3 to version 4: Add WebBaseUrl and opt-out settings
+        if (Configuration.Version == 3)
+        {
+            Log.Information("Migrating configuration from version 3 to version 4");
+
+            // No data shape changes; just initializing new fields with defaults.
+            Configuration.WebBaseUrl = "https://alphascope.app";
+            Configuration.OptOutInGamePopups = false;
+            Configuration.OptOutContributingScans = false;
+            Configuration.Version = 4;
+            needsSave = true;
+
+            Log.Information("Configuration migration to version 4 completed");
+        }
+
         // Save configuration if any changes were made
         if (needsSave)
         {

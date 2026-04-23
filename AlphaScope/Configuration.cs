@@ -39,8 +39,9 @@ namespace AlphaScope
         /// <summary>
         /// Configuration version for handling config schema updates.
         /// Version 3: Added encrypted API key storage and security enhancements.
+        /// Version 4: Added WebBaseUrl and opt-out settings.
         /// </summary>
-        public int Version { get; set; } = 3;
+        public int Version { get; set; } = 4;
         
         /// <summary>
         /// Base URL for the AlphaScopeServer API endpoint. Default points at the production
@@ -193,6 +194,24 @@ namespace AlphaScope
         /// Refresh interval in milliseconds for scanning nearby players (default: 5 seconds)
         /// </summary>
         public int ObjectTableRefreshInterval { get; set; } = 5_000;
+
+        /// <summary>
+        /// Base URL of the AlphaScope web app. Override for dev/staging.
+        /// </summary>
+        public string WebBaseUrl { get; set; } = "https://alphascope.app";
+
+        /// <summary>
+        /// Suppress in-game pop-ups (notifications + auto-opening of the micro-card on right-click).
+        /// The right-click context menu entry remains; the user just has to click it.
+        /// </summary>
+        public bool OptOutInGamePopups { get; set; } = false;
+
+        /// <summary>
+        /// When true, the plugin still scans for the local user's data but suppresses upload of
+        /// scans of OTHER characters. Lets a user run the plugin for personal scans without
+        /// contributing to the network.
+        /// </summary>
+        public bool OptOutContributingScans { get; set; } = false;
 
         // ========== LODESTONE REFRESH SERVICE SETTINGS ==========
         
