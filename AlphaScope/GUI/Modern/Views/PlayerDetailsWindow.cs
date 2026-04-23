@@ -405,11 +405,10 @@ public class PlayerDetailsWindow : BaseModernWindow
         List<MountInfo>? mounts = null;
         DateTime? lastMountsDataUpdate = null;
 
-        // Try to get fresh player data from cache first
+        // Try to get fresh player data from cache first. This runs on every ImGui draw pass
+        // while the Collections tab is visible — keep it silent; warn only on parse failure.
         if (PersistenceContext._playerCache.TryGetValue(_contentId, out var freshPlayerData))
         {
-            Plugin.Log.Information($"[CollectionsTab Debug] Found cached player data for {_contentId}");
-            
             // Parse minion data
             if (!string.IsNullOrEmpty(freshPlayerData.LodestoneMinionsData))
             {
@@ -417,14 +416,13 @@ public class PlayerDetailsWindow : BaseModernWindow
                 {
                     minions = JsonSerializer.Deserialize<List<MinionInfo>>(freshPlayerData.LodestoneMinionsData);
                     lastMinionsDataUpdate = freshPlayerData.LastMinionsDataUpdate;
-                    Plugin.Log.Information($"[CollectionsTab Debug] Successfully deserialized {minions?.Count ?? 0} minions for player {_contentId}");
                 }
                 catch (JsonException ex)
                 {
                     Plugin.Log.Warning($"Failed to parse minion data for player {_contentId}: {ex.Message}");
                 }
             }
-            
+
             // Parse mount data
             if (!string.IsNullOrEmpty(freshPlayerData.LodestoneMountsData))
             {
@@ -432,7 +430,6 @@ public class PlayerDetailsWindow : BaseModernWindow
                 {
                     mounts = JsonSerializer.Deserialize<List<MountInfo>>(freshPlayerData.LodestoneMountsData);
                     lastMountsDataUpdate = freshPlayerData.LastMountsDataUpdate;
-                    Plugin.Log.Information($"[CollectionsTab Debug] Successfully deserialized {mounts?.Count ?? 0} mounts for player {_contentId}");
                 }
                 catch (JsonException ex)
                 {
