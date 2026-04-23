@@ -206,6 +206,14 @@ namespace AlphaScope
         /// </summary>
         public bool OptOutInGamePopups { get; set; } = false;
 
+        /// <summary>
+        /// Running total of player-scan uploads this user has successfully contributed to the
+        /// AlphaScope network over the lifetime of the plugin install. Incremented on each
+        /// successful upload batch by the batch size. Starts at 0 on fresh install or after a
+        /// config reset; cannot be back-filled from server history.
+        /// </summary>
+        public long TotalContributions { get; set; } = 0;
+
         // ========== LODESTONE REFRESH SERVICE SETTINGS ==========
         
         /// <summary>

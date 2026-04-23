@@ -260,8 +260,11 @@ internal sealed class SlimMainWindow : Window
     private static void DrawUploadStatus()
     {
         ImGui.TextDisabled("Upload status");
+        var config = Plugin.Instance.Configuration;
         var queued = PersistenceContext._UploadPlayers.Count;
         var lastUpload = PersistenceContext.LastSuccessfulUploadAt;
+
+        ImGui.TextUnformatted($"Lifetime contributions: {config.TotalContributions:N0}");
 
         if (queued == 0 && lastUpload is null)
         {

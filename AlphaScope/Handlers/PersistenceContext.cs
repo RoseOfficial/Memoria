@@ -448,6 +448,12 @@ internal sealed class PersistenceContext
                 // Drop successfully-uploaded entries from the durable outbox.
                 _outbox?.Remove(uploadedKeys);
                 LastSuccessfulUploadAt = DateTime.UtcNow;
+                var config = Plugin.Instance?.Configuration;
+                if (config is not null)
+                {
+                    config.TotalContributions += itemsToUpload.Count;
+                    config.Save();
+                }
                 uploadSuccess = true;
             }
             else if (uploadResult.AuthenticationFailure)
