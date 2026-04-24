@@ -61,4 +61,60 @@ public class TakedownsController : ControllerBase
 
         return Accepted();
     }
+
+    [HttpGet]
+    public async Task<IActionResult> List([FromQuery] string status = "pending")
+    {
+        var isAdmin = (bool)(HttpContext.Items["IsAdmin"] ?? false);
+        if (!isAdmin) return NotFound();
+
+        if (!Enum.TryParse<TakedownStatus>(status, ignoreCase: true, out var parsed))
+            return BadRequest("invalid status");
+
+        var items = await _context.TakedownRequests
+            .Where(t => t.Status == parsed)
+            .OrderBy(t => t.SubmittedAt)
+            .Select(t => new TakedownListItem(
+                t.Id, t.WorldSlug, t.NameSlug, t.ResolvedPlayerLocalContentId,
+                t.Reason, t.ContactEmail, t.SubmittedAt, t.Status.ToString()))
+            .ToListAsync();
+
+        return Ok(items);
+    }
+
+    [HttpPatch("{id}")]
+    public async Task<IActionResult> Act(int id, [FromBody] TakedownActionRequest body)
+    {
+        var isAdmin = (bool)(HttpContext.Items["IsAdmin"] ?? false);
+        var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
+        if (!isAdmin || viewerUserId is null) return NotFound();
+
+        var row = await _context.TakedownRequests.FindAsync(id);
+        if (row is null) return NotFound();
+        if (row.Status != TakedownStatus.Pending) return Conflict("already resolved");
+
+        row.ResolvedByUserId = viewerUserId.Value;
+        row.ResolvedAt = DateTime.UtcNow;
+        row.ResolutionNotes = body.Notes;
+
+        switch (body.Action?.ToLowerInvariant())
+        {
+            case "approve":
+                row.Status = TakedownStatus.Resolved;
+                if (row.ResolvedPlayerLocalContentId is long pid)
+                {
+                    var player = await _context.Players.FindAsync(pid);
+                    if (player != null) player.HideEntirely = true;
+                }
+                break;
+            case "reject":
+                row.Status = TakedownStatus.Rejected;
+                break;
+            default:
+                return BadRequest("action must be 'approve' or 'reject'");
+        }
+
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
 }

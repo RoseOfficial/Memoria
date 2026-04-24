@@ -62,4 +62,55 @@ public class TakedownsControllerTests
 
         ctx.TakedownRequests.First().ResolvedPlayerLocalContentId.Should().Be(42);
     }
+
+    [Fact]
+    public async Task List_NonAdmin_Returns404()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var c = MakeController(ctx);
+        c.HttpContext.Items["IsAdmin"] = false;
+        var result = await c.List("pending");
+        result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task List_Admin_ReturnsPendingOrdered()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        ctx.TakedownRequests.AddRange(
+            new TakedownRequest { WorldSlug = "a", NameSlug = "b", Reason = "r", ContactEmail = "e@e", SubmitterIpHash = "h",
+                SubmittedAt = DateTime.UtcNow.AddHours(-1), Status = TakedownStatus.Pending },
+            new TakedownRequest { WorldSlug = "a", NameSlug = "c", Reason = "r", ContactEmail = "e@e", SubmitterIpHash = "h",
+                SubmittedAt = DateTime.UtcNow, Status = TakedownStatus.Pending });
+        await ctx.SaveChangesAsync();
+
+        var c = MakeController(ctx);
+        c.HttpContext.Items["IsAdmin"] = true;
+        c.HttpContext.Items["ViewerUserId"] = 1;
+        var result = await c.List("pending");
+        var list = ((OkObjectResult)result).Value.Should().BeAssignableTo<IEnumerable<TakedownListItem>>().Subject.ToList();
+        list.Should().HaveCount(2);
+        list[0].NameSlug.Should().Be("b"); // older first
+    }
+
+    [Fact]
+    public async Task Act_Approve_FlipsHideEntirelyAndResolves()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        ctx.Users.Add(new ApplicationUser { Id = 9, ApiKey = "x", DiscordUserId = 1 });
+        ctx.Players.Add(new Player { LocalContentId = 50, Name = "Tataru Taru", HomeWorldId = 91 });
+        var td = new TakedownRequest { WorldSlug = "balmung", NameSlug = "tataru-taru", Reason = "r", ContactEmail = "e@e",
+            SubmitterIpHash = "h", ResolvedPlayerLocalContentId = 50, Status = TakedownStatus.Pending };
+        ctx.TakedownRequests.Add(td);
+        await ctx.SaveChangesAsync();
+
+        var c = MakeController(ctx);
+        c.HttpContext.Items["IsAdmin"] = true;
+        c.HttpContext.Items["ViewerUserId"] = 9;
+        var result = await c.Act(td.Id, new TakedownActionRequest("approve", null));
+
+        result.Should().BeOfType<NoContentResult>();
+        (await ctx.Players.FindAsync(50L))!.HideEntirely.Should().BeTrue();
+        (await ctx.TakedownRequests.FindAsync(td.Id))!.Status.Should().Be(TakedownStatus.Resolved);
+    }
 }
