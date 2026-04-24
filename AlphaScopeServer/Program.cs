@@ -83,6 +83,10 @@ builder.Services.AddCors(options =>
 builder.Services.Configure<AlphaScopeServer.Services.Auth.DiscordOptions>(
     builder.Configuration.GetSection(AlphaScopeServer.Services.Auth.DiscordOptions.Section));
 
+// Admin Discord user allowlist.
+builder.Services.Configure<AlphaScopeServer.Services.Admin.AdminOptions>(
+    builder.Configuration.GetSection(AlphaScopeServer.Services.Admin.AdminOptions.SectionName));
+
 if (!builder.Environment.IsEnvironment("Testing"))
 {
     var discord = builder.Configuration.GetSection(AlphaScopeServer.Services.Auth.DiscordOptions.Section)
