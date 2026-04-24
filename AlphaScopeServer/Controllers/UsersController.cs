@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.DTOs;
 using AlphaScopeServer.Models.Entities;
+using AlphaScopeServer.Services.World;
 using System.Security.Cryptography;
 
 namespace AlphaScopeServer.Controllers
@@ -335,6 +336,42 @@ namespace AlphaScopeServer.Controllers
                 Lifetime: user.TotalContributions,
                 Recent: Array.Empty<RecentContribution>());
             return Ok(response);
+        }
+
+        [HttpGet("me/characters")]
+        public async Task<IActionResult> GetCharacters()
+        {
+            var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
+            if (viewerUserId is null) return Unauthorized();
+
+            var rows = await _context.Players
+                .Where(p => p.ClaimedByUserId == viewerUserId.Value)
+                .Select(p => new {
+                    LocalContentId = p.LocalContentId,
+                    Name = p.Name,
+                    HomeWorldId = p.HomeWorldId,
+                    AvatarUrl = p.AvatarLink,
+                    HideAlts = p.HideAlts,
+                    HideEncounters = p.HideEncounters,
+                    HideEntirely = p.HideEntirely,
+                    ClaimedAt = p.ClaimedAt,
+                })
+                .ToListAsync();
+
+            // Project world name in memory — WorldNames.Resolve is not EF-translatable
+            var items = rows.Select(p => new {
+                localContentId = p.LocalContentId,
+                name = p.Name,
+                worldSlug = p.HomeWorldId.HasValue ? WorldNames.ToSlug(WorldNames.Resolve(p.HomeWorldId) ?? "unknown") : "unknown",
+                worldName = p.HomeWorldId.HasValue ? WorldNames.Resolve(p.HomeWorldId) ?? "Unknown" : "Unknown",
+                avatarUrl = p.AvatarUrl,
+                hideAlts = p.HideAlts,
+                hideEncounters = p.HideEncounters,
+                hideEntirely = p.HideEntirely,
+                claimedAt = p.ClaimedAt,
+            }).ToList();
+
+            return Ok(items);
         }
 
         private static string GenerateApiKey()
