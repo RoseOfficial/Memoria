@@ -41,10 +41,15 @@ namespace AlphaScopeServer.Middleware
             if (path != null && (
                 path.Contains("/server") && context.Request.Method == "GET" ||
                 path.Contains("/users/login") ||
-                path.Contains("/users/create-test-user") ||
                 (path.Contains("/auth/") && !path.Contains("/auth/logout")) ||
                 path.Contains("/swagger") ||
-                path.Contains("/health")))
+                path.Contains("/health") ||
+                // Plan 0c public-read endpoints used by the anonymous web surface.
+                // by-slug and recent return tier-filtered content; takedowns/POST is the
+                // public submission form. Tier/admin gating happens downstream in each controller.
+                (path.Contains("/players/recent") && context.Request.Method == "GET") ||
+                (path.Contains("/players/by-slug") && context.Request.Method == "GET") ||
+                (path.EndsWith("/takedowns") && context.Request.Method == "POST")))
             {
                 await _next(context);
                 return;

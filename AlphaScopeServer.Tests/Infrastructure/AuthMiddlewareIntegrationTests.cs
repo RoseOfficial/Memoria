@@ -43,13 +43,13 @@ public class AuthMiddlewareIntegrationTests : IClassFixture<TestAppFactory>
     }
 
     [Fact]
-    public async Task AuthPaths_AreReachableWithoutApiKey()
+    public async Task PublicReadPaths_AreReachableWithoutApiKey()
     {
         using var client = _factory.CreateClient();
-        // /users/create-test-user must be reachable so the plugin can self-register.
-        var response = await client.PostAsJsonAsync("/v1/users/create-test-user", new { Name = "probe" });
-        // 401 would mean the middleware blocked it (bug). Anything else (400, 404, 500, 200) means
-        // the middleware let it through and the downstream controller handled it on its own terms.
+        // Plan 0c public-read endpoints must be reachable to anon visitors.
+        var response = await client.GetAsync("/v1/players/recent");
+        // 401 would mean the middleware blocked it (bug). Anything else (200, 500) means
+        // the middleware let it through and the downstream controller handled it.
         response.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
     }
 }

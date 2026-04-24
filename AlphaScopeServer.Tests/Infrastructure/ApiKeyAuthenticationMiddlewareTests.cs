@@ -39,18 +39,20 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     }
 
     [Theory]
-    [InlineData("/server")]
-    [InlineData("/users/login")]
-    [InlineData("/users/create-test-user")]
-    [InlineData("/auth/callback")]
-    [InlineData("/swagger")]
-    [InlineData("/health")]
-    public async Task InvokeAsync_ShouldSkipAuthenticationForExemptPaths(string path)
+    [InlineData("/server", "GET")]
+    [InlineData("/users/login", "POST")]
+    [InlineData("/auth/callback", "GET")]
+    [InlineData("/swagger", "GET")]
+    [InlineData("/health", "GET")]
+    [InlineData("/v1/players/recent", "GET")]
+    [InlineData("/v1/players/by-slug", "GET")]
+    [InlineData("/v1/takedowns", "POST")]
+    public async Task InvokeAsync_ShouldSkipAuthenticationForExemptPaths(string path, string method)
     {
         // Arrange
         var context = CreateHttpContext();
         context.Request.Path = path;
-        context.Request.Method = "GET";
+        context.Request.Method = method;
 
         // Act
         await _middleware.InvokeAsync(context, _dbContext);
