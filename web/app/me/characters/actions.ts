@@ -39,3 +39,23 @@ export async function verifyClaim(playerId: number): Promise<{ ok: true } | { er
   const body = await res.json().catch(() => ({}))
   return { error: body.error ?? `Verify failed (${res.status})`, attemptsLeft: body.attemptsLeft }
 }
+
+export async function setPrivacy(playerId: number, field: 'hideAlts' | 'hideEncounters' | 'hideEntirely', value: boolean): Promise<{ ok: true } | { error: string }> {
+  const body: Record<string, boolean> = {}
+  body[field] = value
+  const res = await apiFetch(`/v1/players/${playerId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) return { error: `Update failed (${res.status})` }
+  revalidatePath('/me/characters')
+  return { ok: true }
+}
+
+export async function unclaim(playerId: number): Promise<{ ok: true } | { error: string }> {
+  const res = await apiFetch(`/v1/players/${playerId}/claim`, { method: 'DELETE' })
+  if (!res.ok) return { error: `Unclaim failed (${res.status})` }
+  revalidatePath('/me/characters')
+  return { ok: true }
+}

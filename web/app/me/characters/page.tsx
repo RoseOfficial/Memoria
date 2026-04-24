@@ -2,6 +2,7 @@ import { apiFetchJson } from '../../../lib/api'
 import { toSlug } from '../../../lib/slug'
 import Link from 'next/link'
 import { AddCharacterButton } from './CharactersClient'
+import { PrivacyToggles } from './PrivacyToggles'
 
 type CharacterRow = {
   localContentId: number
@@ -41,11 +42,12 @@ export default async function CharactersPage() {
                 </Link>
                 <p className="text-sm text-[var(--color-text-muted)]">{c.worldName}</p>
               </div>
-              <div className="text-sm text-[var(--color-text-dim)]">
-                {c.hideAlts && <span className="mr-2">hide alts</span>}
-                {c.hideEncounters && <span className="mr-2">hide encounters</span>}
-                {c.hideEntirely && <span className="mr-2">HIDDEN</span>}
-              </div>
+              <PrivacyToggles
+                playerId={c.localContentId}
+                hideAlts={c.hideAlts}
+                hideEncounters={c.hideEncounters}
+                hideEntirely={c.hideEntirely}
+              />
             </div>
           ))}
         </div>
