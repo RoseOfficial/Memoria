@@ -4,6 +4,8 @@ import type { PlayerProfileResponse } from '../../../../lib/types'
 import { ProfileHeaderCard } from '../../../../components/profile/ProfileHeader'
 import { JobsSection } from '../../../../components/profile/JobsSection'
 import { CustomizationSection } from '../../../../components/profile/CustomizationSection'
+import { MountsSection } from '../../../../components/profile/MountsSection'
+import { MinionsSection } from '../../../../components/profile/MinionsSection'
 
 export default async function ProfilePage({ params }: { params: Promise<{ world: string; name: string }> }) {
   const { world, name } = await params
@@ -27,6 +29,8 @@ export default async function ProfilePage({ params }: { params: Promise<{ world:
       <div className="grid md:grid-cols-2 gap-1 bg-[var(--color-bg-elevated)]">
         <JobsSection data={profile.jobs} />
         {profile.customization && <CustomizationSection data={profile.customization} />}
+        {profile.mounts && <MountsSection data={profile.mounts} />}
+        {profile.minions && <MinionsSection data={profile.minions} />}
       </div>
     </main>
   )
