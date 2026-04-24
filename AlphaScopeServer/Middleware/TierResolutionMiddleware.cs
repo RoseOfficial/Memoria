@@ -10,9 +10,8 @@ namespace AlphaScopeServer.Middleware
     /// Classifies the current request's viewer tier. Runs after ApiKeyAuthenticationMiddleware
     /// so context.Items["User"] is already populated.
     ///
-    /// In Plan 0a this is a stub that returns Tier 1 for every request regardless of auth state,
-    /// because no downstream code consumes Tier yet. The branching shape is complete and tested
-    /// so Plan 0c only flips the one literal `ctx.Items["Tier"] = 1` to `tier` below.
+    /// Plan 0c flipped the one literal `ctx.Items["Tier"] = 1` to use the computed tier, so
+    /// guild-member viewers receive Tier 2 content end-to-end.
     /// </summary>
     public class TierResolutionMiddleware
     {
@@ -41,14 +40,8 @@ namespace AlphaScopeServer.Middleware
                 tier = 1;
             }
 
-            // NOTE (Plan 0a stub): Tier is unconditionally 1. Plan 0c replaces the literal below
-            // with `tier` when the web app starts consuming it.
-            ctx.Items["Tier"] = 1;
+            ctx.Items["Tier"] = tier;
             ctx.Items["ViewerUserId"] = user?.Id;
-
-            // Silence "unused" warning on `tier` — the branching must exist and be tested,
-            // but the variable isn't written back to ctx.Items until Plan 0c flips the stub.
-            _ = tier;
 
             bool isAdmin = false;
             if (user?.DiscordUserId is { } did)
