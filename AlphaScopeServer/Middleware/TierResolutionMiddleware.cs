@@ -1,5 +1,8 @@
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.Entities;
+using AlphaScopeServer.Services.Admin;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace AlphaScopeServer.Middleware
 {
@@ -46,6 +49,14 @@ namespace AlphaScopeServer.Middleware
             // Silence "unused" warning on `tier` — the branching must exist and be tested,
             // but the variable isn't written back to ctx.Items until Plan 0c flips the stub.
             _ = tier;
+
+            bool isAdmin = false;
+            if (user?.DiscordUserId is { } did)
+            {
+                var adminOptions = ctx.RequestServices.GetService<IOptions<AdminOptions>>()?.Value;
+                isAdmin = adminOptions?.DiscordUserIds.Contains(did) ?? false;
+            }
+            ctx.Items["IsAdmin"] = isAdmin;
 
             await _next(ctx);
         }

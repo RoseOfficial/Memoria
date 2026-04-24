@@ -1,10 +1,13 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Middleware;
 using AlphaScopeServer.Models.Entities;
+using AlphaScopeServer.Services.Admin;
 using TestUtilities;
 
 namespace AlphaScopeServer.Tests.Infrastructure;
@@ -76,5 +79,57 @@ public class TierResolutionMiddlewareTests : IDisposable
         var user = new ApplicationUser { Name = "U", ApiKey = "k", IsGuildMember = true, GuildMembershipCheckedAt = DateTime.UtcNow, PrimaryCharacterLocalContentId = 0 };
         var result = await TierResolutionMiddleware.IsGuildMemberFresh(user, _db);
         result.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Middleware_SetsIsAdminTrue_WhenUserInAllowlist()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var user = new ApplicationUser { Id = 1, ApiKey = "x", DiscordUserId = 12345 };
+        ctx.Users.Add(user);
+        await ctx.SaveChangesAsync();
+
+        var options = Options.Create(new AdminOptions { DiscordUserIds = new() { 12345 } });
+        var http = new DefaultHttpContext();
+        http.Items["User"] = user;
+        http.RequestServices = new ServiceCollection().AddSingleton(options).BuildServiceProvider();
+
+        var middleware = new TierResolutionMiddleware(next: (_) => Task.CompletedTask);
+        await middleware.InvokeAsync(http, ctx);
+
+        http.Items["IsAdmin"].Should().Be(true);
+    }
+
+    [Fact]
+    public async Task Middleware_SetsIsAdminFalse_WhenUserNotInAllowlist()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var user = new ApplicationUser { Id = 1, ApiKey = "x", DiscordUserId = 99 };
+        ctx.Users.Add(user);
+        await ctx.SaveChangesAsync();
+
+        var options = Options.Create(new AdminOptions { DiscordUserIds = new() { 12345 } });
+        var http = new DefaultHttpContext();
+        http.Items["User"] = user;
+        http.RequestServices = new ServiceCollection().AddSingleton(options).BuildServiceProvider();
+
+        var middleware = new TierResolutionMiddleware((_) => Task.CompletedTask);
+        await middleware.InvokeAsync(http, ctx);
+
+        http.Items["IsAdmin"].Should().Be(false);
+    }
+
+    [Fact]
+    public async Task Middleware_SetsIsAdminFalse_WhenAnonymous()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var options = Options.Create(new AdminOptions { DiscordUserIds = new() { 12345 } });
+        var http = new DefaultHttpContext();
+        http.RequestServices = new ServiceCollection().AddSingleton(options).BuildServiceProvider();
+
+        var middleware = new TierResolutionMiddleware((_) => Task.CompletedTask);
+        await middleware.InvokeAsync(http, ctx);
+
+        http.Items["IsAdmin"].Should().Be(false);
     }
 }
