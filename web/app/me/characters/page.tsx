@@ -1,6 +1,7 @@
 import { apiFetchJson } from '../../../lib/api'
 import { toSlug } from '../../../lib/slug'
 import Link from 'next/link'
+import { AddCharacterButton } from './CharactersClient'
 
 type CharacterRow = {
   localContentId: number
@@ -21,7 +22,7 @@ export default async function CharactersPage() {
     <main className="max-w-4xl mx-auto px-8 py-12 space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl">Your characters</h1>
-        {/* Add Character button wired in Task 41 */}
+        <AddCharacterButton />
       </div>
 
       {characters.length === 0 ? (
