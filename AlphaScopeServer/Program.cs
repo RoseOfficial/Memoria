@@ -12,6 +12,8 @@ builder.Services.AddControllers()
     {
         options.SerializerSettings.NullValueHandling = NullValueHandling.Ignore;
         options.SerializerSettings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
+        options.SerializerSettings.ContractResolver =
+            new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
     });
 
 // Configure Entity Framework. In the Testing environment the test harness registers
