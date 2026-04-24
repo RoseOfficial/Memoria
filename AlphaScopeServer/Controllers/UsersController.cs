@@ -311,6 +311,15 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
+        [HttpGet("me/admin")]
+        public Task<IActionResult> GetAdminFlag()
+        {
+            var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
+            if (viewerUserId is null) return Task.FromResult<IActionResult>(Unauthorized());
+            var isAdmin = (bool)(HttpContext.Items["IsAdmin"] ?? false);
+            return Task.FromResult<IActionResult>(Ok(new { IsAdmin = isAdmin }));
+        }
+
         [HttpGet("me/contributions")]
         public async Task<IActionResult> GetContributions()
         {
