@@ -55,6 +55,8 @@ namespace AlphaScopeServer.Data
         public DbSet<ClaimAttempt> ClaimAttempts { get; set; }
         /// <summary>One-time short-TTL codes used to link plugin accounts to web identities</summary>
         public DbSet<AccountLinkCode> AccountLinkCodes { get; set; }
+        /// <summary>Privacy takedown requests submitted by players or third parties</summary>
+        public DbSet<TakedownRequest> TakedownRequests { get; set; } = null!;
 
         /// <summary>
         /// Configures entity relationships, constraints, and database schema.
@@ -198,6 +200,24 @@ namespace AlphaScopeServer.Data
                       .WithMany()
                       .HasForeignKey(e => e.ApplicationUserId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<TakedownRequest>(entity =>
+            {
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => new { e.WorldSlug, e.NameSlug });
+                entity.HasIndex(e => e.SubmittedAt);
+                entity.HasIndex(e => e.SubmitterIpHash);
+
+                entity.HasOne(e => e.ResolvedPlayer)
+                    .WithMany()
+                    .HasForeignKey(e => e.ResolvedPlayerLocalContentId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.ResolvedByUser)
+                    .WithMany()
+                    .HasForeignKey(e => e.ResolvedByUserId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
         }
