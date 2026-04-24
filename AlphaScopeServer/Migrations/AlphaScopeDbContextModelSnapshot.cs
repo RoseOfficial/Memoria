@@ -498,6 +498,75 @@ namespace AlphaScopeServer.Migrations
                     b.ToTable("PlayerWorldHistory");
                 });
 
+            modelBuilder.Entity("AlphaScopeServer.Models.Entities.TakedownRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContactEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("NameSlug")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ResolutionNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ResolvedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ResolvedPlayerLocalContentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SubmitterIpHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("WorldSlug")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ResolvedByUserId");
+
+                    b.HasIndex("ResolvedPlayerLocalContentId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SubmittedAt");
+
+                    b.HasIndex("SubmitterIpHash");
+
+                    b.HasIndex("WorldSlug", "NameSlug");
+
+                    b.ToTable("TakedownRequests");
+                });
+
             modelBuilder.Entity("AlphaScopeServer.Models.Entities.UserCharacter", b =>
                 {
                     b.Property<int>("Id")
@@ -658,6 +727,23 @@ namespace AlphaScopeServer.Migrations
                         .IsRequired();
 
                     b.Navigation("Player");
+                });
+
+            modelBuilder.Entity("AlphaScopeServer.Models.Entities.TakedownRequest", b =>
+                {
+                    b.HasOne("AlphaScopeServer.Models.Entities.ApplicationUser", "ResolvedByUser")
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("AlphaScopeServer.Models.Entities.Player", "ResolvedPlayer")
+                        .WithMany()
+                        .HasForeignKey("ResolvedPlayerLocalContentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ResolvedByUser");
+
+                    b.Navigation("ResolvedPlayer");
                 });
 
             modelBuilder.Entity("AlphaScopeServer.Models.Entities.UserCharacter", b =>
