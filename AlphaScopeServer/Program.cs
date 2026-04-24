@@ -55,29 +55,30 @@ builder.Services.AddSingleton<AlphaScopeServer.Services.Takedowns.TakedownRateLi
 
 // Configure CORS. No wildcard origins — the Dalamud plugin calls via RestSharp (not a browser),
 // so CORS does not apply to it. Browser-based clients must be explicitly allowlisted via
-// the `Cors:AllowedOrigins` config key (comma-separated). Unset = no browser origins allowed.
+// the `Cors:AllowedOrigins` config key (array) or match `Cors:AllowedOriginPattern` (regex).
+// Vercel preview URLs (https://<slug>-alphascope.vercel.app) are covered by the pattern;
+// production origin (https://alphascope.app) lives in AllowedOrigins. AllowCredentials is
+// required for the __Host-alpha cookie — this is incompatible with AllowAnyOrigin(), so we
+// use SetIsOriginAllowed with an explicit delegate instead.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AlphaScopePolicy", policy =>
     {
-        var originsConfig = builder.Configuration["Cors:AllowedOrigins"];
-        var origins = string.IsNullOrWhiteSpace(originsConfig)
-            ? Array.Empty<string>()
-            : originsConfig.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var exactOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? Array.Empty<string>();
+        var pattern = builder.Configuration.GetValue<string>("Cors:AllowedOriginPattern");
+        var regex = string.IsNullOrWhiteSpace(pattern)
+            ? null
+            : new System.Text.RegularExpressions.Regex(
+                pattern,
+                System.Text.RegularExpressions.RegexOptions.Compiled);
 
-        if (origins.Length == 0)
-        {
-            policy.WithOrigins("https://alphascope.invalid")
-                  .AllowAnyMethod()
-                  .AllowAnyHeader();
-        }
-        else
-        {
-            policy.WithOrigins(origins)
-                  .AllowAnyMethod()
-                  .AllowAnyHeader()
-                  .AllowCredentials();
-        }
+        policy.SetIsOriginAllowed(origin =>
+                exactOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase) ||
+                (regex != null && regex.IsMatch(origin)))
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
