@@ -56,7 +56,7 @@ namespace AlphaScopeServer.Data
         /// <summary>One-time short-TTL codes used to link plugin accounts to web identities</summary>
         public DbSet<AccountLinkCode> AccountLinkCodes { get; set; }
         /// <summary>Privacy takedown requests submitted by players or third parties</summary>
-        public DbSet<TakedownRequest> TakedownRequests { get; set; } = null!;
+        public DbSet<TakedownRequest> TakedownRequests { get; set; }
 
         /// <summary>
         /// Configures entity relationships, constraints, and database schema.

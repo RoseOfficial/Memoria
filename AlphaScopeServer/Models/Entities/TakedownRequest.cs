@@ -10,6 +10,7 @@ public enum TakedownStatus
     Rejected = 2,
 }
 
+[Table("TakedownRequests")]
 public class TakedownRequest
 {
     [Key]
