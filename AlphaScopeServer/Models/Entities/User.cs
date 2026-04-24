@@ -45,6 +45,10 @@ namespace AlphaScopeServer.Models.Entities
         public int FetchedPlayerInfoCount { get; set; } = 0;
         public int SearchedNamesCount { get; set; } = 0;
         public DateTime LastSyncedTime { get; set; } = DateTime.UtcNow;
+
+        // Lifetime scan contribution count. Incremented by PlayersController on each
+        // accepted scan upload. Surfaced via GET v1/users/me/contributions.
+        public int TotalContributions { get; set; } = 0;
         
         // Navigation properties
         public virtual ICollection<UserCharacter> Characters { get; set; } = new List<UserCharacter>();

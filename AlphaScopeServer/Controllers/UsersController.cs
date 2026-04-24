@@ -311,6 +311,23 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
+        [HttpGet("me/contributions")]
+        public async Task<IActionResult> GetContributions()
+        {
+            var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
+            if (viewerUserId is null) return Unauthorized();
+
+            var user = await _context.Users.FindAsync(viewerUserId.Value);
+            if (user is null) return Unauthorized();
+
+            // Plan 0c: Recent list is a placeholder — empty array until scan attribution lands.
+            // ApplicationUser.TotalContributions is maintained by PlayersController on scan upload.
+            var response = new ContributionsResponse(
+                Lifetime: user.TotalContributions,
+                Recent: Array.Empty<RecentContribution>());
+            return Ok(response);
+        }
+
         private static string GenerateApiKey()
         {
             using var rng = RandomNumberGenerator.Create();
