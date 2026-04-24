@@ -57,10 +57,12 @@ public static class WorldNames
         return dict;
     }
 
-    public static string ToSlug(string worldName)
+    public static string ToSlug(string input)
     {
-        ArgumentNullException.ThrowIfNull(worldName);
-        return worldName.ToLowerInvariant().Replace("'", "").Replace(" ", "-");
+        ArgumentNullException.ThrowIfNull(input);
+        return System.Text.RegularExpressions.Regex.Replace(
+            input.Trim().ToLowerInvariant().Replace("'", ""),
+            @"\s+", "-");
     }
 
     public static string? Resolve(short? worldId)
