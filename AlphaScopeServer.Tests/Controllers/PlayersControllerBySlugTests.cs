@@ -102,4 +102,42 @@ public class PlayersControllerBySlugTests
         var result = await controller.GetBySlug("balmung", "tchai-nunh");
         result.Should().BeOfType<OkObjectResult>();
     }
+
+    [Fact]
+    public async Task GetBySlug_HistoricName_Returns301ToCurrent()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var player = new Player { LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91 };
+        ctx.Players.Add(player);
+        ctx.Set<PlayerNameHistory>().Add(new PlayerNameHistory
+        {
+            PlayerLocalContentId = 1, Name = "Tata Taru", CreatedAt = DateTime.UtcNow.AddDays(-30),
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx);
+        var result = await controller.GetBySlug("balmung", "tata-taru");
+
+        var redirect = result.Should().BeOfType<RedirectResult>().Subject;
+        redirect.Permanent.Should().BeTrue();
+        redirect.Url.Should().Be("/p/balmung/tataru-taru");
+    }
+
+    [Fact]
+    public async Task GetBySlug_HistoricWorld_Returns301ToCurrent()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var player = new Player { LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91 };
+        ctx.Players.Add(player);
+        ctx.Set<PlayerWorldHistory>().Add(new PlayerWorldHistory
+        {
+            PlayerLocalContentId = 1, WorldId = 54 /* Faerie */, CreatedAt = DateTime.UtcNow.AddDays(-60),
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx);
+        var result = await controller.GetBySlug("faerie", "tataru-taru");
+        var redirect = result.Should().BeOfType<RedirectResult>().Subject;
+        redirect.Url.Should().Be("/p/balmung/tataru-taru");
+    }
 }

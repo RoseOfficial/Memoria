@@ -279,7 +279,33 @@ namespace AlphaScopeServer.Controllers
                 .ToListAsync();
             var player = candidates.FirstOrDefault(p => WorldNames.ToSlug(p.Name) == nameLower);
 
-            if (player is null) return NotFound();
+            if (player is null)
+            {
+                // History fallback: search NameHistory and WorldHistory for any match.
+                // NameHistory entries are keyed to a Player whose CURRENT name may differ.
+                // Use the same worldId-filter + client-side slug match approach as the primary lookup.
+                var nameHistoryCandidates = await _context.Set<PlayerNameHistory>()
+                    .Include(h => h.Player)
+                    .Where(h => h.Player != null && h.Player.HomeWorldId == worldId)
+                    .ToListAsync();
+                var historicByName = nameHistoryCandidates
+                    .FirstOrDefault(h => WorldNames.ToSlug(h.Name) == nameLower)?.Player;
+
+                if (historicByName != null)
+                    return RedirectToCanonical(historicByName);
+
+                var worldHistoryCandidates = await _context.Set<PlayerWorldHistory>()
+                    .Include(h => h.Player)
+                    .Where(h => h.WorldId == worldId)
+                    .ToListAsync();
+                var historicByWorld = worldHistoryCandidates
+                    .FirstOrDefault(h => h.Player != null && WorldNames.ToSlug(h.Player.Name) == nameLower)?.Player;
+
+                if (historicByWorld != null)
+                    return RedirectToCanonical(historicByWorld);
+
+                return NotFound();
+            }
 
             var tier = (int)(HttpContext.Items["Tier"] ?? 1);
             var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
@@ -287,6 +313,13 @@ namespace AlphaScopeServer.Controllers
 
             var dto = BuildProfileResponse(player, tier, isOwner);
             return Ok(dto);
+        }
+
+        private IActionResult RedirectToCanonical(Player player)
+        {
+            var worldSlug = WorldNames.ToSlug(WorldNames.Resolve(player.HomeWorldId) ?? "unknown");
+            var nameSlug = WorldNames.ToSlug(player.Name);
+            return RedirectPermanent($"/p/{worldSlug}/{nameSlug}");
         }
 
         private static PlayerProfileResponse BuildProfileResponse(Player player, int tier, bool isOwner)
