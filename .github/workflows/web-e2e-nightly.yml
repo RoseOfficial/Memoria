@@ -1,0 +1,44 @@
+name: Web E2E (nightly)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://api.alphascope.app
+
+      - run: pnpm exec playwright test
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://api.alphascope.app
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 14
