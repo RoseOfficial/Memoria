@@ -109,6 +109,9 @@ namespace AlphaScopeServer.Migrations
                     b.Property<int>("SearchedNamesCount")
                         .HasColumnType("integer");
 
+                    b.Property<int>("TotalContributions")
+                        .HasColumnType("integer");
+
                     b.Property<int>("UploadedPlayerInfoCount")
                         .HasColumnType("integer");
 
