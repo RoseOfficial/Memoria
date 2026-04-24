@@ -449,6 +449,24 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
+        [HttpPatch("{id}")]
+        public async Task<IActionResult> Patch(long id, [FromBody] PlayerPrivacyPatchRequest body)
+        {
+            var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
+            if (viewerUserId is null) return Unauthorized();
+
+            var player = await _context.Players.FindAsync(id);
+            if (player is null || player.ClaimedByUserId != viewerUserId.Value)
+                return NotFound();
+
+            if (body.HideAlts is { } a) player.HideAlts = a;
+            if (body.HideEncounters is { } e) player.HideEncounters = e;
+            if (body.HideEntirely is { } h) player.HideEntirely = h;
+
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
         [HttpPost]
         public async Task<IActionResult> UploadPlayers([FromBody] List<PostPlayerRequest> players)
         {
