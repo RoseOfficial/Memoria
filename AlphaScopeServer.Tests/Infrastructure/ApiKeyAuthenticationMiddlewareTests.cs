@@ -46,6 +46,7 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     [InlineData("/health", "GET")]
     [InlineData("/v1/players/recent", "GET")]
     [InlineData("/v1/players/by-slug", "GET")]
+    [InlineData("/v1/players/search", "GET")]
     [InlineData("/v1/takedowns", "POST")]
     public async Task InvokeAsync_ShouldSkipAuthenticationForExemptPaths(string path, string method)
     {

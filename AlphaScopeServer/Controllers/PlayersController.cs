@@ -264,6 +264,32 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
+        [HttpGet("search")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Search([FromQuery] string q)
+        {
+            if (string.IsNullOrWhiteSpace(q)) return Ok(new PlayerSearchResultResponse(Array.Empty<PlayerSearchItem>()));
+
+            var needle = q.Trim();
+
+            var raw = await _context.Players
+                .Where(p => !p.HideEntirely && !p.IsPrivate && !p.HideInSearch)
+                .Where(p => p.Name.Contains(needle))
+                .OrderBy(p => p.Name)
+                .Take(50)
+                .Select(p => new { p.LocalContentId, p.Name, p.HomeWorldId, p.AvatarLink })
+                .ToListAsync();
+
+            var items = raw.Select(p => new PlayerSearchItem(
+                p.LocalContentId,
+                p.Name,
+                p.HomeWorldId.HasValue ? WorldNames.ToSlug(WorldNames.Resolve(p.HomeWorldId) ?? "unknown") : "unknown",
+                p.HomeWorldId.HasValue ? WorldNames.Resolve(p.HomeWorldId) ?? "Unknown" : "Unknown",
+                p.AvatarLink)).ToList();
+
+            return Ok(new PlayerSearchResultResponse(items));
+        }
+
         [HttpGet("recent")]
         [AllowAnonymous]
         public async Task<IActionResult> GetRecent()

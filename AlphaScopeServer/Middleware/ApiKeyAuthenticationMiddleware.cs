@@ -49,6 +49,7 @@ namespace AlphaScopeServer.Middleware
                 // public submission form. Tier/admin gating happens downstream in each controller.
                 (path.Contains("/players/recent") && context.Request.Method == "GET") ||
                 (path.Contains("/players/by-slug") && context.Request.Method == "GET") ||
+                (path.Contains("/players/search") && context.Request.Method == "GET") ||
                 (path.EndsWith("/takedowns") && context.Request.Method == "POST")))
             {
                 await _next(context);
