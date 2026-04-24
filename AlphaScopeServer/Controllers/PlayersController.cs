@@ -307,10 +307,14 @@ namespace AlphaScopeServer.Controllers
                 return NotFound();
             }
 
-            var tier = (int)(HttpContext.Items["Tier"] ?? 1);
             var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
             var isOwner = viewerUserId.HasValue && player.ClaimedByUserId == viewerUserId.Value;
+            var isAdmin = (bool)(HttpContext.Items["IsAdmin"] ?? false);
 
+            if (player.HideEntirely && !isOwner && !isAdmin)
+                return NotFound();
+
+            var tier = (int)(HttpContext.Items["Tier"] ?? 1);
             var dto = BuildProfileResponse(player, tier, isOwner);
             return Ok(dto);
         }

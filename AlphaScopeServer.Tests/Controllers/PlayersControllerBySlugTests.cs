@@ -140,4 +140,36 @@ public class PlayersControllerBySlugTests
         var redirect = result.Should().BeOfType<RedirectResult>().Subject;
         redirect.Url.Should().Be("/p/balmung/tataru-taru");
     }
+
+    [Fact]
+    public async Task GetBySlug_HideEntirely_Returns404ToAnon()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        ctx.Players.Add(new Player
+        {
+            LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91, HideEntirely = true,
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx, viewerUserId: null);
+        var result = await controller.GetBySlug("balmung", "tataru-taru");
+        result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task GetBySlug_HideEntirely_Returns200ToOwner()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        ctx.Users.Add(new ApplicationUser { Id = 7, DiscordUserId = 1, ApiKey = "x" });
+        ctx.Players.Add(new Player
+        {
+            LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91,
+            HideEntirely = true, ClaimedByUserId = 7,
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx, viewerUserId: 7);
+        var result = await controller.GetBySlug("balmung", "tataru-taru");
+        result.Should().BeOfType<OkObjectResult>();
+    }
 }
