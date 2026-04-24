@@ -376,7 +376,56 @@ namespace AlphaScopeServer.Controllers
             IReadOnlyList<NameHistoryEntry>? nameHistory = null;
             IReadOnlyList<WorldHistoryEntry>? worldHistory = null;
             IReadOnlyList<AltCharacter>? alts = null;
-            // These get populated in a later task when Tier 2 rendering is enabled end-to-end.
+
+            if (tier >= 2)
+            {
+                if (!player.HideEncounters)
+                {
+                    var top = _context.Set<PlayerTerritoryHistory>()
+                        .Where(t => t.PlayerLocalContentId == player.LocalContentId)
+                        .GroupBy(t => new { t.TerritoryId })
+                        .Select(g => new {
+                            TerritoryId = g.Key.TerritoryId ?? (short)0,
+                            Count = g.Count(),
+                            Last = g.Max(x => x.LastSeenAt),
+                        })
+                        .OrderByDescending(x => x.Count)
+                        .Take(5)
+                        .ToList();
+                    locations = new LocationsData(top.Select(x =>
+                        new TerritoryEntry(x.TerritoryId, $"Territory {x.TerritoryId}", x.Count, x.Last)).ToList());
+                }
+
+                var nhRaw = _context.Set<PlayerNameHistory>()
+                    .Where(h => h.PlayerLocalContentId == player.LocalContentId)
+                    .OrderByDescending(h => h.CreatedAt)
+                    .Select(h => new { h.Name, h.CreatedAt })
+                    .ToList();
+                nameHistory = nhRaw.Select(h => new NameHistoryEntry(h.Name, h.CreatedAt)).ToList();
+
+                var whRaw = _context.Set<PlayerWorldHistory>()
+                    .Where(h => h.PlayerLocalContentId == player.LocalContentId)
+                    .OrderByDescending(h => h.CreatedAt)
+                    .Select(h => new { h.WorldId, h.CreatedAt })
+                    .ToList();
+                worldHistory = whRaw.Select(h => new WorldHistoryEntry(
+                    WorldNames.ToSlug(WorldNames.Resolve(h.WorldId) ?? "unknown"),
+                    WorldNames.Resolve(h.WorldId) ?? "Unknown",
+                    h.CreatedAt)).ToList();
+
+                if (!player.HideAlts && player.AccountId != null)
+                {
+                    var altsRaw = _context.Players
+                        .Where(p => p.AccountId == player.AccountId && p.LocalContentId != player.LocalContentId && !p.HideEntirely)
+                        .Select(p => new { p.Name, p.HomeWorldId, p.LocalContentId })
+                        .ToList();
+                    alts = altsRaw.Select(p => new AltCharacter(
+                        p.Name,
+                        p.HomeWorldId.HasValue ? WorldNames.ToSlug(WorldNames.Resolve(p.HomeWorldId) ?? "unknown") : "unknown",
+                        p.HomeWorldId.HasValue ? WorldNames.Resolve(p.HomeWorldId) ?? "Unknown" : "Unknown",
+                        p.LocalContentId)).ToList();
+                }
+            }
 
             return new PlayerProfileResponse(header, jobs, customization, mounts, minions,
                 locations, nameHistory, worldHistory, alts, isOwner);

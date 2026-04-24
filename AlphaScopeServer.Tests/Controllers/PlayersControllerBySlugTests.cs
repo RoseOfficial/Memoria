@@ -218,4 +218,32 @@ public class PlayersControllerBySlugTests
         dto.Mounts!.Collected.Should().Be(3);
         dto.Mounts.Preview.Should().HaveCount(3);
     }
+
+    [Fact]
+    public async Task GetBySlug_Tier2_PopulatesLocationsAndHistory()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var player = new Player { LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91 };
+        ctx.Players.Add(player);
+        ctx.Set<PlayerNameHistory>().Add(new PlayerNameHistory
+        {
+            PlayerLocalContentId = 1, Name = "Tata Taru", CreatedAt = DateTime.UtcNow.AddDays(-30),
+        });
+        ctx.Set<PlayerTerritoryHistory>().Add(new PlayerTerritoryHistory
+        {
+            PlayerLocalContentId = 1, TerritoryId = 128, FirstSeenAt = DateTime.UtcNow.AddDays(-1), LastSeenAt = DateTime.UtcNow,
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx);
+        controller.HttpContext.Items["Tier"] = 2;
+        var result = await controller.GetBySlug("balmung", "tataru-taru");
+        var dto = ((OkObjectResult)result).Value.Should().BeOfType<PlayerProfileResponse>().Subject;
+
+        dto.Locations.Should().NotBeNull();
+        dto.Locations!.Top.Should().HaveCount(1);
+        dto.NameHistory.Should().NotBeNull();
+        dto.NameHistory!.Should().HaveCount(1);
+        dto.NameHistory[0].Name.Should().Be("Tata Taru");
+    }
 }

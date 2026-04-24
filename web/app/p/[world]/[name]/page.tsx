@@ -8,6 +8,9 @@ import { MountsSection } from '../../../../components/profile/MountsSection'
 import { MinionsSection } from '../../../../components/profile/MinionsSection'
 import { WipSection } from '../../../../components/profile/WipSection'
 import { TierGate } from '../../../../components/profile/TierGate'
+import { LocationsSection } from '../../../../components/profile/LocationsSection'
+import { HistorySection } from '../../../../components/profile/HistorySection'
+import { AltsSection } from '../../../../components/profile/AltsSection'
 
 export default async function ProfilePage({ params }: { params: Promise<{ world: string; name: string }> }) {
   const { world, name } = await params
@@ -37,9 +40,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ world:
         <WipSection title="Lodestone Bio" phase="Phase 3" description="add bio, guardian, nameday, city-state, GC + rank" />
         <WipSection title="Free Company" phase="Phase 3" description="fetch FC profile + member roster" />
         <WipSection title="Achievements / Collectibles" phase="Phase 4" description="add orchestrions, emotes, hairstyles, bardings, and more" />
-        {profile.locations ? <p>locations placeholder (Task 43)</p> : <TierGate title="Recent Locations" tier={2} sectionName="recent locations" />}
-        {profile.nameHistory || profile.worldHistory ? <p>history placeholder (Task 43)</p> : <TierGate title="Name / World History" tier={2} sectionName="name + world history" />}
-        {profile.alts ? <p>alts placeholder (Task 43)</p> : <TierGate title="Alt Characters" tier={2} sectionName="alt characters" />}
+        {profile.locations ? <LocationsSection data={profile.locations} /> : <TierGate title="Recent Locations" tier={2} sectionName="recent locations" />}
+        {(profile.nameHistory !== null || profile.worldHistory !== null) ? <HistorySection names={profile.nameHistory} worlds={profile.worldHistory} /> : <TierGate title="Name / World History" tier={2} sectionName="name + world history" />}
+        {profile.alts ? <AltsSection alts={profile.alts} /> : <TierGate title="Alt Characters" tier={2} sectionName="alt characters" />}
         <WipSection title="Encounter Network" phase="Phase 5" description="build social graph from co-territory observations + CWLS membership" />
       </div>
     </main>
