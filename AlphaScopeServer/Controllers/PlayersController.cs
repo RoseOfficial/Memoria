@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.DTOs;
 using AlphaScopeServer.Models.Entities;
+using AlphaScopeServer.Services.World;
 
 // System dependencies for text processing and HTML parsing
 using System.Text.RegularExpressions;
@@ -679,7 +680,7 @@ namespace AlphaScopeServer.Controllers
                 // First try with HomeWorldId if available
                 if (player.HomeWorldId.HasValue)
                 {
-                    var homeWorldName = GetWorldNameFromId(player.HomeWorldId);
+                    var homeWorldName = WorldNames.Resolve(player.HomeWorldId);
                     if (!string.IsNullOrEmpty(homeWorldName))
                     {
                         lodestoneId = await SearchLodestoneCharacter(player.Name, homeWorldName, logger);
@@ -689,7 +690,7 @@ namespace AlphaScopeServer.Controllers
                 // If not found and CurrentWorldId is different, try current world
                 if (!lodestoneId.HasValue && player.CurrentWorldId.HasValue && player.CurrentWorldId != player.HomeWorldId)
                 {
-                    var currentWorldName = GetWorldNameFromId(player.CurrentWorldId);
+                    var currentWorldName = WorldNames.Resolve(player.CurrentWorldId);
                     if (!string.IsNullOrEmpty(currentWorldName))
                     {
                         lodestoneId = await SearchLodestoneCharacter(player.Name, currentWorldName, logger);
@@ -699,7 +700,7 @@ namespace AlphaScopeServer.Controllers
                 // If still not found, log the issue and return
                 if (!lodestoneId.HasValue)
                 {
-                    logger.LogInformation($"Could not find {player.Name} on Lodestone (tried Home: {GetWorldNameFromId(player.HomeWorldId)}, Current: {GetWorldNameFromId(player.CurrentWorldId)})");
+                    logger.LogInformation($"Could not find {player.Name} on Lodestone (tried Home: {WorldNames.Resolve(player.HomeWorldId)}, Current: {WorldNames.Resolve(player.CurrentWorldId)})");
                     return false;
                 }
 
@@ -741,56 +742,6 @@ namespace AlphaScopeServer.Controllers
                 logger.LogError(ex, $"Error auto-linking Lodestone for player {player.Name}");
                 return false;
             }
-        }
-
-        private string? GetWorldNameFromId(short? worldId)
-        {
-            if (!worldId.HasValue) return null;
-            
-            // World mapping for FFXIV worlds (corrected to match official game data)
-            var worldMap = new Dictionary<short, string>
-            {
-                // Aether Data Center
-                { 34, "Brynhildr" }, { 62, "Diabolos" }, { 75, "Malboro" }, { 37, "Mateus" },
-                { 73, "Adamantoise" }, { 79, "Cactuar" }, { 54, "Faerie" }, { 63, "Gilgamesh" },
-                { 40, "Jenova" }, { 65, "Midgardsormr" }, { 99, "Sargatanas" }, { 57, "Siren" },
-                
-                // Primal Data Center  
-                { 53, "Exodus" }, { 78, "Behemoth" }, { 93, "Excalibur" }, { 35, "Famfrit" },
-                { 95, "Hyperion" }, { 55, "Lamia" }, { 64, "Leviathan" }, { 77, "Ultros" },
-                
-                // Crystal Data Center
-                { 91, "Balmung" }, { 81, "Goblin" }, { 41, "Zalera" }, { 74, "Coeurl" },
-                
-                // Chaos Data Center (EU)
-                { 80, "Cerberus" }, { 71, "Moogle" }, { 39, "Omega" }, { 97, "Ragnarok" },
-                { 85, "Spriggan" },
-                
-                // Light Data Center (EU)
-                { 36, "Lich" }, { 66, "Odin" }, { 56, "Phoenix" }, { 67, "Shiva" },
-                { 33, "Twintania" },
-                
-                // Elemental Data Center (JP)
-                { 23, "Asura" }, { 45, "Carbuncle" }, { 58, "Garuda" }, { 59, "Ifrit" },
-                { 49, "Kujata" }, { 50, "Typhon" },
-                
-                // Gaia Data Center (JP)
-                { 43, "Alexander" }, { 69, "Bahamut" }, { 92, "Durandal" }, { 46, "Fenrir" },
-                { 51, "Ultima" }, { 98, "Ridill" },
-                
-                // Mana Data Center (JP)
-                { 44, "Anima" }, { 70, "Chocobo" }, { 47, "Hades" }, { 48, "Ixion" },
-                { 96, "Masamune" }, { 61, "Titan" }, { 28, "Pandaemonium" },
-                
-                // Meteor Data Center (JP)
-                { 24, "Belias" }, { 82, "Mandragora" }, { 60, "Ramuh" }, { 29, "Shinryu" },
-                { 52, "Valefor" }, { 30, "Unicorn" }, { 31, "Yojimbo" }, { 32, "Zeromus" },
-                
-                // Materia Data Center (OCE)
-                { 21, "Ravana" }, { 22, "Bismarck" }, { 86, "Sephirot" }, { 87, "Sophia" }, { 88, "Zurvan" }
-            };
-
-            return worldMap.TryGetValue(worldId.Value, out var worldName) ? worldName : null;
         }
 
         [HttpPost("{localContentId:long}/claim/start")]
