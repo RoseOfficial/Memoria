@@ -172,4 +172,50 @@ public class PlayersControllerBySlugTests
         var result = await controller.GetBySlug("balmung", "tataru-taru");
         result.Should().BeOfType<OkObjectResult>();
     }
+
+    [Fact]
+    public async Task GetBySlug_WithCustomization_PopulatesCustomizationSection()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        var player = new Player { LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91 };
+        ctx.Players.Add(player);
+        ctx.Set<PlayerCustomizationHistory>().Add(new PlayerCustomizationHistory
+        {
+            PlayerLocalContentId = 1,
+            GenderRace = 5,
+            Face = 2,
+            SkinColor = 4,
+            EyeShape = 1,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx);
+        var result = await controller.GetBySlug("balmung", "tataru-taru");
+        var dto = ((OkObjectResult)result).Value.Should().BeOfType<PlayerProfileResponse>().Subject;
+
+        dto.Customization.Should().NotBeNull();
+        dto.Customization!.Face.Should().Be(2);
+        dto.Customization.SkinColor.Should().Be(4);
+    }
+
+    [Fact]
+    public async Task GetBySlug_WithMountsJson_PopulatesMountsSection()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        ctx.Players.Add(new Player
+        {
+            LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91,
+            LodestoneMountsData = "[\"Company Chocobo\",\"Black Chocobo\",\"Magitek Armor\"]",
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx);
+        var result = await controller.GetBySlug("balmung", "tataru-taru");
+        var dto = ((OkObjectResult)result).Value.Should().BeOfType<PlayerProfileResponse>().Subject;
+
+        dto.Mounts.Should().NotBeNull();
+        dto.Mounts!.Collected.Should().Be(3);
+        dto.Mounts.Preview.Should().HaveCount(3);
+    }
 }

@@ -326,7 +326,7 @@ namespace AlphaScopeServer.Controllers
             return RedirectPermanent($"/p/{worldSlug}/{nameSlug}");
         }
 
-        private static PlayerProfileResponse BuildProfileResponse(Player player, int tier, bool isOwner)
+        private PlayerProfileResponse BuildProfileResponse(Player player, int tier, bool isOwner)
         {
             var worldName = WorldNames.Resolve(player.HomeWorldId) ?? "Unknown";
             var worldSlug = WorldNames.ToSlug(worldName);
@@ -346,9 +346,9 @@ namespace AlphaScopeServer.Controllers
 
             // Tier 1 sections — always filled if data exists
             var jobs = BuildJobs(player);
-            var customization = (CustomizationData?)null;  // Task 8 fills this
-            var mounts = (MountsData?)null;   // Task 8 fills this
-            var minions = (MinionsData?)null; // Task 8 fills this
+            var customization = BuildCustomization(player);
+            var mounts = BuildMounts(player);
+            var minions = BuildMinions(player);
 
             // Tier 2+ sections: null for anon/below-tier viewers
             LocationsData? locations = null;
@@ -359,6 +359,52 @@ namespace AlphaScopeServer.Controllers
 
             return new PlayerProfileResponse(header, jobs, customization, mounts, minions,
                 locations, nameHistory, worldHistory, alts, isOwner);
+        }
+
+        private CustomizationData? BuildCustomization(Player player)
+        {
+            var latest = _context.Set<PlayerCustomizationHistory>()
+                .Where(c => c.PlayerLocalContentId == player.LocalContentId)
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefault();
+            if (latest is null) return null;
+            return new CustomizationData(
+                latest.BodyType, latest.GenderRace, latest.Height, latest.Face,
+                latest.SkinColor, latest.Nose, latest.Jaw, latest.EyeShape);
+        }
+
+        private static MountsData? BuildMounts(Player player)
+        {
+            var build = BuildCollectibles(player.LodestoneMountsData, iconBase: "https://ffxivcollect.com/icons/mounts/", kind: "mount");
+            return build is null ? null : new MountsData(build.Collected, build.KnownTotal, build.Preview);
+        }
+
+        private static MinionsData? BuildMinions(Player player)
+        {
+            var build = BuildCollectibles(player.LodestoneMinionsData, iconBase: "https://ffxivcollect.com/icons/minions/", kind: "minion");
+            return build is null ? null : new MinionsData(build.Collected, build.KnownTotal, build.Preview);
+        }
+
+        private sealed record CollectibleBuild(int Collected, int KnownTotal, IReadOnlyList<CollectibleIcon> Preview);
+
+        private static CollectibleBuild? BuildCollectibles(string? json, string iconBase, string kind)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            try
+            {
+                var names = JsonSerializer.Deserialize<List<string>>(json);
+                if (names is null) return null;
+                // KnownTotal: ~400 for mounts, ~480 for minions per FFXIVCollect. Hard-coded estimates.
+                var total = kind == "mount" ? 400 : 480;
+                var preview = names.Take(16).Select((n, i) =>
+                    new CollectibleIcon(i, n, iconBase + Uri.EscapeDataString(n.ToLowerInvariant().Replace(" ", "-")) + ".png"))
+                    .ToList();
+                return new CollectibleBuild(names.Count, total, preview);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
 
         private static JobsData BuildJobs(Player player)
