@@ -1,10 +1,10 @@
-# AlphaScope Testing Documentation
+# Memoria Testing Documentation
 
-This document provides comprehensive information about the testing infrastructure for the AlphaScope FFXIV plugin project.
+This document provides comprehensive information about the testing infrastructure for the Memoria FFXIV plugin project.
 
 ## Test Suite Overview
 
-The AlphaScope project includes comprehensive testing across multiple layers:
+The Memoria project includes comprehensive testing across multiple layers:
 
 - **Total Tests**: 72 tests
 - **Unit Tests**: 26 tests (Plugin API client, Server controllers)
@@ -14,7 +14,7 @@ The AlphaScope project includes comprehensive testing across multiple layers:
 ## Test Categories
 
 ### 1. Unit Tests
-Located in `AlphaScope.Tests/`
+Located in `Memoria.Tests/`
 
 #### API Client Tests (`API/ApiClientTests.cs`)
 - Tests limited by Dalamud dependencies (11 tests)
@@ -29,7 +29,7 @@ Located in `AlphaScope.Tests/`
 - **ServerController** (`Controllers/ServerControllerTests.cs`) - 5 tests
 
 ### 2. Integration Tests  
-Located in `AlphaScope.Tests/Integration/`
+Located in `Memoria.Tests/Integration/`
 
 #### PersistenceContext Integration Tests
 - **21 tests** covering data upload workflows
@@ -38,7 +38,7 @@ Located in `AlphaScope.Tests/Integration/`
 - Player/retainer relationship management
 
 ### 3. Performance Tests
-Located in `AlphaScope.Tests/Performance/`
+Located in `Memoria.Tests/Performance/`
 
 #### Database Performance (`DatabasePerformanceTests.cs`) - 8 tests
 - Bulk insert operations (1000+ records)
@@ -65,7 +65,7 @@ Located in `AlphaScope.Tests/Performance/`
 #### Quick Test Run
 ```bash
 # Run all tests
-dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj
+dotnet test Memoria.Tests/Memoria.Tests.csproj
 
 # Run specific test categories
 dotnet test --filter "FullyQualifiedName~Performance"
@@ -106,7 +106,7 @@ dotnet tool install --global dotnet-coverage
 dotnet tool install --global dotnet-reportgenerator-globaltool
 
 # Run tests with coverage
-dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj --logger trx --results-directory TestResults/"
+dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test Memoria.Tests/Memoria.Tests.csproj --logger trx --results-directory TestResults/"
 
 # Generate report
 reportgenerator -reports:coverage.cobertura.xml -targetdir:CoverageReport -reporttypes:"Html;JsonSummary"
@@ -127,7 +127,7 @@ The pipeline includes:
 ## Test Configuration
 
 ### Coverage Settings (`coverage.settings`)
-- **Included Modules**: AlphaScope.dll, AlphaScopeServer.dll
+- **Included Modules**: Memoria.dll, MemoriaServer.dll
 - **Excluded**: Test assemblies, generated code
 - **Thresholds**: 70% minimum coverage recommended
 - **Formats**: Cobertura XML, HTML reports, JSON summaries

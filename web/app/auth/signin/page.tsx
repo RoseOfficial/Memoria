@@ -11,7 +11,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
       <SignatureFrame className="py-12 px-8 text-center space-y-6">
         <h1 className="text-3xl">Sign in</h1>
         <p className="text-[var(--color-text-muted)]">
-          AlphaScope uses Discord for sign-in. You must be a member of our Discord to unlock Tier 2 content.
+          Memoria uses Discord for sign-in. You must be a member of our Discord to unlock Tier 2 content.
         </p>
         <a
           href={startUrl}

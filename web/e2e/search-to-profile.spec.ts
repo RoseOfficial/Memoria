@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 
 test('anon user: landing → search → profile', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'AlphaScope' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Memoria' })).toBeVisible()
 
   await page.getByPlaceholder('Search player by name…').fill('Tataru')
   await page.getByRole('button', { name: 'Search' }).click()

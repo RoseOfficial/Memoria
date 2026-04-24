@@ -12,7 +12,7 @@ export default async function Home() {
     <main>
       <SignatureFrame className="max-w-3xl mx-auto mt-16 py-16 px-8">
         <div className="text-center space-y-6">
-          <h1 className="text-5xl tracking-widest">AlphaScope</h1>
+          <h1 className="text-5xl tracking-widest">Memoria</h1>
           <p className="text-lg text-[var(--color-text-muted)] max-w-xl mx-auto">
             FFXIV player lookup — scanned, scrolled, remembered.
           </p>

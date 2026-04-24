@@ -7,7 +7,7 @@ export function Footer() {
         <Link href="/privacy">Privacy</Link>
         <Link href="/terms">Terms</Link>
         <Link href="/takedown">Takedown Request</Link>
-        <span className="ml-auto">AlphaScope — FFXIV player lookup.</span>
+        <span className="ml-auto">Memoria — FFXIV player lookup.</span>
       </div>
     </footer>
   )

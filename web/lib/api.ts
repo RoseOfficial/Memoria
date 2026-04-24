@@ -3,9 +3,9 @@ import { apiBaseUrl } from './env'
 
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const store = await cookies()
-  const alpha = store.get('__Host-alpha')?.value
+  const alpha = store.get('__Host-memoria')?.value
   const headers = new Headers(init?.headers)
-  if (alpha) headers.set('Cookie', `__Host-alpha=${alpha}`)
+  if (alpha) headers.set('Cookie', `__Host-memoria=${alpha}`)
   return fetch(`${apiBaseUrl()}${path}`, {
     ...init,
     headers,

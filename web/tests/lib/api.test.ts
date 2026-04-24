@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 // Mock next/headers before importing api
 vi.mock('next/headers', () => ({
-  cookies: () => ({ get: (name: string) => name === '__Host-alpha' ? { value: 'abc123' } : undefined }),
+  cookies: () => ({ get: (name: string) => name === '__Host-memoria' ? { value: 'abc123' } : undefined }),
 }))
 
 beforeEach(() => {
@@ -18,12 +18,12 @@ describe('apiFetch', () => {
     expect(callArg).toBe('https://api.test/v1/players/recent')
   })
 
-  it('forwards __Host-alpha cookie as Cookie header', async () => {
+  it('forwards __Host-memoria cookie as Cookie header', async () => {
     const { apiFetch } = await import('../../lib/api')
     await apiFetch('/v1/users/me')
     const init = (globalThis.fetch as any).mock.calls[0][1]
     const cookieHeader = (init.headers as Headers).get('Cookie')
-    expect(cookieHeader).toBe('__Host-alpha=abc123')
+    expect(cookieHeader).toBe('__Host-memoria=abc123')
   })
 
   it('defaults to no-store cache', async () => {

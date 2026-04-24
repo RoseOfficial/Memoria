@@ -7,9 +7,9 @@
 **/.vscode/
 
 # The plugin and test projects aren't part of the server deploy.
-AlphaScope/
-AlphaScope.Tests/
-AlphaScopeServer.Tests/
+Memoria/
+Memoria.Tests/
+MemoriaServer.Tests/
 TestUtilities/
 
 # Artefacts and local-only files.

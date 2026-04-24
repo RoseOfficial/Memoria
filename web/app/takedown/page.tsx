@@ -34,7 +34,7 @@ export default function TakedownPage() {
     <main className="max-w-xl mx-auto px-8 py-12 space-y-6">
       <h1 className="text-3xl">Takedown request</h1>
       <p className="text-[var(--color-text-muted)]">
-        Submit a takedown request to have a character hidden from AlphaScope. We review each
+        Submit a takedown request to have a character hidden from Memoria. We review each
         request manually. Approved takedowns hide the character entirely for all visitors.
       </p>
       <form onSubmit={onSubmit} className="space-y-4">

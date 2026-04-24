@@ -1,18 +1,18 @@
 [
   {
-    "Name": "AlphaScope",
+    "Name": "Memoria",
     "Author": "RoseOfficial",
     "Punchline": "Player tracker with full history, alt detection, and Lodestone integration.",
     "Description": "Tracks every player you encounter, with full history of name changes, world transfers, and appearance changes. Links alt characters on the same account via Account ID. Pulls jobs, minions, and mounts from the Lodestone. Stored locally in SQLite, with optional server sync for shared data.",
     "AssemblyVersion": "1.0.0",
-    "InternalName": "AlphaScope",
-    "RepoUrl": "https://github.com/RoseOfficial/AlphaScope",
-    "IconUrl": "https://raw.githubusercontent.com/RoseOfficial/AlphaScope/main/icon.png",
-    "DownloadLinkInstall": "https://github.com/RoseOfficial/AlphaScope/releases/download/1.0.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/RoseOfficial/AlphaScope/releases/download/1.0.0/latest.zip",
+    "InternalName": "Memoria",
+    "RepoUrl": "https://github.com/RoseOfficial/Memoria",
+    "IconUrl": "https://raw.githubusercontent.com/RoseOfficial/Memoria/main/icon.png",
+    "DownloadLinkInstall": "https://github.com/RoseOfficial/Memoria/releases/download/1.0.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/RoseOfficial/Memoria/releases/download/1.0.0/latest.zip",
     "DalamudApiLevel": 14,
     "LastUpdate": 1734478026,
-    "Changelog": "- Initial release of AlphaScope\n- Player scan tracking with name, world, and appearance history\n- Alt-character linking via Account ID\n- Lodestone integration: jobs, minions, mounts\n- Optional sync to companion server",
+    "Changelog": "- Initial release of Memoria\n- Player scan tracking with name, world, and appearance history\n- Alt-character linking via Account ID\n- Lodestone integration: jobs, minions, mounts\n- Optional sync to companion server",
     "Tags": [ "player", "tracker", "history", "alts", "lodestone", "account" ]
   }
 ]

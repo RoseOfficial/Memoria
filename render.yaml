@@ -1,11 +1,11 @@
-# Render infrastructure-as-code for the AlphaScope API server.
+# Render infrastructure-as-code for the Memoria API server.
 # Push this file to the repo, then in Render: New → Blueprint → point at this repo.
 # Secrets (ConnectionStrings__DefaultConnection, Cors__AllowedOrigins) are set in the
 # Render dashboard as Environment variables. They are NEVER committed.
 
 services:
   - type: web
-    name: alphascope-server
+    name: memoria-server
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free

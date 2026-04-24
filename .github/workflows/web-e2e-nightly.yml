@@ -28,11 +28,11 @@ jobs:
 
       - run: pnpm build
         env:
-          NEXT_PUBLIC_API_BASE_URL: https://api.alphascope.app
+          NEXT_PUBLIC_API_BASE_URL: https://api.memoria.gg
 
       - run: pnpm exec playwright test
         env:
-          NEXT_PUBLIC_API_BASE_URL: https://api.alphascope.app
+          NEXT_PUBLIC_API_BASE_URL: https://api.memoria.gg
           PLAYWRIGHT_BASE_URL: http://localhost:3000
 
       - name: Upload report on failure

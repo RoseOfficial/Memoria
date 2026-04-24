@@ -6,8 +6,8 @@
         <CodeCoverage>
           <ModulePaths>
             <Include>
-              <ModulePath>.*AlphaScope\.dll$</ModulePath>
-              <ModulePath>.*AlphaScopeServer\.dll$</ModulePath>
+              <ModulePath>.*Memoria\.dll$</ModulePath>
+              <ModulePath>.*MemoriaServer\.dll$</ModulePath>
             </Include>
             <Exclude>
               <ModulePath>.*Tests.*</ModulePath>
@@ -17,8 +17,8 @@
           
           <Sources>
             <Include>
-              <Source>.*AlphaScope\\.*</Source>
-              <Source>.*AlphaScopeServer\\.*</Source>
+              <Source>.*Memoria\\.*</Source>
+              <Source>.*MemoriaServer\\.*</Source>
             </Include>
             <Exclude>
               <Source>.*\\bin\\.*</Source>

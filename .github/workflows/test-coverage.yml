@@ -21,22 +21,22 @@ jobs:
           9.0.x
     
     - name: Restore server dependencies
-      run: dotnet restore AlphaScopeServer/AlphaScopeServer.csproj
+      run: dotnet restore MemoriaServer/MemoriaServer.csproj
     
     - name: Restore server test dependencies
-      run: dotnet restore AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj
+      run: dotnet restore MemoriaServer.Tests/MemoriaServer.Tests.csproj
     
     - name: Restore test utilities dependencies
       run: dotnet restore TestUtilities/TestUtilities.csproj
     
     - name: Build server
-      run: dotnet build AlphaScopeServer/AlphaScopeServer.csproj --no-restore --configuration Release
+      run: dotnet build MemoriaServer/MemoriaServer.csproj --no-restore --configuration Release
     
     - name: Build test utilities
       run: dotnet build TestUtilities/TestUtilities.csproj --no-restore --configuration Release
     
     - name: Build server tests specifically
-      run: dotnet build AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj --no-restore --configuration Release
+      run: dotnet build MemoriaServer.Tests/MemoriaServer.Tests.csproj --no-restore --configuration Release
     
     - name: Install coverage tools
       run: |
@@ -45,14 +45,14 @@ jobs:
     
     - name: Run server tests with coverage
       run: |
-        dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test AlphaScopeServer.Tests/AlphaScopeServer.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
+        dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test MemoriaServer.Tests/MemoriaServer.Tests.csproj --no-build --configuration Release --logger trx --results-directory TestResults/"
     
     - name: Note about Plugin Tests and Build
       run: |
-        echo "📝 Note: Plugin tests (AlphaScope.Tests) and plugin builds are not run in CI because they depend on Dalamud assemblies"
+        echo "📝 Note: Plugin tests (Memoria.Tests) and plugin builds are not run in CI because they depend on Dalamud assemblies"
         echo "   which are only available in the FFXIV game environment. Run them locally with:"
-        echo "   dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj"
-        echo "   dotnet build AlphaScope/AlphaScope.csproj --configuration Release"
+        echo "   dotnet test Memoria.Tests/Memoria.Tests.csproj"
+        echo "   dotnet build Memoria/Memoria.csproj --configuration Release"
     
     - name: Generate coverage report
       run: |
@@ -103,13 +103,13 @@ jobs:
         dotnet-version: 8.0.x
     
     - name: Restore dependencies
-      run: dotnet restore AlphaScopeServer/AlphaScopeServer.csproj
+      run: dotnet restore MemoriaServer/MemoriaServer.csproj
     
     - name: Build server (Release)
-      run: dotnet build AlphaScopeServer/AlphaScopeServer.csproj --no-restore --configuration Release
+      run: dotnet build MemoriaServer/MemoriaServer.csproj --no-restore --configuration Release
     
     - name: Publish server
-      run: dotnet publish AlphaScopeServer/AlphaScopeServer.csproj --no-restore --configuration Release --output ./publish
+      run: dotnet publish MemoriaServer/MemoriaServer.csproj --no-restore --configuration Release --output ./publish
     
     - name: Upload server artifacts
       uses: actions/upload-artifact@v4
@@ -147,7 +147,7 @@ jobs:
       - name: Build
         run: pnpm build
         env:
-          NEXT_PUBLIC_API_BASE_URL: https://api.alphascope.app
+          NEXT_PUBLIC_API_BASE_URL: https://api.memoria.gg
 
       - name: Unit tests
         run: pnpm test

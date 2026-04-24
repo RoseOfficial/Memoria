@@ -4,7 +4,7 @@ export function Nav() {
   return (
     <header className="border-b border-[var(--color-bg-elevated)] px-6 py-4 flex items-center gap-8">
       <Link href="/" className="font-[var(--font-display)] text-xl text-[var(--color-cream)] tracking-wider">
-        AlphaScope
+        Memoria
       </Link>
       <nav className="flex gap-6 text-sm text-[var(--color-text-muted)]">
         <Link href="/search">Search</Link>

@@ -4,7 +4,7 @@ test.skip(!process.env.PLAYWRIGHT_TEST_COOKIE, 'test cookie not set')
 
 test('link redeem rejects bad format', async ({ page, context }) => {
   await context.addCookies([{
-    name: '__Host-alpha',
+    name: '__Host-memoria',
     value: process.env.PLAYWRIGHT_TEST_COOKIE!,
     domain: 'localhost', path: '/', secure: false, httpOnly: true,
   }])

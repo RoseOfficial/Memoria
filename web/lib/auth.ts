@@ -1,4 +1,4 @@
-// Mirrors AlphaScopeServer/Models/DTOs/UserDto.cs
+// Mirrors MemoriaServer/Models/DTOs/UserDto.cs
 // The server serializes with Newtonsoft.Json [JsonProperty("N")] numeric-string keys.
 // Wire parsing is confined to this file; all callers see clean-named types.
 import { apiFetch } from './api'
@@ -54,7 +54,7 @@ export type MeNetworkStats = {
 // Kept private: nothing outside this file should reference these.
 // ---------------------------------------------------------------------------
 
-// AlphaScopeServer.Models.DTOs.User
+// MemoriaServer.Models.DTOs.User
 type WireUser = {
   '0': string        // BaseUrl
   '1': number        // GameAccountId (non-nullable int on the C# side)
@@ -65,7 +65,7 @@ type WireUser = {
   '6': WireNetworkStats
 }
 
-// AlphaScopeServer.Models.DTOs.UserCharacterDto
+// MemoriaServer.Models.DTOs.UserCharacterDto
 // Note: starts at key "1" — there is no "0" field on this DTO
 type WireCharacter = {
   '1': string | null   // Name
@@ -75,7 +75,7 @@ type WireCharacter = {
   '5': string | null   // AvatarLink
 }
 
-// AlphaScopeServer.Models.DTOs.CharacterPrivacySettingsDto
+// MemoriaServer.Models.DTOs.CharacterPrivacySettingsDto
 type WirePrivacy = {
   '1': boolean  // HideFullProfile
   '2': boolean  // HideTerritoryInfo
@@ -85,13 +85,13 @@ type WirePrivacy = {
   '6': boolean  // HideAltCharacters
 }
 
-// AlphaScopeServer.Models.DTOs.CharacterProfileVisitInfoDto
+// MemoriaServer.Models.DTOs.CharacterProfileVisitInfoDto
 type WireVisitInfo = {
   '1': number | null  // ProfileTotalVisitCount
   '2': number | null  // LastProfileVisitDate (unix seconds)
 }
 
-// AlphaScopeServer.Models.DTOs.UserNetworkStatsDto
+// MemoriaServer.Models.DTOs.UserNetworkStatsDto
 type WireNetworkStats = {
   '1': number  // UploadedPlayersCount
   '2': number  // UploadedPlayerInfoCount

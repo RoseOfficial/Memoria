@@ -1,0 +1,53 @@
+﻿<Project Sdk="Dalamud.NET.Sdk/14.0.1">
+    <PropertyGroup>
+        <Version>1.0.0</Version>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <SatelliteResourceLanguages>none</SatelliteResourceLanguages>
+        <OutputPath Condition="'$(Configuration)' != 'EF'">dist</OutputPath>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <TargetFramework>net10.0-windows</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>Memoria.Tests</_Parameter1>
+        </AssemblyAttribute>
+        <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+            <_Parameter1>DynamicProxyGenAssembly2</_Parameter1>
+        </AssemblyAttribute>
+    </ItemGroup>
+    <ItemGroup>
+      <Content Include="icon.png" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <PackageReference Include="Dalamud.Extensions.MicrosoftLogging" Version="4.0.1" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
+        <PackageReference Include="NetStone" Version="1.4.1" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="RestSharp" Version="112.1.0" />
+        <PackageReference Include="RestSharp.Serializers.NewtonsoftJson" Version="112.1.0" />
+    </ItemGroup>
+    
+    
+    <ItemGroup>
+        <Reference Include="InteropGenerator.Runtime">
+            <HintPath>C:\Users\neoga\AppData\Roaming\XIVLauncher\addon\Hooks\dev\InteropGenerator.Runtime.dll</HintPath>
+            <Private>false</Private>
+        </Reference>
+    </ItemGroup>
+    
+    
+    <ItemGroup>
+      <EmbeddedResource Update="Properties\Loc.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Loc.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
+    </ItemGroup>
+	
+    
+    <ItemGroup>
+      <PackageReference Update="DalamudPackager" Version="14.0.1" />
+      <PackageReference Update="DotNet.ReproducibleBuilds" Version="1.2.25" />
+    </ItemGroup>
+</Project>

@@ -20,7 +20,7 @@ export default async function MePage() {
         <SignatureFrame className="p-8 space-y-4">
           <h2 className="text-xl">Link your in-game character</h2>
           <p className="text-[var(--color-text-muted)]">
-            Open the AlphaScope plugin in-game, go to <em>Settings</em>, click <em>Generate web link code</em>.
+            Open the Memoria plugin in-game, go to <em>Settings</em>, click <em>Generate web link code</em>.
             Paste the code (starts with <code className="text-[var(--color-gold)]">AL-</code>) on the link page below.
           </p>
           <Link href="/me/link" className="inline-block text-[var(--color-gold)] hover:text-[var(--color-gold-bright)]">

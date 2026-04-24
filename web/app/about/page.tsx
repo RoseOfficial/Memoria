@@ -1,11 +1,11 @@
-export const metadata = { title: 'About — AlphaScope' }
+export const metadata = { title: 'About — Memoria' }
 
 export default function About() {
   return (
     <main className="max-w-2xl mx-auto px-8 py-12 space-y-6 prose-invert">
       <h1 className="text-3xl">About</h1>
       <p className="text-[var(--color-text-muted)]">
-        AlphaScope is a FFXIV player lookup tool. A Dalamud plugin scans the players you encounter in-game;
+        Memoria is a FFXIV player lookup tool. A Dalamud plugin scans the players you encounter in-game;
         this website is where the data becomes searchable, browsable, and — if you claim your characters —
         yours to manage.
       </p>

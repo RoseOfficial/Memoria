@@ -5,7 +5,7 @@ param(
     [switch]$SkipBuild = $false
 )
 
-Write-Host "Running AlphaScope Tests with Coverage Analysis" -ForegroundColor Green
+Write-Host "Running Memoria Tests with Coverage Analysis" -ForegroundColor Green
 Write-Host "=============================================" -ForegroundColor Green
 
 # Check if required tools are installed
@@ -25,7 +25,7 @@ if (-not $hasReportGenerator) {
 # Build solution if not skipped
 if (-not $SkipBuild) {
     Write-Host "`nBuilding solution..." -ForegroundColor Blue
-    dotnet build AlphaScope.sln --configuration $Configuration
+    dotnet build Memoria.sln --configuration $Configuration
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Build failed. Exiting."
         exit 1
@@ -46,7 +46,7 @@ if (Test-Path "TestResults") {
 Write-Host "`nRunning tests with coverage collection..." -ForegroundColor Blue
 
 # Run tests with coverage
-dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test AlphaScope.Tests/AlphaScope.Tests.csproj --no-build --configuration $Configuration --logger trx --results-directory TestResults/ --verbosity normal"
+dotnet-coverage collect --settings coverage.settings --output coverage.cobertura.xml "dotnet test Memoria.Tests/Memoria.Tests.csproj --no-build --configuration $Configuration --logger trx --results-directory TestResults/ --verbosity normal"
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Test execution failed. Check the output above for details."

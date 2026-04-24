@@ -1,11 +1,11 @@
-export const metadata = { title: 'Privacy — AlphaScope' }
+export const metadata = { title: 'Privacy — Memoria' }
 
 export default function Privacy() {
   return (
     <main className="max-w-2xl mx-auto px-8 py-12 space-y-6">
       <h1 className="text-3xl">Privacy</h1>
       <p className="text-[var(--color-text-muted)]">
-        AlphaScope records publicly observable data about FFXIV characters: names, worlds, visible
+        Memoria records publicly observable data about FFXIV characters: names, worlds, visible
         appearance, encountered territories, and publicly listed Lodestone information. We do not record
         private chat, party chat, private messages, or any data the game doesn't expose to any passing player.
       </p>

@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
-# PowerShell script to set up test connection between AlphaScope plugin and server
+# PowerShell script to set up test connection between Memoria plugin and server
 
-Write-Host "Setting up AlphaScope test connection..." -ForegroundColor Green
+Write-Host "Setting up Memoria test connection..." -ForegroundColor Green
 
 # Test server health
 Write-Host "`nTesting server health..." -ForegroundColor Yellow
@@ -53,8 +53,8 @@ try {
 }
 
 Write-Host "`n=== Configuration Instructions ===" -ForegroundColor Cyan
-Write-Host "To connect your AlphaScope plugin to the server:" -ForegroundColor White
-Write-Host "1. Open the AlphaScope plugin in-game using /alpha" -ForegroundColor White
+Write-Host "To connect your Memoria plugin to the server:" -ForegroundColor White
+Write-Host "1. Open the Memoria plugin in-game using /alpha" -ForegroundColor White
 Write-Host "2. Go to Settings tab" -ForegroundColor White
 Write-Host "3. Set the following values:" -ForegroundColor White
 Write-Host "   - Server URL: https://localhost:5001/v1/" -ForegroundColor Yellow

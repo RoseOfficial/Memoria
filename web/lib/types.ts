@@ -1,4 +1,4 @@
-// Mirrors AlphaScopeServer/Models/DTOs/PlayerProfileResponse.cs
+// Mirrors MemoriaServer/Models/DTOs/PlayerProfileResponse.cs
 export type ProfileHeader = {
   localContentId: number
   name: string

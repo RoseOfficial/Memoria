@@ -5,7 +5,7 @@ import { Nav } from '../components/nav/Nav'
 import { Footer } from '../components/nav/Footer'
 
 export const metadata: Metadata = {
-  title: 'AlphaScope',
+  title: 'Memoria',
   description: 'FFXIV player lookup — scanned, scrolled, remembered.',
 }
 
