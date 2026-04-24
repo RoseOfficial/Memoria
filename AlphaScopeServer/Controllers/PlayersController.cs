@@ -1,4 +1,5 @@
 // ASP.NET Core dependencies
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -257,6 +258,87 @@ namespace AlphaScopeServer.Controllers
             {
                 _logger.LogError(ex, "Error getting player {PlayerId}", id);
                 return StatusCode(500, "Error retrieving player details");
+            }
+        }
+
+        [HttpGet("by-slug")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetBySlug([FromQuery] string world, [FromQuery] string name)
+        {
+            var worldId = WorldNames.ResolveFromSlug(world);
+            if (worldId is null) return NotFound();
+
+            var nameLower = name.ToLowerInvariant();
+
+            // Current match: Player whose current (HomeWorldId, Name) matches
+            var player = await _context.Players
+                .FirstOrDefaultAsync(p =>
+                    p.HomeWorldId == worldId &&
+                    p.Name.ToLower().Replace(" ", "-").Replace("'", "") == nameLower);
+
+            if (player is null) return NotFound();
+
+            var tier = (int)(HttpContext.Items["Tier"] ?? 1);
+            var viewerUserId = HttpContext.Items["ViewerUserId"] as int?;
+            var isOwner = viewerUserId.HasValue && player.ClaimedByUserId == viewerUserId.Value;
+
+            var dto = BuildProfileResponse(player, tier, isOwner);
+            return Ok(dto);
+        }
+
+        private static PlayerProfileResponse BuildProfileResponse(Player player, int tier, bool isOwner)
+        {
+            var worldName = WorldNames.Resolve(player.HomeWorldId) ?? "Unknown";
+            var worldSlug = WorldNames.ToSlug(worldName);
+
+            var header = new ProfileHeader(
+                LocalContentId: player.LocalContentId,
+                Name: player.Name,
+                WorldSlug: worldSlug,
+                WorldName: worldName,
+                AvatarUrl: player.AvatarLink,
+                CurrentJobId: player.CurrentJobId,
+                CurrentJobLevel: player.CurrentJobLevel,
+                FreeCompanyTag: null,  // not tracked at base Player level yet
+                LastSeenAt: player.LastScannedAt,
+                LastSeenTerritory: null,
+                FirstScannedAt: player.CreatedAt);
+
+            // Tier 1 sections — always filled if data exists
+            var jobs = BuildJobs(player);
+            var customization = (CustomizationData?)null;  // Task 8 fills this
+            var mounts = (MountsData?)null;   // Task 8 fills this
+            var minions = (MinionsData?)null; // Task 8 fills this
+
+            // Tier 2+ sections: null for anon/below-tier viewers
+            LocationsData? locations = null;
+            IReadOnlyList<NameHistoryEntry>? nameHistory = null;
+            IReadOnlyList<WorldHistoryEntry>? worldHistory = null;
+            IReadOnlyList<AltCharacter>? alts = null;
+            // These get populated in a later task when Tier 2 rendering is enabled end-to-end.
+
+            return new PlayerProfileResponse(header, jobs, customization, mounts, minions,
+                locations, nameHistory, worldHistory, alts, isOwner);
+        }
+
+        private static JobsData BuildJobs(Player player)
+        {
+            if (string.IsNullOrWhiteSpace(player.LodestoneJobData))
+                return new JobsData(Array.Empty<JobEntry>());
+
+            try
+            {
+                var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, short>>(player.LodestoneJobData);
+                if (parsed is null) return new JobsData(Array.Empty<JobEntry>());
+                return new JobsData(parsed
+                    .Where(kvp => kvp.Value > 0)
+                    .OrderByDescending(kvp => kvp.Value)
+                    .Select(kvp => new JobEntry(kvp.Key, kvp.Value))
+                    .ToList());
+            }
+            catch
+            {
+                return new JobsData(Array.Empty<JobEntry>());
             }
         }
 
