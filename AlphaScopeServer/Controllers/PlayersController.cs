@@ -264,6 +264,27 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
+        [HttpGet("recent")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetRecent()
+        {
+            var raw = await _context.Players
+                .Where(p => !p.HideEntirely && !p.IsPrivate && !p.HideInSearch && p.LastScannedAt != null)
+                .OrderByDescending(p => p.LastScannedAt)
+                .Take(20)
+                .Select(p => new { p.Name, p.HomeWorldId, p.AvatarLink, p.LastScannedAt })
+                .ToListAsync();
+
+            var items = raw.Select(p => new RecentPlayerItem(
+                p.Name,
+                p.HomeWorldId.HasValue ? WorldNames.ToSlug(WorldNames.Resolve(p.HomeWorldId) ?? "unknown") : "unknown",
+                p.HomeWorldId.HasValue ? WorldNames.Resolve(p.HomeWorldId) ?? "Unknown" : "Unknown",
+                p.AvatarLink,
+                p.LastScannedAt!.Value)).ToList();
+
+            return Ok(new RecentPlayerResponse(items));
+        }
+
         [HttpGet("by-slug")]
         [AllowAnonymous]
         public async Task<IActionResult> GetBySlug([FromQuery] string world, [FromQuery] string name)
