@@ -51,6 +51,8 @@ if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddHostedService<AlphaScopeServer.Services.Maintenance.ClaimAttemptCleanupService>();
 }
 
+builder.Services.AddSingleton<AlphaScopeServer.Services.Takedowns.TakedownRateLimiter>();
+
 // Configure CORS. No wildcard origins — the Dalamud plugin calls via RestSharp (not a browser),
 // so CORS does not apply to it. Browser-based clients must be explicitly allowlisted via
 // the `Cors:AllowedOrigins` config key (comma-separated). Unset = no browser origins allowed.
