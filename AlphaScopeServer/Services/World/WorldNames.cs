@@ -58,7 +58,10 @@ public static class WorldNames
     }
 
     public static string ToSlug(string worldName)
-        => worldName.ToLowerInvariant().Replace("'", "").Replace(" ", "-");
+    {
+        ArgumentNullException.ThrowIfNull(worldName);
+        return worldName.ToLowerInvariant().Replace("'", "").Replace(" ", "-");
+    }
 
     public static string? Resolve(short? worldId)
         => worldId.HasValue && Map.TryGetValue(worldId.Value, out var name) ? name : null;
@@ -69,6 +72,6 @@ public static class WorldNames
         return SlugToId.TryGetValue(slug, out var id) ? id : null;
     }
 
-    public static IReadOnlyCollection<string> AllSlugs() => SlugToId.Keys;
+    public static IReadOnlyCollection<string> AllSlugs() => SlugToId.Keys.ToList();
     public static IReadOnlyDictionary<short, string> AllNames() => Map;
 }

@@ -41,10 +41,17 @@ public class WorldNamesTests
     }
 
     [Fact]
-    public void AllNames_AreUniqueAndCaseInsensitive()
+    public void AllSlugs_AreUniqueAndLowercase()
     {
         var slugs = WorldNames.AllSlugs();
         slugs.Should().OnlyHaveUniqueItems();
         slugs.Should().OnlyContain(s => s == s.ToLowerInvariant());
+    }
+
+    [Fact]
+    public void AllNames_CountMatchesAllSlugs()
+    {
+        // Catches future TryAdd silent-skip when duplicate slugs appear
+        WorldNames.AllSlugs().Count.Should().Be(WorldNames.AllNames().Count);
     }
 }
