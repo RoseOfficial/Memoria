@@ -64,8 +64,7 @@ namespace AlphaScopeServer.Middleware
             if (user.GuildMembershipCheckedAt is null) return Task.FromResult(false);
             if (DateTime.UtcNow - user.GuildMembershipCheckedAt.Value > TimeSpan.FromHours(24))
                 return Task.FromResult(false);
-            // Plan 0a: always false. Plan 0c: return user.IsGuildMember after optional refresh.
-            return Task.FromResult(false);
+            return Task.FromResult(user.IsGuildMember);
         }
     }
 

@@ -73,10 +73,17 @@ public class TierResolutionMiddlewareTests : IDisposable
     }
 
     [Fact]
-    public async Task IsGuildMemberFresh_ReturnsFalse_InStubEvenWhenFresh()
+    public async Task IsGuildMemberFresh_ReturnsTrue_WhenFreshAndMember()
     {
-        // In Plan 0a the helper returns false unconditionally. Plan 0c fleshes it out.
         var user = new ApplicationUser { Name = "U", ApiKey = "k", IsGuildMember = true, GuildMembershipCheckedAt = DateTime.UtcNow, PrimaryCharacterLocalContentId = 0 };
+        var result = await TierResolutionMiddleware.IsGuildMemberFresh(user, _db);
+        result.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsGuildMemberFresh_ReturnsFalse_WhenFreshButNotMember()
+    {
+        var user = new ApplicationUser { Name = "U", ApiKey = "k", IsGuildMember = false, GuildMembershipCheckedAt = DateTime.UtcNow, PrimaryCharacterLocalContentId = 0 };
         var result = await TierResolutionMiddleware.IsGuildMemberFresh(user, _db);
         result.Should().BeFalse();
     }

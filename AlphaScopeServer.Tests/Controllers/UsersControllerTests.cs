@@ -71,7 +71,8 @@ public class UsersControllerTests : IDisposable
         var dbUser = await _context.Users.FirstOrDefaultAsync(u => u.GameAccountId == 123456789);
         dbUser.Should().NotBeNull();
         dbUser!.Name.Should().Be("TestUser");
-        dbUser.ApiKey.Should().EndWith("-123456789");
+        dbUser.ApiKey.Should().NotBeNullOrEmpty();
+        dbUser.ApiKey.Should().NotContain("-123456789"); // opaque key — no GameAccountId suffix
     }
 
     [Fact]
@@ -167,8 +168,7 @@ public class UsersControllerTests : IDisposable
         // Assert
         var dbUser = await _context.Users.FirstOrDefaultAsync(u => u.GameAccountId == 123456789);
         dbUser!.ApiKey.Should().NotBeNullOrEmpty();
-        dbUser.ApiKey.Should().EndWith("-123456789");
-        dbUser.ApiKey.Should().MatchRegex(@"^[A-Za-z0-9]+-123456789$");
+        dbUser.ApiKey.Should().MatchRegex(@"^[A-Za-z0-9]+$"); // opaque key, no suffix
     }
 
     [Theory]

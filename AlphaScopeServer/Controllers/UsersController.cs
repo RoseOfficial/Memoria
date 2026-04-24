@@ -38,13 +38,15 @@ namespace AlphaScopeServer.Controllers
                 {
                     // Create new user
                     var apiKey = GenerateApiKey();
-                    
+
                     user = new ApplicationUser
                     {
                         GameAccountId = request.GameAccountId,
                         PrimaryCharacterLocalContentId = request.UserLocalContentId,
                         Name = request.Name,
-                        ApiKey = $"{apiKey}-{request.GameAccountId}",
+                        // Opaque key — no GameAccountId suffix. Existing older keys
+                        // (with the suffix) still authenticate because lookup is by full-string match.
+                        ApiKey = apiKey,
                         AppRoleId = (int)UserRole.Member,
                         BaseUrl = HttpContext.Request.Scheme + "://" + HttpContext.Request.Host + "/v1/",
                         CreatedAt = DateTime.UtcNow,
