@@ -85,4 +85,21 @@ public class PlayersControllerBySlugTests
         dto.WorldHistory.Should().BeNull();
         dto.Alts.Should().BeNull();
     }
+
+    [Fact]
+    public async Task GetBySlug_ApostropheInName_MatchesViaSlug()
+    {
+        using var ctx = new AlphaScopeDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<AlphaScopeDbContext>());
+        ctx.Players.Add(new Player
+        {
+            LocalContentId = 1,
+            Name = "T'chai Nunh",
+            HomeWorldId = 91,
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx);
+        var result = await controller.GetBySlug("balmung", "tchai-nunh");
+        result.Should().BeOfType<OkObjectResult>();
+    }
 }

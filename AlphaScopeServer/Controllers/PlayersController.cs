@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
+// System dependencies
+using System.Text.Json;
+
 // AlphaScopeServer internal dependencies
 using AlphaScopeServer.Data;
 using AlphaScopeServer.Models.DTOs;
@@ -270,11 +273,11 @@ namespace AlphaScopeServer.Controllers
 
             var nameLower = name.ToLowerInvariant();
 
-            // Current match: Player whose current (HomeWorldId, Name) matches
-            var player = await _context.Players
-                .FirstOrDefaultAsync(p =>
-                    p.HomeWorldId == worldId &&
-                    p.Name.ToLower().Replace(" ", "-").Replace("'", "") == nameLower);
+            // Filter by worldId in SQL (uses index), slug-match on Name in memory
+            var candidates = await _context.Players
+                .Where(p => p.HomeWorldId == worldId)
+                .ToListAsync();
+            var player = candidates.FirstOrDefault(p => WorldNames.ToSlug(p.Name) == nameLower);
 
             if (player is null) return NotFound();
 
@@ -328,7 +331,7 @@ namespace AlphaScopeServer.Controllers
 
             try
             {
-                var parsed = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, short>>(player.LodestoneJobData);
+                var parsed = JsonSerializer.Deserialize<Dictionary<string, short>>(player.LodestoneJobData);
                 if (parsed is null) return new JobsData(Array.Empty<JobEntry>());
                 return new JobsData(parsed
                     .Where(kvp => kvp.Value > 0)
@@ -336,7 +339,7 @@ namespace AlphaScopeServer.Controllers
                     .Select(kvp => new JobEntry(kvp.Key, kvp.Value))
                     .ToList());
             }
-            catch
+            catch (JsonException)
             {
                 return new JobsData(Array.Empty<JobEntry>());
             }
