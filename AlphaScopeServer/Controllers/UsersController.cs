@@ -273,6 +273,7 @@ namespace AlphaScopeServer.Controllers
             }
         }
 
+#if DEBUG
         [HttpPost("create-test-user")]
         public async Task<ActionResult> CreateTestUser()
         {
@@ -281,7 +282,7 @@ namespace AlphaScopeServer.Controllers
                 // Check if user already exists
                 var existingUser = await _context.Users
                     .FirstOrDefaultAsync(u => u.GameAccountId == 1387972975);
-                
+
                 if (existingUser != null)
                 {
                     return Ok(new { message = "Test user already exists", apiKey = existingUser.ApiKey });
@@ -311,6 +312,7 @@ namespace AlphaScopeServer.Controllers
                 return StatusCode(500, $"Error creating test user: {ex.Message}");
             }
         }
+#endif
 
         [HttpGet("me/admin")]
         public Task<IActionResult> GetAdminFlag()
