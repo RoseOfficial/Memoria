@@ -65,6 +65,32 @@ public class PlayersControllerUploadTests : IDisposable
     }
 
     [Fact]
+    public async Task UploadPlayers_RefreshesAccountIdOnSubsequentScans()
+    {
+        // FFXIV's Character.AccountId can briefly hold a stale value in early
+        // game-load before the real id loads. Once a Player row is created with
+        // that stale value, every later scan carries the correct id — but the
+        // update path used to ignore AccountId, so the row stayed stuck on the
+        // wrong value forever and alt-linkage (Player.AccountId match) split
+        // characters that should have been grouped.
+        var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var staleScan = new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 42, Name = "AltSplitter", HomeWorldId = 34, AccountId = 696148207, CreatedAt = ts },
+        };
+        await _controller.UploadPlayers(staleScan);
+
+        var freshScan = new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 42, Name = "AltSplitter", HomeWorldId = 34, AccountId = -441692532, CreatedAt = ts + 60 },
+        };
+        await _controller.UploadPlayers(freshScan);
+
+        var player = await _context.Players.AsNoTracking().FirstAsync(p => p.LocalContentId == 42);
+        player.AccountId.Should().Be(-441692532);
+    }
+
+    [Fact]
     public async Task UploadPlayers_DedupesAndIncrementsByUniqueCount()
     {
         // The plugin's outbox can replay duplicate entries for the same player; the
