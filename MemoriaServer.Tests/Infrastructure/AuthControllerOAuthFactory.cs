@@ -25,7 +25,9 @@ public class AuthControllerOAuthFactory : TestAppFactory
                 ["Discord:GuildId"] = "999888777",
                 ["Discord:StateSigningKey"] = "ZGV2ZWxvcG1lbnQta2V5LTMyLWJ5dGVzLWxvbmctYmFzZTY0",
                 ["ServerBaseUrl"] = "https://api.example.com",
-                ["Cors:AllowedOrigins"] = "https://app.example.com",
+                // IsAllowedReturnTo + the CORS policy both read this as a string array
+                // (matching production appsettings.json), so seed it with an indexed key.
+                ["Cors:AllowedOrigins:0"] = "https://app.example.com",
             });
         });
 

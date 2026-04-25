@@ -275,13 +275,13 @@ namespace MemoriaServer.Controllers
 
         private bool IsAllowedReturnTo(string url)
         {
-            var originsCsv = _configuration["Cors:AllowedOrigins"];
-            if (string.IsNullOrWhiteSpace(originsCsv)) return false;
-
+            // Must be an absolute URL — relative paths could route to the API's own origin
+            // and be exploited as an open-redirect helper.
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
 
-            var allowed = originsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            foreach (var origin in allowed)
+            // Exact origins from the array config (mirrors the CORS policy in Program.cs).
+            var exactOrigins = _configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+            foreach (var origin in exactOrigins)
             {
                 if (Uri.TryCreate(origin, UriKind.Absolute, out var allowedUri) &&
                     uri.Scheme == allowedUri.Scheme &&
@@ -291,6 +291,25 @@ namespace MemoriaServer.Controllers
                     return true;
                 }
             }
+
+            // Regex pattern from config — same source the CORS policy uses for preview URLs.
+            var pattern = _configuration["Cors:AllowedOriginPattern"];
+            if (!string.IsNullOrWhiteSpace(pattern))
+            {
+                var normalized = uri.IsDefaultPort
+                    ? $"{uri.Scheme}://{uri.Host}"
+                    : $"{uri.Scheme}://{uri.Host}:{uri.Port}";
+                try
+                {
+                    if (System.Text.RegularExpressions.Regex.IsMatch(normalized, pattern))
+                        return true;
+                }
+                catch (ArgumentException)
+                {
+                    // Malformed pattern → fail closed.
+                }
+            }
+
             return false;
         }
 
