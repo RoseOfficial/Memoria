@@ -36,6 +36,14 @@ internal sealed class SlimMainWindow : Window
 
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(500);
 
+    // Web account link state. Tracks the in-flight generate request and the resulting code
+    // until it expires; user re-clicks "Generate" to mint a new one once it lapses.
+    private enum LinkState { Idle, Generating, Display, Error }
+    private LinkState _linkState = LinkState.Idle;
+    private string _linkCode = string.Empty;
+    private DateTime _linkExpiresAt;
+    private string _linkError = string.Empty;
+
     public SlimMainWindow(MicroCardWindow microCardWindow)
         : base("Memoria##Main", ImGuiWindowFlags.NoCollapse)
     {
@@ -301,6 +309,9 @@ internal sealed class SlimMainWindow : Window
         }
 
         ImGui.Spacing();
+        DrawWebAccountLink();
+
+        ImGui.Spacing();
         ImGui.TextDisabled("Privacy");
 
         var optOutPopups = config.OptOutInGamePopups;
@@ -314,6 +325,103 @@ internal sealed class SlimMainWindow : Window
         {
             config.Save();
         }
+    }
+
+    private void DrawWebAccountLink()
+    {
+        var config = Plugin.Instance.Configuration;
+
+        ImGui.TextDisabled("Web account link");
+        ImGui.TextWrapped("Link this plugin install to your memoria.gg account so claimed characters and privacy settings sync across the web and the plugin.");
+
+        // Auto-clear the displayed code once it expires; user must regenerate.
+        if (_linkState == LinkState.Display && DateTime.UtcNow >= _linkExpiresAt)
+        {
+            _linkState = LinkState.Idle;
+            _linkCode = string.Empty;
+        }
+
+        switch (_linkState)
+        {
+            case LinkState.Idle:
+                if (ImGui.Button("Generate web link code"))
+                {
+                    StartGenerateLinkCode();
+                }
+                break;
+
+            case LinkState.Generating:
+                ImGui.BeginDisabled();
+                ImGui.Button("Generating…");
+                ImGui.EndDisabled();
+                break;
+
+            case LinkState.Display:
+                ImGui.PushFont(Dalamud.Interface.UiBuilder.MonoFont);
+                ImGui.TextUnformatted(_linkCode);
+                ImGui.PopFont();
+
+                if (ImGui.Button("Copy code"))
+                {
+                    ImGui.SetClipboardText(_linkCode);
+                }
+
+                if (!string.IsNullOrWhiteSpace(config.WebBaseUrl))
+                {
+                    ImGui.SameLine();
+                    if (ImGui.Button("Open memoria.gg/me/link →"))
+                    {
+                        Dalamud.Utility.Util.OpenLink(WebUrls.LinkUrl(config.WebBaseUrl));
+                    }
+                }
+
+                var remaining = _linkExpiresAt - DateTime.UtcNow;
+                if (remaining > TimeSpan.Zero)
+                {
+                    ImGui.TextDisabled($"Expires in {(int)remaining.TotalMinutes}m {remaining.Seconds:00}s");
+                }
+                break;
+
+            case LinkState.Error:
+                ImGui.TextColored(new Vector4(1f, 0.4f, 0.4f, 1f), _linkError);
+                if (ImGui.Button("Try again"))
+                {
+                    StartGenerateLinkCode();
+                }
+                break;
+        }
+    }
+
+    private void StartGenerateLinkCode()
+    {
+        _linkState = LinkState.Generating;
+        _linkError = string.Empty;
+
+        // Fire-and-forget: API call runs off the framework thread; we update UI state from
+        // the continuation. Errors are surfaced via _linkError without crashing the window.
+        _ = System.Threading.Tasks.Task.Run(async () =>
+        {
+            try
+            {
+                var result = await Plugin.Instance.ApiClient.GenerateWebLinkCodeAsync();
+                if (result.Success && result.Data is { } data && !string.IsNullOrWhiteSpace(data.Code))
+                {
+                    _linkCode = data.Code;
+                    _linkExpiresAt = data.ExpiresAt;
+                    _linkState = LinkState.Display;
+                }
+                else
+                {
+                    _linkError = result.Error ?? "Failed to generate link code.";
+                    _linkState = LinkState.Error;
+                }
+            }
+            catch (Exception ex)
+            {
+                _linkError = ex.Message;
+                _linkState = LinkState.Error;
+            }
+        });
     }
 
     private static void DrawUploadStatus()

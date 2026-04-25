@@ -10,6 +10,7 @@ using Memoria.API.Models.Responses.Player;
 using Memoria.API.Models.Responses.Server;
 using Memoria.API.Models.Requests.Player;
 using Memoria.API.Models.Requests.User;
+using Memoria.API.Models.Shared;
 using UserModels = Memoria.API.Models.Responses.User;
 using Memoria.API.Query.Player;
 using Memoria.API.Services;
@@ -535,6 +536,17 @@ namespace Memoria.API
         {
             var result = await UserRefreshMyInfoAsync();
             return result.GetValueOrDefault((null, "Failed to refresh user info"));
+        }
+
+        /// <summary>
+        /// Generates a one-time code that the user pastes into memoria.gg/me/link to merge
+        /// their Discord identity onto this plugin install. Pass-through to UserAuthService;
+        /// returns the raw ApiResponse so the UI can react to the 503 / 401 / etc. status codes.
+        /// </summary>
+        public async Task<ApiResponse<UserModels.LinkGenerateResponse>> GenerateWebLinkCodeAsync(CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+            return await _userAuthService.GenerateWebLinkCodeAsync(cancellationToken);
         }
 
         /// <summary>

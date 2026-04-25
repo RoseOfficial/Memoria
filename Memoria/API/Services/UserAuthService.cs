@@ -418,6 +418,43 @@ namespace Memoria.API.Services
         // GetErrorMessage method is inherited from BaseApiService
 
         /// <summary>
+        /// Generates a one-time link code via POST /v1/auth/link/generate. The user pastes the
+        /// returned code into memoria.gg/me/link to merge their Discord identity onto this plugin
+        /// install. The server short-circuits with 503 when Discord OAuth isn't configured.
+        /// </summary>
+        public async Task<ApiResponse<LinkGenerateResponse>> GenerateWebLinkCodeAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var apiKey = Config.Key;
+                if (string.IsNullOrWhiteSpace(apiKey))
+                    return ApiResponse<LinkGenerateResponse>.Fail("Plugin is not authenticated yet — restart the plugin or check your settings.", ErrorCodes.UNAUTHORIZED);
+
+                var request = new RestRequest(ApiEndpoints.AUTH_LINK_GENERATE)
+                    .AddHeader(ApiHeaders.API_KEY, apiKey);
+
+                var response = await RestClient.ExecutePostAsync(request, cancellationToken).ConfigureAwait(false);
+
+                if (response.IsSuccessful && !string.IsNullOrWhiteSpace(response.Content))
+                {
+                    var parsed = JsonConvert.DeserializeObject<LinkGenerateResponse>(response.Content!);
+                    if (parsed != null && !string.IsNullOrWhiteSpace(parsed.Code))
+                        return ApiResponse<LinkGenerateResponse>.Ok(parsed, (int)response.StatusCode);
+                }
+
+                if ((int)response.StatusCode == 503)
+                    return ApiResponse<LinkGenerateResponse>.Fail("Server has not configured Discord login yet — try again later.", 503);
+
+                return ApiResponse<LinkGenerateResponse>.Fail(GetErrorMessage(response), (int)response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                _secureLogger.LogError(ex, "Error while generating web link code");
+                return HandleCommonException<LinkGenerateResponse>(ex, "generating web link code");
+            }
+        }
+
+        /// <summary>
         /// Cancels any in-progress authentication operation
         /// </summary>
         public Task<ApiResponse> CancelAuthenticationAsync(CancellationToken cancellationToken = default)

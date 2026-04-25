@@ -37,6 +37,14 @@ public static class WebUrls
         return $"{baseUrl.TrimEnd('/')}/me";
     }
 
+    /// <summary>Build the plugin↔web link redemption URL: <c>{base}/me/link</c>.</summary>
+    public static string LinkUrl(string baseUrl)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            throw new ArgumentException("Base URL is required.", nameof(baseUrl));
+        return $"{baseUrl.TrimEnd('/')}/me/link";
+    }
+
     /// <summary>Return the landing page URL.</summary>
     public static string LandingUrl(string baseUrl)
     {

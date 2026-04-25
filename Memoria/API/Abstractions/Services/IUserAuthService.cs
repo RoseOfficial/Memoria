@@ -126,5 +126,12 @@ namespace Memoria.API.Abstractions.Services
         /// The task result contains an ApiResponse indicating whether the cancellation was successful.
         /// </returns>
         Task<ApiResponse> CancelAuthenticationAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Generates a one-time code (15-minute expiry) that the user pastes into memoria.gg/me/link
+        /// to merge their Discord identity onto this plugin install.
+        /// </summary>
+        Task<ApiResponse<LinkGenerateResponse>> GenerateWebLinkCodeAsync(
+            CancellationToken cancellationToken = default);
     }
 }

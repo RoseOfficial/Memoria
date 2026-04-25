@@ -80,7 +80,13 @@ namespace Memoria.API.Constants
         /// Endpoint for waiting for login completion
         /// </summary>
         public const string WAIT_FOR_LOGIN = "waitforlogin";
-        
+
+        /// <summary>
+        /// Endpoint for generating a one-time code that the web app redeems to link the
+        /// caller's plugin install to its Discord-authenticated account.
+        /// </summary>
+        public const string AUTH_LINK_GENERATE = "auth/link/generate";
+
         #endregion
         
         #region Health and Monitoring Endpoints
