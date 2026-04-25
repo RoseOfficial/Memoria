@@ -577,6 +577,7 @@ namespace MemoriaServer.Controllers
                             CurrentJobLevel = playerRequest.CurrentJobLevel,
                             PlayerPos = playerRequest.PlayerPos,
                             CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime,
+                            LastScannedAt = DateTime.UtcNow,
                             LodestoneJobData = playerRequest.LodestoneJobData,
                             MainJobId = playerRequest.MainJobId,
                             MainJobLevel = playerRequest.MainJobLevel,
@@ -707,6 +708,11 @@ namespace MemoriaServer.Controllers
                         {
                             existingPlayer.UpdatedAt = DateTime.UtcNow;
                         }
+
+                        // Stamp every upload as a scan event regardless of whether other fields
+                        // changed — a player who's standing still is still being observed, and the
+                        // home page's "recent scans" feed depends on this column being populated.
+                        existingPlayer.LastScannedAt = DateTime.UtcNow;
                     }
                 }
 
