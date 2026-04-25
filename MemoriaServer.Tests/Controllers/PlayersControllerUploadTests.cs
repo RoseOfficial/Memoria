@@ -65,6 +65,54 @@ public class PlayersControllerUploadTests : IDisposable
     }
 
     [Fact]
+    public async Task UploadPlayers_StampsUserScannedPlayerForEachPlayerInBatch()
+    {
+        var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var batch = new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 11, Name = "PlayerA", HomeWorldId = 34, CreatedAt = ts },
+            new() { LocalContentId = 22, Name = "PlayerB", HomeWorldId = 65, CreatedAt = ts },
+        };
+
+        await _controller.UploadPlayers(batch);
+
+        var rows = await _context.UserScannedPlayers.AsNoTracking()
+            .Where(s => s.UserId == _user.Id)
+            .ToListAsync();
+        rows.Should().HaveCount(2);
+        rows.Select(r => r.PlayerLocalContentId).Should().BeEquivalentTo(new long[] { 11, 22 });
+    }
+
+    [Fact]
+    public async Task UploadPlayers_UpdatesExistingScanRowOnRescan()
+    {
+        // Same player uploaded twice should result in one row with the LATER timestamp,
+        // not two rows. The dashboard query relies on per-(user, player) uniqueness.
+        var earlier = (int)DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds();
+        var first = new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 33, Name = "Player33", HomeWorldId = 34, CreatedAt = earlier },
+        };
+        await _controller.UploadPlayers(first);
+        var beforeStamp = await _context.UserScannedPlayers.AsNoTracking()
+            .FirstAsync(s => s.UserId == _user.Id && s.PlayerLocalContentId == 33);
+
+        await Task.Delay(20); // ensure UTC clock advances past the previous stamp
+
+        var second = new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 33, Name = "Player33", HomeWorldId = 34, CreatedAt = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds() },
+        };
+        await _controller.UploadPlayers(second);
+
+        var allRows = await _context.UserScannedPlayers.AsNoTracking()
+            .Where(s => s.UserId == _user.Id && s.PlayerLocalContentId == 33)
+            .ToListAsync();
+        allRows.Should().HaveCount(1);
+        allRows[0].LastScannedAt.Should().BeAfter(beforeStamp.LastScannedAt);
+    }
+
+    [Fact]
     public async Task UploadPlayers_RefreshesAccountIdOnSubsequentScans()
     {
         // FFXIV's Character.AccountId can briefly hold a stale value in early

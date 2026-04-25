@@ -334,11 +334,33 @@ namespace MemoriaServer.Controllers
             var user = await _context.Users.FindAsync(viewerUserId.Value);
             if (user is null) return Unauthorized();
 
-            // Plan 0c: Recent list is a placeholder — empty array until scan attribution lands.
-            // ApplicationUser.TotalContributions is maintained by PlayersController on scan upload.
+            // Pull the last 10 distinct players this user has scanned, ordered by
+            // their most recent scan. UserScannedPlayer is an upsert table so each
+            // player appears at most once per user; the index on (UserId,
+            // LastScannedAt) keeps this query cheap as the table grows.
+            var recentRaw = await _context.UserScannedPlayers
+                .Where(s => s.UserId == viewerUserId.Value)
+                .OrderByDescending(s => s.LastScannedAt)
+                .Take(10)
+                .Join(_context.Players,
+                    s => s.PlayerLocalContentId,
+                    p => p.LocalContentId,
+                    (s, p) => new { s.LastScannedAt, p.Name, p.HomeWorldId })
+                .ToListAsync();
+
+            var recent = recentRaw.Select(r =>
+            {
+                var worldName = WorldNames.Resolve(r.HomeWorldId) ?? "Unknown";
+                return new RecentContribution(
+                    PlayerName: r.Name,
+                    WorldSlug: WorldNames.ToSlug(worldName),
+                    WorldName: worldName,
+                    ScannedAt: r.LastScannedAt);
+            }).ToList();
+
             var response = new ContributionsResponse(
                 Lifetime: user.TotalContributions,
-                Recent: Array.Empty<RecentContribution>());
+                Recent: recent);
             return Ok(response);
         }
 

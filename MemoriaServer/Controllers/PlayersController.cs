@@ -784,13 +784,38 @@ namespace MemoriaServer.Controllers
                     }
                 }
 
-                // Stamp the authenticated uploader's lifetime contribution counter so
-                // /me on the web shows what they've actually contributed. Mirrors the
-                // plugin-side counter at PersistenceContext.PostPlayerData; the server
-                // value is the durable record across plugin reinstalls.
+                // Stamp the authenticated uploader's lifetime contribution counter and
+                // per-player scan attribution so the /me dashboard can show both the
+                // running total and a recent-contributions list. Lifetime mirrors the
+                // plugin-side counter at PersistenceContext.PostPlayerData; per-player
+                // attribution is server-only since the plugin doesn't track it.
                 if (HttpContext.Items["User"] is ApplicationUser uploader && players.Count > 0)
                 {
                     uploader.TotalContributions += players.Count;
+
+                    var contentIds = players.Select(p => (long)p.LocalContentId).ToList();
+                    var existingScans = await _context.UserScannedPlayers
+                        .Where(s => s.UserId == uploader.Id && contentIds.Contains(s.PlayerLocalContentId))
+                        .ToListAsync();
+                    var scanByContentId = existingScans.ToDictionary(s => s.PlayerLocalContentId);
+                    var scannedAt = DateTime.UtcNow;
+                    foreach (var playerRequest in players)
+                    {
+                        var contentId = (long)playerRequest.LocalContentId;
+                        if (scanByContentId.TryGetValue(contentId, out var existingScan))
+                        {
+                            existingScan.LastScannedAt = scannedAt;
+                        }
+                        else
+                        {
+                            _context.UserScannedPlayers.Add(new UserScannedPlayer
+                            {
+                                UserId = uploader.Id,
+                                PlayerLocalContentId = contentId,
+                                LastScannedAt = scannedAt,
+                            });
+                        }
+                    }
                 }
 
                 // Save history entries

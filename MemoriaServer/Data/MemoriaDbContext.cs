@@ -51,6 +51,8 @@ namespace MemoriaServer.Data
         public DbSet<ApplicationUser> Users { get; set; }
         /// <summary>Links between users and their FFXIV characters</summary>
         public DbSet<UserCharacter> UserCharacters { get; set; }
+        /// <summary>Per-(user, player) most-recent-scan timestamps for the dashboard recent list</summary>
+        public DbSet<UserScannedPlayer> UserScannedPlayers { get; set; }
         /// <summary>Pending character-claim verifications; one row per (user, player) pair</summary>
         public DbSet<ClaimAttempt> ClaimAttempts { get; set; }
         /// <summary>One-time short-TTL codes used to link plugin accounts to web identities</summary>
@@ -174,6 +176,26 @@ namespace MemoriaServer.Data
                     .OnDelete(DeleteBehavior.Cascade);
                 entity.HasIndex(e => e.LocalContentId);
                 entity.HasIndex(e => e.UserId);
+            });
+
+            modelBuilder.Entity<UserScannedPlayer>(entity =>
+            {
+                // Composite primary key — one row per (user, player) pair.
+                entity.HasKey(e => new { e.UserId, e.PlayerLocalContentId });
+
+                // The dashboard query is "top N by LastScannedAt DESC for this user",
+                // so the supporting index keys on UserId first then LastScannedAt.
+                entity.HasIndex(e => new { e.UserId, e.LastScannedAt });
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Player)
+                      .WithMany()
+                      .HasForeignKey(e => e.PlayerLocalContentId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<ClaimAttempt>(entity =>
