@@ -9,8 +9,13 @@ export async function startClaim(world: string, name: string): Promise<{ code: s
   if (lookup.status === 301) {
     const loc = lookup.headers.get('Location')
     if (loc) {
-      // re-fetch at the canonical URL
-      const m = loc.match(/\/p\/([^/]+)\/([^/]+)/)
+      // re-fetch at the canonical URL. The character class stops at `?` and `#`
+      // because Netlify's edge proxy appends the original request's query string
+      // onto relative Location headers it receives from the origin — so a clean
+      // server-side `/p/brynhildr/rose-ultima` arrives as
+      // `/p/brynhildr/rose-ultima?world=midgardsormr&name=rose-ultima`. A greedy
+      // `[^/]+` would swallow the query into the name slug and re-fetch garbage.
+      const m = loc.match(/\/p\/([^/?#]+)\/([^/?#]+)/)
       if (m) return startClaim(m[1], m[2])
     }
     return { error: 'Character moved to a new world or renamed; please retry with current details.' }
