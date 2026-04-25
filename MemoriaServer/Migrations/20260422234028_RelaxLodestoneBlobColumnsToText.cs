@@ -1,10 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using MemoriaServer.Data;
 
 #nullable disable
 
 namespace MemoriaServer.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(MemoriaDbContext))]
+    [Migration("20260422234028_RelaxLodestoneBlobColumnsToText")]
     public partial class RelaxLodestoneBlobColumnsToText : Migration
     {
         /// <inheritdoc />

@@ -1,5 +1,7 @@
 ﻿using System;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using MemoriaServer.Data;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
@@ -7,6 +9,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MemoriaServer.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(MemoriaDbContext))]
+    [Migration("20260422180016_InitialCreate")]
     public partial class InitialCreate : Migration
     {
         /// <inheritdoc />

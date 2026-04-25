@@ -418,7 +418,9 @@ Temporary Items
 *.sqlite3
 
 # Entity Framework
-**/Migrations/*.Designer.cs
+# Note: do NOT ignore *.Designer.cs — those carry the [Migration] / [DbContext] attributes
+# that EF uses to discover migrations at runtime. Without them Database.Migrate() does
+# nothing and the server boots against a stale schema.
 **/Migrations/*_Initial.cs
 
 # .NET Core
