@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { startClaim, verifyClaim } from '../../app/me/characters/actions'
 import { toSlug } from '../../lib/slug'
+import { DATA_CENTER_ORDER, WORLDS_BY_DC } from '../../lib/worlds'
 
 export function ClaimModal({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState<'enter' | 'verify'>('enter')
@@ -18,7 +19,8 @@ export function ClaimModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     setError(null)
     startTransition(async () => {
-      const result = await startClaim(toSlug(world), toSlug(name))
+      // `world` is already a slug (option value); only the name needs slugging.
+      const result = await startClaim(world, toSlug(name))
       if ('error' in result) { setError(result.error); return }
       setCode(result.code)
       setPlayerId(result.playerId)
@@ -42,8 +44,17 @@ export function ClaimModal({ onClose }: { onClose: () => void }) {
         {step === 'enter' ? (
           <form onSubmit={onStart} className="space-y-4">
             <h2 className="text-2xl">Claim a character</h2>
-            <input required placeholder="World (e.g. Balmung)" value={world} onChange={(e) => setWorld(e.target.value)}
-              className="w-full bg-[var(--color-bg)] border border-[var(--color-bg-elevated)] px-4 py-2" />
+            <select required value={world} onChange={(e) => setWorld(e.target.value)}
+              className="w-full bg-[var(--color-bg)] border border-[var(--color-bg-elevated)] px-4 py-2">
+              <option value="" disabled>Select your home world…</option>
+              {DATA_CENTER_ORDER.map((dc) => (
+                <optgroup key={dc} label={dc}>
+                  {WORLDS_BY_DC[dc].map((w) => (
+                    <option key={w.slug} value={w.slug}>{w.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
             <input required placeholder="Character name" value={name} onChange={(e) => setName(e.target.value)}
               className="w-full bg-[var(--color-bg)] border border-[var(--color-bg-elevated)] px-4 py-2" />
             {error && <p className="text-[var(--color-danger)] text-sm">{error}</p>}
