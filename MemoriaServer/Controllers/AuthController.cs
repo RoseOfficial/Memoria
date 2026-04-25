@@ -40,6 +40,9 @@ namespace MemoriaServer.Controllers
         [HttpGet("discord/start")]
         public IActionResult StartDiscordOAuth([FromQuery] string return_to)
         {
+            if (!_discordOptions.Value.IsConfigured)
+                return DiscordNotConfigured();
+
             if (string.IsNullOrWhiteSpace(return_to) || !IsAllowedReturnTo(return_to))
                 return BadRequest("Invalid return_to URL.");
 
@@ -72,6 +75,9 @@ namespace MemoriaServer.Controllers
             [FromQuery] string state,
             CancellationToken ct)
         {
+            if (!_discordOptions.Value.IsConfigured)
+                return DiscordNotConfigured();
+
             if (string.IsNullOrWhiteSpace(code))
                 return BadRequest("OAuth authorization was denied or missing.");
 
@@ -173,6 +179,9 @@ namespace MemoriaServer.Controllers
         [HttpPost("link/generate")]
         public async Task<IActionResult> GenerateLinkCode(CancellationToken ct)
         {
+            if (!_discordOptions.Value.IsConfigured)
+                return DiscordNotConfigured();
+
             if (HttpContext.Items["User"] is not ApplicationUser user)
                 return Unauthorized();
 
@@ -192,6 +201,9 @@ namespace MemoriaServer.Controllers
         [HttpPost("link/redeem")]
         public async Task<IActionResult> RedeemLinkCode([FromBody] MemoriaServer.Models.DTOs.LinkRedeemRequest request, CancellationToken ct)
         {
+            if (!_discordOptions.Value.IsConfigured)
+                return DiscordNotConfigured();
+
             if (HttpContext.Items["User"] is not ApplicationUser webUser)
                 return Unauthorized();
 
@@ -256,6 +268,10 @@ namespace MemoriaServer.Controllers
             });
             return NoContent();
         }
+
+        private IActionResult DiscordNotConfigured() =>
+            StatusCode(StatusCodes.Status503ServiceUnavailable,
+                new { error = "Discord OAuth is not configured on this server." });
 
         private bool IsAllowedReturnTo(string url)
         {

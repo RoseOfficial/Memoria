@@ -92,27 +92,33 @@ builder.Services.Configure<MemoriaServer.Services.Auth.DiscordOptions>(
 builder.Services.Configure<MemoriaServer.Services.Admin.AdminOptions>(
     builder.Configuration.GetSection(MemoriaServer.Services.Admin.AdminOptions.SectionName));
 
+// Register OAuthStateSigner unconditionally so AuthController can be constructed even when
+// Discord isn't configured. When Discord is off the controller short-circuits with 503 before
+// touching the signer, so the throwaway random key never gets used.
 if (!builder.Environment.IsEnvironment("Testing"))
 {
     var discord = builder.Configuration.GetSection(MemoriaServer.Services.Auth.DiscordOptions.Section)
         .Get<MemoriaServer.Services.Auth.DiscordOptions>()
-        ?? throw new InvalidOperationException("Discord config section missing.");
+        ?? new MemoriaServer.Services.Auth.DiscordOptions();
 
-    if (string.IsNullOrWhiteSpace(discord.ClientId) ||
-        string.IsNullOrWhiteSpace(discord.ClientSecret) ||
-        string.IsNullOrWhiteSpace(discord.GuildId) ||
-        string.IsNullOrWhiteSpace(discord.StateSigningKey))
+    if (discord.IsConfigured)
     {
-        throw new InvalidOperationException(
-            "Discord:ClientId, Discord:ClientSecret, Discord:GuildId, Discord:StateSigningKey are all required.");
+        var serverBaseUrl = builder.Configuration["ServerBaseUrl"];
+        if (string.IsNullOrWhiteSpace(serverBaseUrl))
+            throw new InvalidOperationException(
+                "ServerBaseUrl is required when Discord OAuth is configured (used for the OAuth callback URL).");
+
+        builder.Services.AddSingleton(new MemoriaServer.Services.Auth.OAuthStateSigner(discord.StateSigningKey));
     }
+    else
+    {
+        Console.WriteLine(
+            "[Memoria] Discord OAuth is not configured — auth/discord/* and auth/link/* endpoints will return 503. " +
+            "Set Discord:ClientId, Discord:ClientSecret, Discord:GuildId, Discord:StateSigningKey, and ServerBaseUrl to enable login.");
 
-    var serverBaseUrl = builder.Configuration["ServerBaseUrl"]
-        ?? throw new InvalidOperationException("ServerBaseUrl config value is required.");
-    if (string.IsNullOrWhiteSpace(serverBaseUrl))
-        throw new InvalidOperationException("ServerBaseUrl cannot be empty.");
-
-    builder.Services.AddSingleton(new MemoriaServer.Services.Auth.OAuthStateSigner(discord.StateSigningKey));
+        var throwaway = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        builder.Services.AddSingleton(new MemoriaServer.Services.Auth.OAuthStateSigner(throwaway));
+    }
 }
 
 // Named HttpClient for Discord API calls. Tests override with a stubbed HttpMessageHandler.
