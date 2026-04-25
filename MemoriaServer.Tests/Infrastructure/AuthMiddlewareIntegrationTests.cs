@@ -52,4 +52,21 @@ public class AuthMiddlewareIntegrationTests : IClassFixture<TestAppFactory>
         // the middleware let it through and the downstream controller handled it.
         response.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
     }
+
+    [Theory]
+    [InlineData("/v1/auth/link/generate")]
+    [InlineData("/v1/auth/link/redeem")]
+    public async Task AuthLinkEndpoints_WithoutApiKey_AreRejectedByMiddleware(string path)
+    {
+        // Regression: link/generate and link/redeem are auth-required despite living under
+        // /auth/. The middleware — not the controller — is the layer responsible for that
+        // rejection. The plain-text "API key is required" body distinguishes a middleware
+        // 401 from a controller-level Unauthorized() (which serializes ProblemDetails JSON).
+        using var client = _factory.CreateClient();
+        var response = await client.PostAsync(path, content: null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var body = await response.Content.ReadAsStringAsync();
+        body.Should().Be("API key is required");
+    }
 }

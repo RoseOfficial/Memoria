@@ -41,7 +41,11 @@ namespace MemoriaServer.Middleware
             if (path != null && (
                 path.Contains("/server") && context.Request.Method == "GET" ||
                 path.Contains("/users/login") ||
-                (path.Contains("/auth/") && !path.Contains("/auth/logout")) ||
+                // Only the Discord OAuth start/callback are anonymous browser entry points.
+                // Other /auth/ routes (logout, link/generate, link/redeem) all require an
+                // authenticated caller — either the plugin's api-key header or the
+                // __Host-memoria session cookie — so they must flow through the middleware.
+                path.Contains("/auth/discord/") ||
                 path.Contains("/swagger") ||
                 path.Contains("/health") ||
                 // Plan 0c public-read endpoints used by the anonymous web surface.

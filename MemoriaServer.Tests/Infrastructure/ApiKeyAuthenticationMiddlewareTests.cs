@@ -41,7 +41,8 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     [Theory]
     [InlineData("/server", "GET")]
     [InlineData("/users/login", "POST")]
-    [InlineData("/auth/callback", "GET")]
+    [InlineData("/v1/auth/discord/start", "GET")]
+    [InlineData("/v1/auth/discord/callback", "GET")]
     [InlineData("/swagger", "GET")]
     [InlineData("/health", "GET")]
     [InlineData("/v1/players/recent", "GET")]
@@ -75,6 +76,25 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
         await _middleware.InvokeAsync(context, _dbContext);
 
         // Assert — no api-key header → 401, _next is never called
+        await _mockNext.DidNotReceive().Invoke(Arg.Any<HttpContext>());
+        context.Response.StatusCode.Should().Be(401);
+    }
+
+    [Theory]
+    [InlineData("/v1/auth/link/generate", "POST")]
+    [InlineData("/v1/auth/link/redeem", "POST")]
+    public async Task InvokeAsync_ShouldRequireAuth_ForAuthLinkEndpoints(string path, string method)
+    {
+        // Regression: link/generate and link/redeem live under /auth/ but require an
+        // authenticated caller. The previous blanket /auth/ bypass let unauthenticated
+        // requests through, so the controller had to return 401 itself — surfacing as
+        // ProblemDetails JSON in the plugin's error UI instead of being rejected here.
+        var context = CreateHttpContext();
+        context.Request.Path = path;
+        context.Request.Method = method;
+
+        await _middleware.InvokeAsync(context, _dbContext);
+
         await _mockNext.DidNotReceive().Invoke(Arg.Any<HttpContext>());
         context.Response.StatusCode.Should().Be(401);
     }
