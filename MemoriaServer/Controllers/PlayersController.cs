@@ -820,8 +820,6 @@ namespace MemoriaServer.Controllers
                     });
                 }
 
-                // User stats tracking removed - public API
-
                 return Ok(new { message = "Players uploaded successfully", count = players.Count });
             }
             catch (Exception ex)
