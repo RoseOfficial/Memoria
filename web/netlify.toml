@@ -16,3 +16,17 @@
 
 # NEXT_PUBLIC_API_BASE_URL is set per environment in the Netlify UI, not here,
 # because it differs between production and preview deploys.
+
+# Proxy /v1/* to the Render API so the API appears under the Netlify origin.
+# Without this, the __Host-memoria session cookie that Render's OAuth callback
+# sets is host-locked to the Render domain and the browser will never send it
+# to the Netlify domain. With the proxy, Set-Cookie comes back through Netlify
+# and the browser scopes the cookie to the Netlify origin, so Next.js SSR can
+# read it from cookies() and forward it on subsequent server-side fetches.
+#
+# Update the `to =` URL when the Render service is renamed (e.g. memoria-server).
+[[redirects]]
+  from = "/v1/*"
+  to = "https://alphascope-rvbq.onrender.com/v1/:splat"
+  status = 200
+  force = true
