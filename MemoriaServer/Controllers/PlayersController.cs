@@ -773,6 +773,15 @@ namespace MemoriaServer.Controllers
                     }
                 }
 
+                // Stamp the authenticated uploader's lifetime contribution counter so
+                // /me on the web shows what they've actually contributed. Mirrors the
+                // plugin-side counter at PersistenceContext.PostPlayerData; the server
+                // value is the durable record across plugin reinstalls.
+                if (HttpContext.Items["User"] is ApplicationUser uploader && players.Count > 0)
+                {
+                    uploader.TotalContributions += players.Count;
+                }
+
                 // Save history entries
                 await _context.SaveChangesAsync();
 
