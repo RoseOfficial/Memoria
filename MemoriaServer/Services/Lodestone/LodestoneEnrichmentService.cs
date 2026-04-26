@@ -150,7 +150,7 @@ namespace MemoriaServer.Services.Lodestone
                 return;
             }
 
-            FetchOutcome outcome;
+            FetchOutcome? outcome;
             try
             {
                 outcome = await FetchAsync(player.Name, player.HomeWorldId, player.CurrentWorldId, ct);
@@ -161,12 +161,22 @@ namespace MemoriaServer.Services.Lodestone
             }
             catch (Exception ex)
             {
-                // Treat unexpected failures as transient: log and skip stamping LastJobDataUpdate
-                // so the next startup-seed (or the 7-day stale window) re-queues this player.
-                // We deliberately don't re-enqueue immediately — a poisoned profile would block
-                // the queue on retry forever. The next service restart picks up everything that
-                // didn't get LastJobDataUpdate stamped.
+                // Thrown failures (HttpRequestException, parse errors, etc.) are transient: log
+                // and skip stamping LastJobDataUpdate so the next startup-seed (or the 7-day
+                // stale window) re-queues this player. We deliberately don't re-enqueue
+                // immediately — a poisoned profile would block the queue on retry forever.
                 _logger.LogWarning(ex, "LodestoneEnrichment: transient fetch failure for {Name} ({Id}); will retry on next seed", player.Name, localContentId);
+                return;
+            }
+
+            // FetchAsync returns null when NetStone gave us back a null wrapper (HTTP error
+            // swallowed inside the library) rather than a confident "Lodestone said no match."
+            // Stamping LastJobDataUpdate in that case would lock the row out of retries for a
+            // full week on what was probably a transient 5xx, so leave it alone and let the
+            // next seed cycle pick it up.
+            if (outcome is null)
+            {
+                _logger.LogInformation("LodestoneEnrichment: inconclusive fetch for {Name} ({Id}); will retry on next seed", player.Name, localContentId);
                 return;
             }
 
@@ -259,7 +269,13 @@ namespace MemoriaServer.Services.Lodestone
             }
         }
 
-        private async Task<FetchOutcome> FetchAsync(string name, short? homeWorldId, short? currentWorldId, CancellationToken ct)
+        // Returns:
+        //   FetchOutcome with NotFound=false → enrichment data to write
+        //   FetchOutcome.NotFoundResult       → confident "Lodestone has no such character"
+        //   null                              → inconclusive (NetStone returned a null wrapper,
+        //                                       likely a swallowed transient HTTP error). The
+        //                                       caller should NOT stamp LastJobDataUpdate.
+        private async Task<FetchOutcome?> FetchAsync(string name, short? homeWorldId, short? currentWorldId, CancellationToken ct)
         {
             var client = await GetClientAsync();
 
@@ -273,25 +289,40 @@ namespace MemoriaServer.Services.Lodestone
             if (!string.IsNullOrEmpty(worldName))
                 query.World = worldName;
 
-            var searchResult = await client.SearchCharacter(query).WaitAsync(ct);
-            var match = searchResult?.Results?.FirstOrDefault();
+            var primarySearch = await client.SearchCharacter(query).WaitAsync(ct);
+            var match = primarySearch?.Results?.FirstOrDefault();
 
             // Some characters (e.g. cross-server visitors whose home world we have wrong, or
             // whose home world is on a DC the search filter rejects) don't surface on a
             // world-filtered search but do on a global one. Retry without the filter.
+            NetStone.Model.Parseables.Search.Character.CharacterSearchPage? fallbackSearch = null;
             if (match is null && !string.IsNullOrEmpty(worldName))
             {
                 var globalQuery = new CharacterSearchQuery { CharacterName = name };
-                searchResult = await client.SearchCharacter(globalQuery).WaitAsync(ct);
-                match = searchResult?.Results?.FirstOrDefault();
+                fallbackSearch = await client.SearchCharacter(globalQuery).WaitAsync(ct);
+                match = fallbackSearch?.Results?.FirstOrDefault();
             }
 
             if (match is null)
-                return FetchOutcome.NotFoundResult;
+            {
+                // Distinguish "Lodestone responded with no matches" (confident not-found) from
+                // "NetStone gave us a null wrapper" (likely a transient 5xx swallowed inside
+                // the library). At least one wrapper being non-null means Lodestone *did*
+                // answer at some point, so the empty result set is real. If both wrappers we
+                // attempted came back null, treat it as inconclusive.
+                var anyWrapperNonNull = primarySearch is not null
+                    || (fallbackSearch is not null);
+                return anyWrapperNonNull ? FetchOutcome.NotFoundResult : null;
+            }
 
             var profile = await client.GetCharacter(match.Id!).WaitAsync(ct);
             if (profile is null)
-                return FetchOutcome.NotFoundResult;
+            {
+                // Search found a hit but the profile fetch returned null — this is almost
+                // always a transient profile-page failure, not a deleted character. Don't
+                // stamp.
+                return null;
+            }
 
             int? lodestoneId = int.TryParse(match.Id, out var parsedId) ? parsedId : null;
             var avatarUrl = profile.Avatar?.ToString();
