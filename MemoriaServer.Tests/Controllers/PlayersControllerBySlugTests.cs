@@ -246,4 +246,75 @@ public class PlayersControllerBySlugTests
         dto.NameHistory!.Should().HaveCount(1);
         dto.NameHistory[0].Name.Should().Be("Tata Taru");
     }
+
+    [Fact]
+    public async Task GetBySlug_Owner_SeesLocationsEvenWithHideEncountersTrue()
+    {
+        // Privacy toggles are about who-else-can-see, not "blind myself to my own
+        // profile." Without this bypass the owner's /p/ view shows the same TierGate
+        // a stranger would see, and the privacy toggles look like they broke things.
+        using var ctx = new MemoriaDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<MemoriaDbContext>());
+        ctx.Players.Add(new Player
+        {
+            LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91,
+            ClaimedByUserId = 7, HideEncounters = true,
+        });
+        ctx.Set<PlayerTerritoryHistory>().Add(new PlayerTerritoryHistory
+        {
+            PlayerLocalContentId = 1, TerritoryId = 128, FirstSeenAt = DateTime.UtcNow.AddDays(-1), LastSeenAt = DateTime.UtcNow,
+        });
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx, viewerUserId: 7);
+        controller.HttpContext.Items["Tier"] = 2;
+        var result = await controller.GetBySlug("balmung", "tataru-taru");
+        var dto = ((OkObjectResult)result).Value.Should().BeOfType<PlayerProfileResponse>().Subject;
+
+        dto.Locations.Should().NotBeNull("the owner must still see their own locations");
+        dto.Locations!.Top.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetBySlug_Owner_SeesAltsEvenWithHideAltsTrue()
+    {
+        using var ctx = new MemoriaDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<MemoriaDbContext>());
+        ctx.Players.AddRange(
+            new Player { LocalContentId = 1, Name = "Owner Char",  HomeWorldId = 91, ClaimedByUserId = 7, AccountId = 12345, HideAlts = true },
+            new Player { LocalContentId = 2, Name = "Owner Alt",   HomeWorldId = 91, AccountId = 12345 }
+        );
+        await ctx.SaveChangesAsync();
+
+        var controller = MakeController(ctx, viewerUserId: 7);
+        controller.HttpContext.Items["Tier"] = 2;
+        var result = await controller.GetBySlug("balmung", "owner-char");
+        var dto = ((OkObjectResult)result).Value.Should().BeOfType<PlayerProfileResponse>().Subject;
+
+        dto.Alts.Should().NotBeNull();
+        dto.Alts!.Single().Name.Should().Be("Owner Alt");
+    }
+
+    [Fact]
+    public async Task GetBySlug_Stranger_StillBlockedByHideAltsAndHideEncounters()
+    {
+        // Symmetry check — the owner-bypass must NOT leak through to other viewers.
+        using var ctx = new MemoriaDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<MemoriaDbContext>());
+        ctx.Players.AddRange(
+            new Player { LocalContentId = 1, Name = "Owner Char", HomeWorldId = 91, ClaimedByUserId = 7, AccountId = 12345, HideAlts = true, HideEncounters = true },
+            new Player { LocalContentId = 2, Name = "Owner Alt",  HomeWorldId = 91, AccountId = 12345 }
+        );
+        ctx.Set<PlayerTerritoryHistory>().Add(new PlayerTerritoryHistory
+        {
+            PlayerLocalContentId = 1, TerritoryId = 128, FirstSeenAt = DateTime.UtcNow.AddDays(-1), LastSeenAt = DateTime.UtcNow,
+        });
+        await ctx.SaveChangesAsync();
+
+        // Different viewer (not the owner, not admin).
+        var controller = MakeController(ctx, viewerUserId: 99);
+        controller.HttpContext.Items["Tier"] = 2;
+        var result = await controller.GetBySlug("balmung", "owner-char");
+        var dto = ((OkObjectResult)result).Value.Should().BeOfType<PlayerProfileResponse>().Subject;
+
+        dto.Locations.Should().BeNull("strangers honor HideEncounters");
+        dto.Alts.Should().BeNull("strangers honor HideAlts");
+    }
 }

@@ -407,7 +407,7 @@ namespace MemoriaServer.Controllers
                 return NotFound();
 
             var tier = (int)(HttpContext.Items["Tier"] ?? 1);
-            var dto = BuildProfileResponse(player, tier, isOwner);
+            var dto = BuildProfileResponse(player, tier, isOwner, isAdmin);
             return Ok(dto);
         }
 
@@ -418,7 +418,7 @@ namespace MemoriaServer.Controllers
             return RedirectPermanent($"/p/{worldSlug}/{nameSlug}");
         }
 
-        private PlayerProfileResponse BuildProfileResponse(Player player, int tier, bool isOwner)
+        private PlayerProfileResponse BuildProfileResponse(Player player, int tier, bool isOwner, bool isAdmin)
         {
             var worldName = WorldNames.Resolve(player.HomeWorldId) ?? "Unknown";
             var worldSlug = WorldNames.ToSlug(worldName);
@@ -449,9 +449,16 @@ namespace MemoriaServer.Controllers
             IReadOnlyList<WorldHistoryEntry>? worldHistory = null;
             IReadOnlyList<AltCharacter>? alts = null;
 
+            // The owner (and admins) always see their own data, even when privacy
+            // flags hide it from everyone else — the toggles are about who-else-can-see,
+            // not "blind myself to my own profile." Without this bypass the owner's
+            // /p/ view shows the same TierGate placeholder a stranger would see and
+            // the privacy toggles look like they broke the page.
+            var canSeeRestrictedSections = isOwner || isAdmin;
+
             if (tier >= 2)
             {
-                if (!player.HideEncounters)
+                if (!player.HideEncounters || canSeeRestrictedSections)
                 {
                     var top = _context.Set<PlayerTerritoryHistory>()
                         .Where(t => t.PlayerLocalContentId == player.LocalContentId)
@@ -493,7 +500,7 @@ namespace MemoriaServer.Controllers
                     WorldNames.Resolve(h.WorldId) ?? "Unknown",
                     h.CreatedAt)).ToList();
 
-                if (!player.HideAlts && player.AccountId != null)
+                if ((!player.HideAlts || canSeeRestrictedSections) && player.AccountId != null)
                 {
                     var altsRaw = _context.Players
                         .Where(p => p.AccountId == player.AccountId && p.LocalContentId != player.LocalContentId && !p.HideEntirely)
