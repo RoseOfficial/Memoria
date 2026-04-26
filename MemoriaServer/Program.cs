@@ -206,6 +206,32 @@ app.MapGet("/health", () => new { status = "healthy", timestamp = DateTimeOffset
     .WithName("HealthCheck")
     .WithOpenApi();
 
+// Lodestone enrichment health: lets uptime monitors and ad-hoc checks see queue progress
+// without needing direct DB access. Lives under /health so the api-key middleware bypasses
+// it (matches /health prefix). queue_depth resolves the singleton service via RequestServices
+// so this still works in the Testing environment where the service isn't registered.
+app.MapGet("/health/lodestone", async (HttpContext http, MemoriaDbContext db) =>
+{
+    var service = http.RequestServices.GetService<MemoriaServer.Services.Lodestone.LodestoneEnrichmentService>();
+    var pending = await db.Players.CountAsync(p => p.LastJobDataUpdate == null);
+    var notFound = await db.Players.CountAsync(p =>
+        p.LastJobDataUpdate != null && p.LodestoneJobData == null);
+    var fresh = await db.Players.CountAsync(p => p.LodestoneJobData != null);
+    var lastStamp = await db.Players.MaxAsync(p => p.LastJobDataUpdate);
+
+    return Results.Ok(new
+    {
+        queue_depth = service?.QueueDepth ?? 0,
+        pending,
+        not_found = notFound,
+        fresh_count = fresh,
+        last_stamp_at = lastStamp,
+        timestamp = DateTimeOffset.UtcNow,
+    });
+})
+.WithName("LodestoneHealth")
+.WithOpenApi();
+
 
 app.Run();
 
