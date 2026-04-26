@@ -61,28 +61,36 @@ internal sealed class ObjectTableHandler : IDisposable
         if (Process.GetProcessesByName("Anamnesis").Length != 0)
             PersistenceContext.AnamnesisFound = true;
 
-        // Resolve TerritoryName once per scan — every player in the batch was
-        // observed in the same zone, so the lookup is constant-cost. The server
-        // upserts a TerritoryNames row on receive, which is what the Locations
-        // panel joins to render real zone names. Use the same destructure pattern
-        // as Tools.GetTerritoryName so any breaking Lumina API change shows up
-        // there too instead of silently swallowing it through the catch block.
+        // Resolve TerritoryName once per scan via the known-working Tools helper —
+        // empirically the in-line destructure pattern was returning null in production
+        // (TerritoryNames table never populated), and Tools.GetTerritoryName is the
+        // form already proven against the bundled Lumina version. Strip the region
+        // suffix ("Limsa Lominsa Upper Decks, La Noscea" → "Limsa Lominsa Upper Decks")
+        // since the Locations panel only needs the place name.
         var localTerritoryId = (short)PersistenceContext._clientState.TerritoryType;
         string? localTerritoryName = null;
         try
         {
-            var sheet = Plugin.DataManager.GetExcelSheet<TerritoryType>();
-            if (sheet is not null
-                && sheet.GetRowOrDefault((uint)localTerritoryId) is { PlaceName.Value.Name: var nameSeString })
+            var combined = Tools.GetTerritoryName((ushort)localTerritoryId);
+            if (!string.IsNullOrWhiteSpace(combined) && combined != "[Unknown]")
             {
-                var raw = nameSeString.ToString();
-                if (!string.IsNullOrWhiteSpace(raw)) localTerritoryName = raw;
+                var commaIdx = combined.IndexOf(',');
+                localTerritoryName = commaIdx > 0 ? combined.Substring(0, commaIdx).Trim() : combined;
             }
         }
         catch
         {
             // Lumina lookup failures are non-fatal — server falls back to "Territory N".
         }
+
+        // Local player's ContentId — only their AccountId is reliably the real value.
+        // bc->AccountId for non-local Characters in the object table sometimes returns
+        // the local user's value (stale memory / pre-spawn-packet read), which when
+        // stamped onto stranger rows produces fake alt links. Confirmed in prod:
+        // a Midgardsormr stranger had the local user's Brynhildr-account id.
+        // Cross-user alt linkage still works via GameHooks.ProcessSocialListResult
+        // (party / player search packets carry verified per-player AccountIds).
+        var localContentId = (ulong)PersistenceContext._playerState.ContentId;
 
         List<PlayerMapping> playerMappings = new();
         List<PostPlayerRequest> playerRequests = new();
@@ -94,10 +102,13 @@ internal sealed class ObjectTableHandler : IDisposable
                 if (bc->ContentId == 0 || bc->AccountId == 0)
                     continue;
 
+                var isLocalPlayer = localContentId != 0 && bc->ContentId == localContentId;
+                int? trustedAccountId = isLocalPlayer ? (int?)bc->AccountId : null;
+
                 playerMappings.Add(new PlayerMapping
                 {
                     ContentId = bc->ContentId,
-                    AccountId = bc->AccountId,
+                    AccountId = isLocalPlayer ? bc->AccountId : 0,
                     PlayerName = bc->NameString,
                     WorldId = bc->HomeWorld,
                     CurrentWorldId = bc->CurrentWorld,
@@ -113,7 +124,7 @@ internal sealed class ObjectTableHandler : IDisposable
                 {
                     LocalContentId = bc->ContentId,
                     Name = bc->NameString,
-                    AccountId = (int?)bc->AccountId,
+                    AccountId = trustedAccountId,
                     HomeWorldId = homeWorld,
                     CurrentWorldId = currentWorld,
                     TerritoryId = localTerritoryId,
