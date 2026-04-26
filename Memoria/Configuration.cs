@@ -40,8 +40,10 @@ namespace Memoria
         /// Configuration version for handling config schema updates.
         /// Version 3: Added encrypted API key storage and security enhancements.
         /// Version 4: Added WebBaseUrl and OptOutInGamePopups.
+        /// Version 5: Repointed WebBaseUrl from memoria.gg to memoriagg.netlify.app
+        ///            (the memoria.gg domain isn't routed to the production deploy yet).
         /// </summary>
-        public int Version { get; set; } = 4;
+        public int Version { get; set; } = 5;
         
         /// <summary>
         /// Base URL for the MemoriaServer API endpoint. Default points at the production
@@ -198,7 +200,7 @@ namespace Memoria
         /// <summary>
         /// Base URL of the Memoria web app. Override for dev/staging.
         /// </summary>
-        public string WebBaseUrl { get; set; } = "https://memoria.gg";
+        public string WebBaseUrl { get; set; } = "https://memoriagg.netlify.app";
 
         /// <summary>
         /// Suppress in-game pop-ups (notifications + auto-opening of the micro-card on right-click).

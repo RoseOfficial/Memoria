@@ -419,8 +419,9 @@ namespace Memoria.API.Services
 
         /// <summary>
         /// Generates a one-time link code via POST /v1/auth/link/generate. The user pastes the
-        /// returned code into memoria.gg/me/link to merge their Discord identity onto this plugin
-        /// install. The server short-circuits with 503 when Discord OAuth isn't configured.
+        /// returned code into the web app's /me/link page to merge their Discord identity onto
+        /// this plugin install. The server short-circuits with 503 when Discord OAuth isn't
+        /// configured.
         /// </summary>
         public async Task<ApiResponse<LinkGenerateResponse>> GenerateWebLinkCodeAsync(CancellationToken cancellationToken = default)
         {

@@ -332,7 +332,7 @@ internal sealed class SlimMainWindow : Window
         var config = Plugin.Instance.Configuration;
 
         ImGui.TextDisabled("Web account link");
-        ImGui.TextWrapped("Link this plugin install to your memoria.gg account so claimed characters and privacy settings sync across the web and the plugin.");
+        ImGui.TextWrapped("Link this plugin install to your web account so claimed characters and privacy settings sync across the web and the plugin.");
 
         // Auto-clear the displayed code once it expires; user must regenerate.
         if (_linkState == LinkState.Display && DateTime.UtcNow >= _linkExpiresAt)
@@ -369,7 +369,7 @@ internal sealed class SlimMainWindow : Window
                 if (!string.IsNullOrWhiteSpace(config.WebBaseUrl))
                 {
                     ImGui.SameLine();
-                    if (ImGui.Button("Open memoria.gg/me/link →"))
+                    if (ImGui.Button("Open the link page →"))
                     {
                         Dalamud.Utility.Util.OpenLink(WebUrls.LinkUrl(config.WebBaseUrl));
                     }

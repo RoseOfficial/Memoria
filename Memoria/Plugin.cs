@@ -560,6 +560,20 @@ public sealed class Plugin : IDalamudPlugin
             Log.Information("Configuration migration to version 4 completed");
         }
 
+        // Migrate to version 5: Repoint WebBaseUrl to the Netlify host. The memoria.gg
+        // domain isn't routed to the production deploy yet, so existing installs need
+        // to be moved off the old default. There is no in-game UI to override
+        // WebBaseUrl, so overwriting it is safe — anyone who edited the config file
+        // by hand can re-edit after this ships.
+        if (Configuration.Version < 5)
+        {
+            Configuration.WebBaseUrl = "https://memoriagg.netlify.app";
+            Configuration.Version = 5;
+            needsSave = true;
+
+            Log.Information("Configuration migration to version 5 completed (WebBaseUrl → Netlify)");
+        }
+
         // Save configuration if any changes were made
         if (needsSave)
         {

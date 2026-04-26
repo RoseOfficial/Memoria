@@ -4,8 +4,8 @@ using Newtonsoft.Json;
 namespace Memoria.API.Models.Responses.User
 {
     /// <summary>
-    /// Response from POST /v1/auth/link/generate. The user pastes <see cref="Code"/> into
-    /// memoria.gg/me/link to merge their Discord identity onto this plugin install.
+    /// Response from POST /v1/auth/link/generate. The user pastes <see cref="Code"/> into the
+    /// web app's /me/link page to merge their Discord identity onto this plugin install.
     /// </summary>
     public sealed class LinkGenerateResponse
     {

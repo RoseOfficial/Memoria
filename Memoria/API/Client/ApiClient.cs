@@ -539,8 +539,8 @@ namespace Memoria.API
         }
 
         /// <summary>
-        /// Generates a one-time code that the user pastes into memoria.gg/me/link to merge
-        /// their Discord identity onto this plugin install. Pass-through to UserAuthService;
+        /// Generates a one-time code that the user pastes into the web app's /me/link page to
+        /// merge their Discord identity onto this plugin install. Pass-through to UserAuthService;
         /// returns the raw ApiResponse so the UI can react to the 503 / 401 / etc. status codes.
         /// </summary>
         public async Task<ApiResponse<UserModels.LinkGenerateResponse>> GenerateWebLinkCodeAsync(CancellationToken cancellationToken = default)
