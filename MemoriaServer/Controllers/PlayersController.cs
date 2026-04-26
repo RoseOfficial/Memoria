@@ -266,21 +266,48 @@ namespace MemoriaServer.Controllers
 
         [HttpGet("search")]
         [AllowAnonymous]
-        public async Task<IActionResult> Search([FromQuery] string q)
+        public async Task<IActionResult> Search([FromQuery] string q, [FromQuery] int limit = 50)
         {
             if (string.IsNullOrWhiteSpace(q)) return Ok(new PlayerSearchResultResponse(Array.Empty<PlayerSearchItem>()));
 
             var needle = q.Trim();
+            if (needle.Length == 0) return Ok(new PlayerSearchResultResponse(Array.Empty<PlayerSearchItem>()));
 
-            var raw = await _context.Players
+            // Cap the response. Typeahead callers ask for 10; the /search page asks for 50.
+            // Anything above 50 is wasted bandwidth — the UI can't usefully render hundreds.
+            var resultLimit = Math.Clamp(limit, 1, 50);
+
+            // Pull a generous set of case-insensitive substring matches, then score in
+            // memory so prefix matches outrank embedded substrings. The candidate window is
+            // wider than the result limit so the score-then-trim doesn't cut off good
+            // matches that happened to be alphabetically late.
+            //
+            // Lower-casing both sides translates to SQL `LOWER(Name) LIKE %needle%` on
+            // Postgres and works on the InMemory provider too — the more idiomatic
+            // EF.Functions.ILike is Npgsql-only and throws under InMemory.
+            var needleLower = needle.ToLowerInvariant();
+            var candidates = await _context.Players
                 .Where(p => !p.HideEntirely && !p.IsPrivate && !p.HideInSearch)
-                .Where(p => p.Name.Contains(needle))
-                .OrderBy(p => p.Name)
-                .Take(50)
+                .Where(p => p.Name.ToLower().Contains(needleLower))
+                .Take(200)
                 .Select(p => new { p.LocalContentId, p.Name, p.HomeWorldId, p.AvatarLink })
                 .ToListAsync();
 
-            var items = raw.Select(p => new PlayerSearchItem(
+            var ordered = candidates
+                .Select(p => new
+                {
+                    p.LocalContentId,
+                    p.Name,
+                    p.HomeWorldId,
+                    p.AvatarLink,
+                    Score = ScoreNameMatch(p.Name, needle),
+                })
+                .OrderBy(x => x.Score)
+                .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(resultLimit)
+                .ToList();
+
+            var items = ordered.Select(p => new PlayerSearchItem(
                 p.LocalContentId,
                 p.Name,
                 p.HomeWorldId.HasValue ? WorldNames.ToSlug(WorldNames.Resolve(p.HomeWorldId) ?? "unknown") : "unknown",
@@ -289,6 +316,24 @@ namespace MemoriaServer.Controllers
 
             return Ok(new PlayerSearchResultResponse(items));
         }
+
+        // Lower score = better match. The scale is intentionally coarse so OrderBy is
+        // stable and predictable: prefix > word-prefix > substring. Equal scores fall
+        // through to alphabetical at the call site. Public so tests can pin the bucket
+        // assignment table without spinning up the full controller.
+        public static int ScoreNameMatch(string name, string needle)
+        {
+            if (name.StartsWith(needle, StringComparison.OrdinalIgnoreCase))
+                return 0;
+
+            // FFXIV character names are always two space-separated words, so the only
+            // word boundary worth checking is " <needle>" anywhere in the string.
+            if (name.IndexOf(" " + needle, StringComparison.OrdinalIgnoreCase) >= 0)
+                return 1;
+
+            return 2;
+        }
+
 
         [HttpGet("recent")]
         [AllowAnonymous]
