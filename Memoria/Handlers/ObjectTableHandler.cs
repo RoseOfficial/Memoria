@@ -83,15 +83,12 @@ internal sealed class ObjectTableHandler : IDisposable
             // Lumina lookup failures are non-fatal — server falls back to "Territory N".
         }
 
-        // Local player's ContentId — only their AccountId is reliably the real value.
-        // bc->AccountId for non-local Characters in the object table sometimes returns
-        // the local user's value (stale memory / pre-spawn-packet read), which when
-        // stamped onto stranger rows produces fake alt links. Confirmed in prod:
-        // a Midgardsormr stranger had the local user's Brynhildr-account id.
-        // Cross-user alt linkage still works via GameHooks.ProcessSocialListResult
-        // (party / player search packets carry verified per-player AccountIds).
-        var localContentId = (ulong)PersistenceContext._playerState.ContentId;
-
+        // Match AlphaScope's original behavior: read bc->AccountId for every player.
+        // The field is unreliable on its own (it sometimes returns the local user's
+        // value when the spawn packet hasn't fully landed), but the new spawn-packet
+        // hook in GameHooks lands first with verified data and the server's
+        // first-scan-wins logic locks that in. Object-table reads are the fallback
+        // for players already in the zone when we joined.
         List<PlayerMapping> playerMappings = new();
         List<PostPlayerRequest> playerRequests = new();
         foreach (var obj in _objectTable)
@@ -102,13 +99,10 @@ internal sealed class ObjectTableHandler : IDisposable
                 if (bc->ContentId == 0 || bc->AccountId == 0)
                     continue;
 
-                var isLocalPlayer = localContentId != 0 && bc->ContentId == localContentId;
-                int? trustedAccountId = isLocalPlayer ? (int?)bc->AccountId : null;
-
                 playerMappings.Add(new PlayerMapping
                 {
                     ContentId = bc->ContentId,
-                    AccountId = isLocalPlayer ? bc->AccountId : 0,
+                    AccountId = bc->AccountId,
                     PlayerName = bc->NameString,
                     WorldId = bc->HomeWorld,
                     CurrentWorldId = bc->CurrentWorld,
@@ -124,7 +118,7 @@ internal sealed class ObjectTableHandler : IDisposable
                 {
                     LocalContentId = bc->ContentId,
                     Name = bc->NameString,
-                    AccountId = trustedAccountId,
+                    AccountId = (int?)bc->AccountId,
                     HomeWorldId = homeWorld,
                     CurrentWorldId = currentWorld,
                     TerritoryId = localTerritoryId,

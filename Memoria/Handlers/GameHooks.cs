@@ -9,6 +9,7 @@ using Dalamud.Memory;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using Dalamud.Utility.Signatures;
+using FFXIVClientStructs.FFXIV.Client.Game.Network;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -35,6 +36,17 @@ internal sealed unsafe class GameHooks : IDisposable
 
     private delegate nint SocialListResultDelegate(nint a1, nint dataPtr);
 
+    /// <summary>
+    /// Hooks PacketDispatcher.HandleSpawnPlayerPacket — fires every time another player
+    /// enters our visibility range. The packet carries server-verified AccountId at
+    /// offset 0, ContentId at 0x08, world ids at 0x14/0x16, and the player name embedded
+    /// in CommonSpawnData. This is the path the Character struct's bc-&gt;AccountId field
+    /// can't be trusted to provide — the game writes that slot reliably only for the
+    /// local user's character, so spawn-packet capture is how we get accurate per-player
+    /// AccountIds for everyone we walk past.
+    /// </summary>
+    private delegate void HandleSpawnPlayerPacketDelegate(uint targetId, SpawnPlayerPacket* packet);
+
 #pragma warning disable CS0649
     [Signature("40 53 48 83 EC 20 48 8B  D9 33 C9 45 33 C9", DetourName = nameof(ProcessCharacterNameResult))]
     private Hook<CharacterNameResultDelegate> CharacterNameResultHook { get; init; } = null!;
@@ -43,6 +55,11 @@ internal sealed unsafe class GameHooks : IDisposable
     [Signature("48 89 5C 24 10 56 48 83 EC 20 48 ?? ?? ?? ?? ?? ?? 48 8B F2 E8 ?? ?? ?? ?? 48 8B D8",
         DetourName = nameof(ProcessSocialListResult))]
     private Hook<SocialListResultDelegate> SocialListResultHook { get; init; } = null!;
+
+    // Signature from FFXIVClientStructs PacketDispatcher.HandleSpawnPlayerPacket.
+    [Signature("48 89 5C 24 ?? 57 48 81 EC ?? ?? ?? ?? 48 8B DA 8B F9 0F B6 92",
+        DetourName = nameof(ProcessSpawnPlayerPacket))]
+    private Hook<HandleSpawnPlayerPacketDelegate> SpawnPlayerPacketHook { get; init; } = null!;
 
 #pragma warning restore CS0649
 
@@ -55,7 +72,7 @@ internal sealed unsafe class GameHooks : IDisposable
         gameInteropProvider.InitializeFromAttributes(this);
         CharacterNameResultHook.Enable();
         SocialListResultHook.Enable();
-       
+        SpawnPlayerPacketHook.Enable();
     }
 
     private int ProcessCharacterNameResult(nint a1, ulong contentId, char* playerName)
@@ -163,10 +180,82 @@ internal sealed unsafe class GameHooks : IDisposable
         return SocialListResultHook.Original(a1, dataPtr);
     }
 
+    private void ProcessSpawnPlayerPacket(uint targetId, SpawnPlayerPacket* packet)
+    {
+        try
+        {
+            if (packet == null)
+            {
+                SpawnPlayerPacketHook.Original(targetId, packet);
+                return;
+            }
+
+            var contentId = packet->ContentId;
+            var accountId = packet->AccountId;
+
+            // Skip if either id is missing — the packet sometimes arrives partially
+            // populated for transitional spawn states (housing previews, GM-spawned
+            // mannequins, etc.) and we don't want to record those as real players.
+            if (contentId == 0 || accountId == 0)
+            {
+                SpawnPlayerPacketHook.Original(targetId, packet);
+                return;
+            }
+
+            // Name is in CommonSpawnData._name at packet offset 0x252 (CommonSpawnData
+            // starts at 0x20 within the packet, and _name is at 0x232 inside CommonSpawnData).
+            // 32-byte ASCII null-terminated.
+            var namePtr = (nint)packet + 0x252;
+            var name = MemoryHelper.ReadString(namePtr, Encoding.ASCII, 32);
+            if (string.IsNullOrEmpty(name))
+            {
+                SpawnPlayerPacketHook.Original(targetId, packet);
+                return;
+            }
+
+            ushort? homeWorldId = packet->HomeWorldId != 0 ? packet->HomeWorldId : null;
+            ushort? currentWorldId = packet->CurrentWorldId != 0 ? packet->CurrentWorldId : null;
+
+            var mapping = new PlayerMapping
+            {
+                ContentId = contentId,
+                AccountId = accountId,
+                PlayerName = name,
+                WorldId = homeWorldId,
+                CurrentWorldId = currentWorldId,
+            };
+
+            var playerRequest = new PostPlayerRequest
+            {
+                LocalContentId = contentId,
+                Name = name,
+                AccountId = (int?)accountId,
+                HomeWorldId = homeWorldId,
+                CurrentWorldId = currentWorldId,
+                TerritoryId = (short)PersistenceContext._clientState.TerritoryType,
+                CurrentJobId = packet->Common.ClassJobId != 0 ? packet->Common.ClassJobId : null,
+                CurrentJobLevel = packet->Common.Level != 0 ? (short)packet->Common.Level : null,
+                CreatedAt = Tools.UnixTime,
+            };
+
+            var currentWorldForMapping = (ushort?)PersistenceContext.GetCurrentWorld();
+            Task.Run(() => _persistenceContext.HandleContentIdMappingAsync(
+                new List<PlayerMapping> { mapping }, currentWorldForMapping));
+            PersistenceContext.AddPlayerUploadData(new List<PostPlayerRequest> { playerRequest });
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Could not process spawn player packet");
+        }
+
+        SpawnPlayerPacketHook.Original(targetId, packet);
+    }
+
     public void Dispose()
     {
         CharacterNameResultHook.Dispose();
         SocialListResultHook.Dispose();
+        SpawnPlayerPacketHook.Dispose();
     }
 
     /// <summary>
