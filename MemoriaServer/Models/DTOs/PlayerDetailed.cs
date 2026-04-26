@@ -6,7 +6,7 @@ namespace MemoriaServer.Models.DTOs
     {
         [JsonProperty("F")] public int[] Flags { get; set; } = [];
         [JsonProperty("1")] public long LocalContentId { get; set; }
-        [JsonProperty("2")] public int? AccountId { get; set; }
+        [JsonProperty("2")] public long? AccountId { get; set; }
         [JsonProperty("3")] public List<PlayerCustomizationHistoryDto> PlayerCustomizationHistories { get; set; } = new();
         [JsonProperty("4")] public List<PlayerTerritoryHistoryDto> TerritoryHistory { get; set; } = new();
         [JsonProperty("5")] public PlayerLodestoneDto? PlayerLodestone { get; set; } = null;

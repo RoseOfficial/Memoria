@@ -18,7 +18,7 @@ namespace Memoria.API.Models.Requests.Player
         [JsonProperty("3")]
         public ushort? HomeWorldId { get; set; }
         [JsonProperty("4")]
-        public int? AccountId { get; set; }
+        public long? AccountId { get; set; }
         [JsonProperty("5")]
         public short? TerritoryId { get; set; }
         [JsonProperty("6")]

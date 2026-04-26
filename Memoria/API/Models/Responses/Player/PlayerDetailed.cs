@@ -23,7 +23,7 @@ namespace Memoria.API.Models.Responses.Player
         [JsonProperty("1")]
         public long LocalContentId { get; set; }
         [JsonProperty("2")]
-        public int? AccountId { get; set; }
+        public long? AccountId { get; set; }
         [JsonProperty("3")]
         public List<PlayerCustomizationHistoryDto> PlayerCustomizationHistories { get; set; } = new List<PlayerCustomizationHistoryDto>();
         [JsonProperty("4")]

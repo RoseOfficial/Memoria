@@ -13,7 +13,14 @@ namespace MemoriaServer.Models.Entities
         [MaxLength(100)]
         public string Name { get; set; } = string.Empty;
         
-        public int? AccountId { get; set; }
+        // Stored as long because FFXIV's AccountId is a 64-bit ulong (per
+        // FFXIVClientStructs Character.AccountId / SpawnPlayerPacket.AccountId).
+        // The earlier int? was truncating to the lower 32 bits, which collapsed
+        // distinct accounts into shared int32 buckets and produced what looked
+        // like alt-linkage leakage at scale. Bit-pattern is preserved across the
+        // ulong → long unchecked cast performed at the plugin scan sites; equality
+        // matching for alt grouping works the same regardless of signed/unsigned.
+        public long? AccountId { get; set; }
         public short? HomeWorldId { get; set; }
         public short? CurrentWorldId { get; set; }
         public short? TerritoryId { get; set; }

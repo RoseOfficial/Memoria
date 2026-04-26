@@ -96,7 +96,7 @@ internal sealed unsafe class GameHooks : IDisposable
                     {
                         LocalContentId = contentId,
                         Name = mapping.PlayerName,
-                        AccountId = (int?)mapping.AccountId,
+                        AccountId = mapping.AccountId.HasValue ? unchecked((long)mapping.AccountId.Value) : (long?)null,
                         HomeWorldId = null,
                         CurrentWorldId = (ushort?)PersistenceContext.GetCurrentWorld(),
                         CreatedAt = Tools.UnixTime,
@@ -148,7 +148,7 @@ internal sealed unsafe class GameHooks : IDisposable
                     {
                         LocalContentId = mapping.ContentId,
                         Name = mapping.PlayerName,
-                        AccountId = (int?)mapping.AccountId,
+                        AccountId = mapping.AccountId.HasValue ? unchecked((long)mapping.AccountId.Value) : (long?)null,
                         HomeWorldId = mapping.WorldId,
                         CurrentWorldId = (ushort?)PersistenceContext.GetCurrentWorld(),
                         TerritoryId = player.TerritoryId == 0 ? (short?)null : (short)player.TerritoryId,
@@ -234,7 +234,7 @@ internal sealed unsafe class GameHooks : IDisposable
             {
                 LocalContentId = contentId,
                 Name = name,
-                AccountId = (int?)accountId,
+                AccountId = unchecked((long)accountId),
                 HomeWorldId = homeWorldId,
                 CurrentWorldId = currentWorldId,
                 TerritoryId = (short)PersistenceContext._clientState.TerritoryType,

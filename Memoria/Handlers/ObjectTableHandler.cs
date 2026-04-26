@@ -118,7 +118,7 @@ internal sealed class ObjectTableHandler : IDisposable
                 {
                     LocalContentId = bc->ContentId,
                     Name = bc->NameString,
-                    AccountId = (int?)bc->AccountId,
+                    AccountId = unchecked((long)bc->AccountId),
                     HomeWorldId = homeWorld,
                     CurrentWorldId = currentWorld,
                     TerritoryId = localTerritoryId,

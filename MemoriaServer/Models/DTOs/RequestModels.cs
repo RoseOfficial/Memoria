@@ -9,7 +9,7 @@ namespace MemoriaServer.Models.DTOs
         [JsonProperty("1")] public ulong LocalContentId { get; set; }
         [JsonProperty("2")] public string Name { get; set; } = string.Empty;
         [JsonProperty("3")] public ushort? HomeWorldId { get; set; }
-        [JsonProperty("4")] public int? AccountId { get; set; }
+        [JsonProperty("4")] public long? AccountId { get; set; }
         [JsonProperty("5")] public short? TerritoryId { get; set; }
         [JsonProperty("6")] public string? PlayerPos { get; set; }
         [JsonProperty("7")] public ushort? CurrentWorldId { get; set; }
