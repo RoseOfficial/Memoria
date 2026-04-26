@@ -1,39 +1,44 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json.Serialization;
-using System.Threading.Tasks;
+﻿using Newtonsoft.Json;
 
 namespace Memoria.Models
 {
+    /// <summary>
+    /// Compact customization payload sent on every player scan. Property keys mirror
+    /// MemoriaServer.Models.DTOs.PlayerCustomization on the server side. Attributes
+    /// MUST be Newtonsoft's <c>JsonProperty</c> — the upload pipeline uses
+    /// RestSharp.Serializers.NewtonsoftJson, which ignores System.Text.Json's
+    /// <c>JsonPropertyName</c> and falls back to C# property names. The earlier
+    /// JsonPropertyName attribution silently shipped every field as a different key
+    /// than the server expected, so customization arrived as all-nulls on every
+    /// scan and the profile's Customization panel rendered blank.
+    /// </summary>
     public class PlayerCustomization
     {
-        [JsonPropertyName("1")]
+        [JsonProperty("1")]
         public byte? BodyType { get; set; }
-        [JsonPropertyName("2")]
+        [JsonProperty("2")]
         public byte? GenderRace { get; set; }
-        [JsonPropertyName("3")]
+        [JsonProperty("3")]
         public byte? Height { get; set; }
-        [JsonPropertyName("4")]
+        [JsonProperty("4")]
         public byte? Face { get; set; }
-        [JsonPropertyName("5")]
+        [JsonProperty("5")]
         public byte? SkinColor { get; set; }
-        [JsonPropertyName("6")]
+        [JsonProperty("6")]
         public byte? Nose { get; set; }
-        [JsonPropertyName("7")]
+        [JsonProperty("7")]
         public byte? Jaw { get; set; }
-        [JsonPropertyName("8")]
+        [JsonProperty("8")]
         public byte? MuscleMass { get; set; }
-        [JsonPropertyName("9")]
+        [JsonProperty("9")]
         public byte? BustSize { get; set; }
-        [JsonPropertyName("A")]
+        [JsonProperty("A")]
         public byte? TailShape { get; set; }
-        [JsonPropertyName("B")]
+        [JsonProperty("B")]
         public byte? Mouth { get; set; }
-        [JsonPropertyName("C")]
+        [JsonProperty("C")]
         public byte? EyeShape { get; set; }
-        [JsonPropertyName("D")]
+        [JsonProperty("D")]
         public bool? SmallIris { get; set; }
     }
 }

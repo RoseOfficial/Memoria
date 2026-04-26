@@ -159,6 +159,104 @@ public class PlayersControllerUploadTests : IDisposable
     }
 
     [Fact]
+    public async Task UploadPlayers_AppendsCustomizationHistoryRowWhenChanged()
+    {
+        // First scan with all real values: row created.
+        var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
+        {
+            new()
+            {
+                LocalContentId = 901, Name = "FantasiaTester", HomeWorldId = 34, CreatedAt = ts,
+                Customization = new PlayerCustomization
+                {
+                    BodyType = 1, GenderRace = 4, Height = 50, Face = 3, SkinColor = 7, Nose = 2,
+                    Jaw = 1, MuscleMass = 0, BustSize = 0, TailShape = 0, Mouth = 1, EyeShape = 5, SmallIris = false,
+                },
+            },
+        });
+
+        // Second scan with identical values: no new row (history shouldn't fragment).
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
+        {
+            new()
+            {
+                LocalContentId = 901, Name = "FantasiaTester", HomeWorldId = 34, CreatedAt = ts + 60,
+                Customization = new PlayerCustomization
+                {
+                    BodyType = 1, GenderRace = 4, Height = 50, Face = 3, SkinColor = 7, Nose = 2,
+                    Jaw = 1, MuscleMass = 0, BustSize = 0, TailShape = 0, Mouth = 1, EyeShape = 5, SmallIris = false,
+                },
+            },
+        });
+
+        // Third scan with one byte different (haircut → new Face value): a second row appended.
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
+        {
+            new()
+            {
+                LocalContentId = 901, Name = "FantasiaTester", HomeWorldId = 34, CreatedAt = ts + 120,
+                Customization = new PlayerCustomization
+                {
+                    BodyType = 1, GenderRace = 4, Height = 50, Face = 9, SkinColor = 7, Nose = 2,
+                    Jaw = 1, MuscleMass = 0, BustSize = 0, TailShape = 0, Mouth = 1, EyeShape = 5, SmallIris = false,
+                },
+            },
+        });
+
+        var rows = await _context.PlayerCustomizationHistory.AsNoTracking()
+            .Where(h => h.PlayerLocalContentId == 901)
+            .OrderBy(h => h.CreatedAt)
+            .ToListAsync();
+        rows.Should().HaveCount(2, "the second identical scan must not create a new row");
+        rows[0].Face.Should().Be(3);
+        rows[1].Face.Should().Be(9);
+    }
+
+    [Fact]
+    public async Task UploadPlayers_ReplacesAllNullCustomizationRowOnNextScan()
+    {
+        // Regression: an early scan from the days when the plugin's PlayerCustomization
+        // used [JsonPropertyName] (System.Text.Json) instead of [JsonProperty] (Newtonsoft)
+        // would land on the server with every field null. The previous "first scan only"
+        // upload logic then permanently blocked any real data from being recorded for
+        // that player. Now a real subsequent scan must append a fresh row that the
+        // Customization panel can show.
+        _context.Players.Add(new Player { LocalContentId = 902, Name = "OldNullRow", HomeWorldId = 34 });
+        await _context.SaveChangesAsync();
+        _context.PlayerCustomizationHistory.Add(new PlayerCustomizationHistory
+        {
+            PlayerLocalContentId = 902,
+            CreatedAt = DateTime.UtcNow.AddDays(-3),
+            // every field null
+        });
+        await _context.SaveChangesAsync();
+
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
+        {
+            new()
+            {
+                LocalContentId = 902, Name = "OldNullRow", HomeWorldId = 34,
+                CreatedAt = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                Customization = new PlayerCustomization
+                {
+                    BodyType = 2, GenderRace = 6, Height = 30, Face = 1, SkinColor = 5,
+                    Nose = 0, Jaw = 0, MuscleMass = 0, BustSize = 0, TailShape = 0,
+                    Mouth = 0, EyeShape = 1, SmallIris = true,
+                },
+            },
+        });
+
+        var rows = await _context.PlayerCustomizationHistory.AsNoTracking()
+            .Where(h => h.PlayerLocalContentId == 902)
+            .OrderByDescending(h => h.CreatedAt)
+            .ToListAsync();
+        rows.Should().HaveCount(2);
+        rows[0].BodyType.Should().Be(2, "the latest row must carry the real values, not the null stub");
+        rows[0].GenderRace.Should().Be(6);
+    }
+
+    [Fact]
     public async Task UploadPlayers_RefreshesAccountIdOnSubsequentScans()
     {
         // FFXIV's Character.AccountId can briefly hold a stale value in early

@@ -466,6 +466,23 @@ namespace MemoriaServer.Controllers
                 locations, nameHistory, worldHistory, alts, isOwner);
         }
 
+        private static bool HasCustomizationChanged(PlayerCustomizationHistory latest, PlayerCustomization current)
+        {
+            return latest.BodyType != current.BodyType
+                || latest.GenderRace != current.GenderRace
+                || latest.Height != current.Height
+                || latest.Face != current.Face
+                || latest.SkinColor != current.SkinColor
+                || latest.Nose != current.Nose
+                || latest.Jaw != current.Jaw
+                || latest.MuscleMass != current.MuscleMass
+                || latest.BustSize != current.BustSize
+                || latest.TailShape != current.TailShape
+                || latest.Mouth != current.Mouth
+                || latest.EyeShape != current.EyeShape
+                || latest.SmallIris != current.SmallIris;
+        }
+
         private CustomizationData? BuildCustomization(Player player)
         {
             var latest = _context.Set<PlayerCustomizationHistory>()
@@ -800,13 +817,22 @@ namespace MemoriaServer.Controllers
                             _context.PlayerNameHistory.Add(nameHistory);
                         }
 
-                        // Add customization history if provided and doesn't exist
+                        // Append a customization history row whenever the upload's values
+                        // differ from the latest stored row (or when no row exists). The
+                        // previous "first scan only" branch meant haircuts, fantasias,
+                        // and any post-first-scan customization changes were silently
+                        // dropped — and a stale all-null row from an early upload (e.g.,
+                        // the JsonPropertyName / JsonProperty mismatch we just fixed)
+                        // permanently blocked any real data from being recorded.
                         if (playerRequest.Customization != null)
                         {
-                            var hasCustomizationHistory = await _context.PlayerCustomizationHistory
-                                .AnyAsync(h => h.PlayerLocalContentId == player.LocalContentId);
-                            
-                            if (!hasCustomizationHistory)
+                            var latestCustomization = await _context.PlayerCustomizationHistory
+                                .Where(h => h.PlayerLocalContentId == player.LocalContentId)
+                                .OrderByDescending(h => h.CreatedAt)
+                                .FirstOrDefaultAsync();
+
+                            if (latestCustomization is null
+                                || HasCustomizationChanged(latestCustomization, playerRequest.Customization))
                             {
                                 var customization = new PlayerCustomizationHistory
                                 {
@@ -824,7 +850,7 @@ namespace MemoriaServer.Controllers
                                     Mouth = playerRequest.Customization.Mouth,
                                     EyeShape = playerRequest.Customization.EyeShape,
                                     SmallIris = playerRequest.Customization.SmallIris,
-                                    CreatedAt = player.CreatedAt
+                                    CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
                                 };
                                 _context.PlayerCustomizationHistory.Add(customization);
                             }
