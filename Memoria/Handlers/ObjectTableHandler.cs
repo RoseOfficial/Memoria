@@ -61,26 +61,56 @@ internal sealed class ObjectTableHandler : IDisposable
         if (Process.GetProcessesByName("Anamnesis").Length != 0)
             PersistenceContext.AnamnesisFound = true;
 
-        // Resolve TerritoryName once per scan via the known-working Tools helper —
-        // empirically the in-line destructure pattern was returning null in production
-        // (TerritoryNames table never populated), and Tools.GetTerritoryName is the
-        // form already proven against the bundled Lumina version. Strip the region
-        // suffix ("Limsa Lominsa Upper Decks, La Noscea" → "Limsa Lominsa Upper Decks")
-        // since the Locations panel only needs the place name.
+        // Resolve TerritoryName once per scan via the safest Lumina API path:
+        // GetRowOrDefault (no exceptions for missing ids) + ValueNullable on the
+        // RowRef so an unresolvable PlaceName doesn't throw either. Two earlier
+        // attempts (the inline destructure pattern, and the Tools.GetTerritoryName
+        // helper that uses ExcelResolver+GetRow) both produced an empty
+        // TerritoryNames table in production despite many uploads — this version
+        // logs each step at Information so we can see exactly which link in the
+        // chain is failing if it still doesn't populate.
         var localTerritoryId = (short)PersistenceContext._clientState.TerritoryType;
         string? localTerritoryName = null;
         try
         {
-            var combined = Tools.GetTerritoryName((ushort)localTerritoryId);
-            if (!string.IsNullOrWhiteSpace(combined) && combined != "[Unknown]")
+            var sheet = Plugin.DataManager.GetExcelSheet<TerritoryType>();
+            if (sheet is null)
             {
-                var commaIdx = combined.IndexOf(',');
-                localTerritoryName = commaIdx > 0 ? combined.Substring(0, commaIdx).Trim() : combined;
+                _logger.LogWarning("[Territory] GetExcelSheet<TerritoryType>() returned null");
+            }
+            else
+            {
+                var row = sheet.GetRowOrDefault((uint)localTerritoryId);
+                if (!row.HasValue)
+                {
+                    _logger.LogInformation("[Territory] row {Id} not found in sheet", localTerritoryId);
+                }
+                else
+                {
+                    var placeName = row.Value.PlaceName.ValueNullable;
+                    if (!placeName.HasValue)
+                    {
+                        _logger.LogInformation("[Territory] PlaceName.ValueNullable is null for territory {Id}", localTerritoryId);
+                    }
+                    else
+                    {
+                        var name = placeName.Value.Name.ToString();
+                        if (string.IsNullOrWhiteSpace(name))
+                        {
+                            _logger.LogInformation("[Territory] PlaceName.Name resolved to empty for territory {Id}", localTerritoryId);
+                        }
+                        else
+                        {
+                            localTerritoryName = name;
+                            _logger.LogInformation("[Territory] {Id} resolved to '{Name}'", localTerritoryId, name);
+                        }
+                    }
+                }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Lumina lookup failures are non-fatal — server falls back to "Territory N".
+            _logger.LogWarning(ex, "[Territory] Lookup threw for territory {Id}", localTerritoryId);
         }
 
         // Match AlphaScope's original behavior: read bc->AccountId for every player.
