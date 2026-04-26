@@ -65,6 +65,52 @@ public class ApiKeyAuthenticationMiddlewareTests : IDisposable
     }
 
     [Fact]
+    public async Task InvokeAsync_PublicReadPath_WithValidCookie_ResolvesUser()
+    {
+        // Regression: public-read endpoints (by-slug, recent, search) used to skip the
+        // middleware entirely, which meant signed-in users hitting them were treated as
+        // anonymous downstream — TierResolutionMiddleware never saw the user and stamped
+        // Tier 1, hiding Locations and Alts from logged-in guild members on profile pages.
+        var user = new ApplicationUser
+        {
+            Name = "Viewer",
+            ApiKey = "VIEWER-PUBLIC-KEY",
+            DiscordUserId = 1234,
+            IsGuildMember = true,
+            GuildMembershipCheckedAt = DateTime.UtcNow,
+            PrimaryCharacterLocalContentId = 0,
+        };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        var context = CreateHttpContext();
+        context.Request.Path = "/v1/players/by-slug";
+        context.Request.Method = "GET";
+        context.Request.Headers["Cookie"] = "__Host-memoria=VIEWER-PUBLIC-KEY";
+
+        await _middleware.InvokeAsync(context, _dbContext);
+
+        await _mockNext.Received(1).Invoke(context);
+        (context.Items["User"] as ApplicationUser)!.Id.Should().Be(user.Id);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_PublicReadPath_WithInvalidKey_DowngradesToAnonymous()
+    {
+        // Stale or revoked credentials shouldn't 401 the user out of public read pages —
+        // they should silently fall through to the anonymous view.
+        var context = CreateHttpContext();
+        context.Request.Path = "/v1/players/by-slug";
+        context.Request.Method = "GET";
+        context.Request.Headers["api-key"] = "this-key-does-not-exist";
+
+        await _middleware.InvokeAsync(context, _dbContext);
+
+        await _mockNext.Received(1).Invoke(context);
+        context.Items.Should().NotContainKey("User");
+    }
+
+    [Fact]
     public async Task InvokeAsync_ShouldRequireAuth_ForAuthLogout()
     {
         // Arrange

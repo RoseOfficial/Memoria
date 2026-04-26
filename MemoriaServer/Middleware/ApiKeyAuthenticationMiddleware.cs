@@ -36,29 +36,37 @@ namespace MemoriaServer.Middleware
 
         public async Task InvokeAsync(HttpContext context, MemoriaDbContext dbContext)
         {
-            // Skip authentication for certain endpoints
             var path = context.Request.Path.Value?.ToLower();
-            if (path != null && (
-                path.Contains("/server") && context.Request.Method == "GET" ||
+            var method = context.Request.Method;
+
+            // Skip auth and skip user resolution entirely. Discord OAuth start/callback
+            // are anonymous browser entry points; health/swagger don't carry credentials;
+            // takedowns POST is a public submission form; users/login predates the new
+            // OAuth flow but still creates accounts.
+            var bypassEntirely = path != null && (
+                (path.Contains("/server") && method == "GET") ||
                 path.Contains("/users/login") ||
-                // Only the Discord OAuth start/callback are anonymous browser entry points.
-                // Other /auth/ routes (logout, link/generate, link/redeem) all require an
-                // authenticated caller — either the plugin's api-key header or the
-                // __Host-memoria session cookie — so they must flow through the middleware.
                 path.Contains("/auth/discord/") ||
                 path.Contains("/swagger") ||
                 path.Contains("/health") ||
-                // Plan 0c public-read endpoints used by the anonymous web surface.
-                // by-slug and recent return tier-filtered content; takedowns/POST is the
-                // public submission form. Tier/admin gating happens downstream in each controller.
-                (path.Contains("/players/recent") && context.Request.Method == "GET") ||
-                (path.Contains("/players/by-slug") && context.Request.Method == "GET") ||
-                (path.Contains("/players/search") && context.Request.Method == "GET") ||
-                (path.EndsWith("/takedowns") && context.Request.Method == "POST")))
+                (path.EndsWith("/takedowns") && method == "POST"));
+
+            if (bypassEntirely)
             {
                 await _next(context);
                 return;
             }
+
+            // Public-read endpoints serve both anonymous viewers AND signed-in users.
+            // We still want to resolve any cookie/api-key on these so signed-in viewers
+            // get tier-gated extras (Locations, Alts, etc.) — without this the
+            // tier-resolution middleware downstream sees no user and stamps Tier 1
+            // even for guild members. Missing or invalid credentials downgrade to
+            // anonymous instead of returning 401.
+            var publicRead = path != null && method == "GET" && (
+                path.Contains("/players/recent") ||
+                path.Contains("/players/by-slug") ||
+                path.Contains("/players/search"));
 
             // Resolve API key from header first, then fall back to the __Host-memoria cookie.
             var apiKey = context.Request.Headers.TryGetValue("api-key", out var headerValues)
@@ -72,6 +80,11 @@ namespace MemoriaServer.Middleware
 
             if (string.IsNullOrEmpty(apiKey))
             {
+                if (publicRead)
+                {
+                    await _next(context);
+                    return;
+                }
                 context.Response.StatusCode = 401;
                 await context.Response.WriteAsync("API key is required");
                 return;
@@ -83,6 +96,11 @@ namespace MemoriaServer.Middleware
 
                 if (user == null)
                 {
+                    if (publicRead)
+                    {
+                        await _next(context);
+                        return;
+                    }
                     context.Response.StatusCode = 401;
                     await context.Response.WriteAsync("Invalid API key");
                     return;
