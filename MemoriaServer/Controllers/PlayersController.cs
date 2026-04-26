@@ -419,8 +419,16 @@ namespace MemoriaServer.Controllers
                         .OrderByDescending(x => x.Count)
                         .Take(5)
                         .ToList();
+                    var ids = top.Select(x => x.TerritoryId).ToList();
+                    var names = _context.TerritoryNames
+                        .Where(tn => ids.Contains(tn.TerritoryId))
+                        .ToDictionary(tn => tn.TerritoryId, tn => tn.Name);
                     locations = new LocationsData(top.Select(x =>
-                        new TerritoryEntry(x.TerritoryId, $"Territory {x.TerritoryId}", x.Count, x.Last)).ToList());
+                        new TerritoryEntry(
+                            x.TerritoryId,
+                            names.TryGetValue(x.TerritoryId, out var resolved) ? resolved : $"Territory {x.TerritoryId}",
+                            x.Count,
+                            x.Last)).ToList());
                 }
 
                 var nhRaw = _context.Set<PlayerNameHistory>()
@@ -781,6 +789,49 @@ namespace MemoriaServer.Controllers
                                 };
                                 _context.PlayerCustomizationHistory.Add(customization);
                             }
+                        }
+                    }
+                }
+
+                // Upsert the TerritoryNames lookup for any (territory id, name) pairs the
+                // batch carries. The plugin resolves names from Lumina at scan time so
+                // this is the only path the server learns zone names — once seen, the
+                // Locations panel can show "Limsa Lominsa Upper Decks" instead of
+                // "Territory 129". DistinctBy on TerritoryId because every player in the
+                // batch was scanned in the same zone, so values repeat.
+                var territoryUpserts = players
+                    .Where(p => p.TerritoryId.HasValue && !string.IsNullOrWhiteSpace(p.TerritoryName))
+                    .Select(p => (Id: p.TerritoryId!.Value, Name: p.TerritoryName!.Trim()))
+                    .DistinctBy(t => t.Id)
+                    .ToList();
+                if (territoryUpserts.Count > 0)
+                {
+                    var territoryIds = territoryUpserts.Select(t => t.Id).ToList();
+                    var existingNames = await _context.TerritoryNames
+                        .Where(tn => territoryIds.Contains(tn.TerritoryId))
+                        .ToListAsync();
+                    var nameByContentId = existingNames.ToDictionary(tn => tn.TerritoryId);
+                    var now = DateTime.UtcNow;
+                    foreach (var (id, name) in territoryUpserts)
+                    {
+                        if (nameByContentId.TryGetValue(id, out var row))
+                        {
+                            // Only stamp on actual changes — most uploads see existing rows
+                            // and rewriting LastUpdatedAt every batch would wear the index.
+                            if (row.Name != name)
+                            {
+                                row.Name = name;
+                                row.LastUpdatedAt = now;
+                            }
+                        }
+                        else
+                        {
+                            _context.TerritoryNames.Add(new TerritoryName
+                            {
+                                TerritoryId = id,
+                                Name = name,
+                                LastUpdatedAt = now,
+                            });
                         }
                     }
                 }

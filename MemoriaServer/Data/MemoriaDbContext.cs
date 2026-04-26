@@ -40,6 +40,8 @@ namespace MemoriaServer.Data
         public DbSet<PlayerCustomizationHistory> PlayerCustomizationHistory { get; set; }
         /// <summary>Historical record of territories/zones where players have been seen</summary>
         public DbSet<PlayerTerritoryHistory> PlayerTerritoryHistory { get; set; }
+        /// <summary>FFXIV TerritoryType id → display name lookup, populated by scan uploads</summary>
+        public DbSet<TerritoryName> TerritoryNames { get; set; }
         /// <summary>Links between players and their Lodestone profiles</summary>
         public DbSet<PlayerLodestone> PlayerLodestones { get; set; }
         /// <summary>Record of when player profiles were viewed/accessed</summary>

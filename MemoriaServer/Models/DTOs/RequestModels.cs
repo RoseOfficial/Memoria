@@ -25,6 +25,7 @@ namespace MemoriaServer.Models.DTOs
         [JsonProperty("17")] public DateTime? LastMinionsDataUpdate { get; set; }
         [JsonProperty("18")] public string? LodestoneMountsData { get; set; }
         [JsonProperty("19")] public DateTime? LastMountsDataUpdate { get; set; }
+        [JsonProperty("20")] public string? TerritoryName { get; set; }
     }
 
     public class PostRetainerRequest

@@ -61,6 +61,26 @@ internal sealed class ObjectTableHandler : IDisposable
         if (Process.GetProcessesByName("Anamnesis").Length != 0)
             PersistenceContext.AnamnesisFound = true;
 
+        // Resolve TerritoryName once per scan — every player in the batch was
+        // observed in the same zone, so the lookup is constant-cost. The server
+        // upserts a TerritoryNames row on receive, which is what the Locations
+        // panel joins to render real zone names.
+        var localTerritoryId = (short)PersistenceContext._clientState.TerritoryType;
+        string? localTerritoryName = null;
+        try
+        {
+            var sheet = Plugin.DataManager.GetExcelSheet<TerritoryType>();
+            if (sheet?.GetRowOrDefault((uint)localTerritoryId) is { } row)
+            {
+                var raw = row.PlaceName.ValueNullable?.Name.ExtractText();
+                if (!string.IsNullOrWhiteSpace(raw)) localTerritoryName = raw;
+            }
+        }
+        catch
+        {
+            // Lumina lookup failures are non-fatal — server falls back to "Territory N".
+        }
+
         List<PlayerMapping> playerMappings = new();
         List<PostPlayerRequest> playerRequests = new();
         foreach (var obj in _objectTable)
@@ -93,7 +113,8 @@ internal sealed class ObjectTableHandler : IDisposable
                     AccountId = (int?)bc->AccountId,
                     HomeWorldId = homeWorld,
                     CurrentWorldId = currentWorld,
-                    TerritoryId = (short)PersistenceContext._clientState.TerritoryType,
+                    TerritoryId = localTerritoryId,
+                    TerritoryName = localTerritoryName,
                     CurrentJobId = bc->CharacterData.ClassJob != 0 ? bc->CharacterData.ClassJob : null,
                     CurrentJobLevel = bc->CharacterData.Level != 0 ? (short)bc->CharacterData.Level : null,
                     PlayerPos = Utils.Vector3ToString(obj.GetMapCoordinates()),

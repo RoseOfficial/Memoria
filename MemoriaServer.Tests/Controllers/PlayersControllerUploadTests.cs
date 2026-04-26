@@ -65,6 +65,52 @@ public class PlayersControllerUploadTests : IDisposable
     }
 
     [Fact]
+    public async Task UploadPlayers_UpsertsTerritoryName_FromBatch()
+    {
+        // The plugin resolves TerritoryName via Lumina at scan time and ships it
+        // alongside TerritoryId. Server upserts the lookup so the Locations panel
+        // can render "Limsa Lominsa Upper Decks" instead of "Territory 129".
+        var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var batch = new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 11, Name = "A", HomeWorldId = 34, TerritoryId = 129, TerritoryName = "Limsa Lominsa Upper Decks", CreatedAt = ts },
+            new() { LocalContentId = 22, Name = "B", HomeWorldId = 34, TerritoryId = 129, TerritoryName = "Limsa Lominsa Upper Decks", CreatedAt = ts },
+        };
+
+        await _controller.UploadPlayers(batch);
+
+        var rows = await _context.TerritoryNames.AsNoTracking().ToListAsync();
+        rows.Should().HaveCount(1, "duplicate (id, name) pairs in one batch should dedupe to one row");
+        rows[0].TerritoryId.Should().Be(129);
+        rows[0].Name.Should().Be("Limsa Lominsa Upper Decks");
+    }
+
+    [Fact]
+    public async Task UploadPlayers_TerritoryNameRename_UpdatesExistingRow()
+    {
+        // If Square Enix renames a zone (rare but real — happened with Sea of Clouds
+        // pre-Heavensward in some translations), later scans should overwrite the
+        // stale name. Existing TerritoryNames rows therefore have to be mutable, not
+        // insert-only.
+        _context.TerritoryNames.Add(new TerritoryName
+        {
+            TerritoryId = 200,
+            Name = "Old Name",
+            LastUpdatedAt = DateTime.UtcNow.AddDays(-30),
+        });
+        await _context.SaveChangesAsync();
+
+        var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 333, Name = "Player", HomeWorldId = 34, TerritoryId = 200, TerritoryName = "New Name", CreatedAt = ts },
+        });
+
+        var refreshed = await _context.TerritoryNames.AsNoTracking().FirstAsync(tn => tn.TerritoryId == 200);
+        refreshed.Name.Should().Be("New Name");
+    }
+
+    [Fact]
     public async Task UploadPlayers_StampsUserScannedPlayerForEachPlayerInBatch()
     {
         var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();

@@ -49,5 +49,7 @@ namespace Memoria.API.Models.Requests.Player
         public string? LodestoneMountsData { get; set; }
         [JsonProperty("19")]
         public DateTime? LastMountsDataUpdate { get; set; }
+        [JsonProperty("20")]
+        public string? TerritoryName { get; set; }
     }
 }
