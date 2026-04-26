@@ -47,6 +47,13 @@ namespace MemoriaServer.Services.Lodestone
         // counts, and avatar fresh without hammering Lodestone for unchanged data.
         private static readonly TimeSpan StaleAfter = TimeSpan.FromDays(7);
 
+        // How often to re-run the staleness seed query. The processing loop only catches
+        // staleness at startup otherwise — on a long-running instance (no Render sleep, no
+        // redeploy) that means rows that cross the 7-day mark mid-uptime never get re-queued.
+        // Hourly is dirt-cheap (a single indexed Postgres query) and gives us a worst-case
+        // 7d + 1h freshness guarantee instead of "whenever the server happens to restart."
+        private static readonly TimeSpan ReseedInterval = TimeSpan.FromHours(1);
+
         public LodestoneEnrichmentService(
             IServiceScopeFactory scopeFactory,
             ILogger<LodestoneEnrichmentService> logger)
@@ -71,22 +78,31 @@ namespace MemoriaServer.Services.Lodestone
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Seed the queue from existing rows that are missing or stale. This catches every
-            // player that predates this service AND any player whose enrichment expired since
-            // the last server start.
-            try
-            {
-                await SeedFromDatabaseAsync(stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "LodestoneEnrichment: failed to seed initial queue from database");
-            }
+            // Seed the queue from existing rows that are missing or stale, then re-seed every
+            // ReseedInterval (1h) so the 7-day staleness rule keeps holding even on long-running
+            // instances that never hit a redeploy or sleep. The first iteration runs immediately
+            // because lastSeedAt starts at MinValue.
+            var lastSeedAt = DateTime.MinValue;
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
+                    if (DateTime.UtcNow - lastSeedAt >= ReseedInterval)
+                    {
+                        try
+                        {
+                            await SeedFromDatabaseAsync(stoppingToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "LodestoneEnrichment: re-seed failed (will try again next interval)");
+                        }
+                        // Stamp regardless of success so a persistent failure doesn't busy-loop
+                        // the seed query — next attempt is one ReseedInterval out.
+                        lastSeedAt = DateTime.UtcNow;
+                    }
+
                     if (_queue.TryDequeue(out var localContentId))
                     {
                         _enqueued.TryRemove(localContentId, out _);
