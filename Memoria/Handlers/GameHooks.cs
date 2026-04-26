@@ -198,9 +198,14 @@ internal sealed unsafe class GameHooks : IDisposable
             // mannequins, etc.) and we don't want to record those as real players.
             if (contentId == 0 || accountId == 0)
             {
+                _logger.LogTrace("SpawnPlayerPacket targetId={TargetId} contentId={ContentId} accountId={AccountId} — skipped (zero id)",
+                    targetId, contentId, accountId);
                 SpawnPlayerPacketHook.Original(targetId, packet);
                 return;
             }
+
+            _logger.LogInformation("SpawnPlayerPacket received: targetId={TargetId} contentId={ContentId} accountId={AccountId}",
+                targetId, contentId, accountId);
 
             // Name is in CommonSpawnData._name at packet offset 0x252 (CommonSpawnData
             // starts at 0x20 within the packet, and _name is at 0x232 inside CommonSpawnData).
