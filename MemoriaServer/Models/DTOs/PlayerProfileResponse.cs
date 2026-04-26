@@ -20,6 +20,7 @@ public record ProfileHeader(
     string WorldName,
     string? AvatarUrl,
     byte? CurrentJobId,
+    string? CurrentJobName,
     short? CurrentJobLevel,
     string? FreeCompanyTag,
     DateTime? LastSeenAt,

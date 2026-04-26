@@ -385,6 +385,7 @@ namespace MemoriaServer.Controllers
                 WorldName: worldName,
                 AvatarUrl: player.AvatarLink,
                 CurrentJobId: player.CurrentJobId,
+                CurrentJobName: MemoriaServer.Services.Jobs.JobNames.Resolve(player.CurrentJobId),
                 CurrentJobLevel: player.CurrentJobLevel,
                 FreeCompanyTag: null,  // not tracked at base Player level yet
                 LastSeenAt: player.LastScannedAt,

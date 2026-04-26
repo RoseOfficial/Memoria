@@ -20,7 +20,7 @@ export function ProfileHeaderCard({ header }: { header: ProfileHeader }) {
               <>
                 <span className="mx-3 text-[var(--color-text-dim)]">·</span>
                 <span className="text-[var(--color-gold)] uppercase text-xs tracking-widest mr-2">Job</span>
-                Job {header.currentJobId} Lv {header.currentJobLevel ?? '?'}
+                {header.currentJobName ?? `Job ${header.currentJobId}`} Lv {header.currentJobLevel ?? '?'}
               </>
             )}
           </div>

@@ -6,6 +6,7 @@ export type ProfileHeader = {
   worldName: string
   avatarUrl: string | null
   currentJobId: number | null
+  currentJobName: string | null
   currentJobLevel: number | null
   freeCompanyTag: string | null
   lastSeenAt: string | null
