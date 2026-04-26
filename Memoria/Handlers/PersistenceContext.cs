@@ -852,6 +852,13 @@ internal sealed class PersistenceContext
                 HomeWorldId = originalRequest.HomeWorldId,
                 CurrentWorldId = originalRequest.CurrentWorldId,
                 TerritoryId = originalRequest.TerritoryId,
+                // Forwarded explicitly because the field-by-field rebuild below dropped
+                // it silently — TerritoryName was added to PostPlayerRequest after this
+                // enricher was written, and "fields not listed get default(null)" meant
+                // every enriched upload arrived at the server with TerritoryName=null,
+                // so the TerritoryNames lookup table never populated despite the plugin
+                // resolving "Limsa Lominsa Lower Decks" perfectly on the scan side.
+                TerritoryName = originalRequest.TerritoryName,
                 CurrentJobId = originalRequest.CurrentJobId,
                 CurrentJobLevel = originalRequest.CurrentJobLevel,
                 PlayerPos = originalRequest.PlayerPos,
