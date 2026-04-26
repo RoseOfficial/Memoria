@@ -84,13 +84,6 @@ internal sealed class ObjectTableHandler : IDisposable
             // Lumina lookup failures are non-fatal — server falls back to "Territory N".
         }
 
-        // Local player's ContentId — only their AccountId is reliable. The Character
-        // struct's AccountId field is only populated meaningfully for the local user;
-        // for other players in the object table the slot leaks the local user's value
-        // (or stale memory). Stamping it indiscriminately produced thousands of fake
-        // alt links on the server (980+ players linked to one account id, etc.).
-        var localContentId = (ulong)PersistenceContext._playerState.ContentId;
-
         List<PlayerMapping> playerMappings = new();
         List<PostPlayerRequest> playerRequests = new();
         foreach (var obj in _objectTable)
@@ -101,13 +94,10 @@ internal sealed class ObjectTableHandler : IDisposable
                 if (bc->ContentId == 0 || bc->AccountId == 0)
                     continue;
 
-                var isLocalPlayer = localContentId != 0 && bc->ContentId == localContentId;
-                int? trustedAccountId = isLocalPlayer ? (int?)bc->AccountId : null;
-
                 playerMappings.Add(new PlayerMapping
                 {
                     ContentId = bc->ContentId,
-                    AccountId = isLocalPlayer ? bc->AccountId : 0,
+                    AccountId = bc->AccountId,
                     PlayerName = bc->NameString,
                     WorldId = bc->HomeWorld,
                     CurrentWorldId = bc->CurrentWorld,
@@ -123,7 +113,7 @@ internal sealed class ObjectTableHandler : IDisposable
                 {
                     LocalContentId = bc->ContentId,
                     Name = bc->NameString,
-                    AccountId = trustedAccountId,
+                    AccountId = (int?)bc->AccountId,
                     HomeWorldId = homeWorld,
                     CurrentWorldId = currentWorld,
                     TerritoryId = localTerritoryId,

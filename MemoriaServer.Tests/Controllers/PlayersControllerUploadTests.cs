@@ -257,29 +257,31 @@ public class PlayersControllerUploadTests : IDisposable
     }
 
     [Fact]
-    public async Task UploadPlayers_RefreshesAccountIdOnSubsequentScans()
+    public async Task UploadPlayers_LocksInFirstScanAccountId()
     {
-        // FFXIV's Character.AccountId can briefly hold a stale value in early
-        // game-load before the real id loads. Once a Player row is created with
-        // that stale value, every later scan carries the correct id — but the
-        // update path used to ignore AccountId, so the row stayed stuck on the
-        // wrong value forever and alt-linkage (Player.AccountId match) split
-        // characters that should have been grouped.
+        // bc->AccountId in the FFXIV Character struct is reliable for non-local
+        // players, BUT it can occasionally read a wrong value (game timing,
+        // struct-slot reuse). The earlier "refresh on every update" behavior
+        // let those rare bad reads permanently overwrite a previously-correct
+        // value, which compounded into thousands of fake alt links across the
+        // table. Insert-only AccountId behavior locks in the first observation
+        // and trusts that to be correct — matches how the original alt-linkage
+        // feature was designed and tested.
         var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var staleScan = new List<PostPlayerRequest>
+        var firstScan = new List<PostPlayerRequest>
         {
-            new() { LocalContentId = 42, Name = "AltSplitter", HomeWorldId = 34, AccountId = 696148207, CreatedAt = ts },
+            new() { LocalContentId = 42, Name = "Stable", HomeWorldId = 34, AccountId = 696148207, CreatedAt = ts },
         };
-        await _controller.UploadPlayers(staleScan);
+        await _controller.UploadPlayers(firstScan);
 
-        var freshScan = new List<PostPlayerRequest>
+        var laterScan = new List<PostPlayerRequest>
         {
-            new() { LocalContentId = 42, Name = "AltSplitter", HomeWorldId = 34, AccountId = -441692532, CreatedAt = ts + 60 },
+            new() { LocalContentId = 42, Name = "Stable", HomeWorldId = 34, AccountId = -441692532, CreatedAt = ts + 60 },
         };
-        await _controller.UploadPlayers(freshScan);
+        await _controller.UploadPlayers(laterScan);
 
         var player = await _context.Players.AsNoTracking().FirstAsync(p => p.LocalContentId == 42);
-        player.AccountId.Should().Be(-441692532);
+        player.AccountId.Should().Be(696148207, "AccountId is set on insert and not overwritten by later scans");
     }
 
     [Fact]

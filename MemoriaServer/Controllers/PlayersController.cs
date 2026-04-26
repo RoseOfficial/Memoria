@@ -727,17 +727,6 @@ namespace MemoriaServer.Controllers
                             _context.PlayerNameHistory.Add(nameHistory);
                         }
 
-                        // Refresh AccountId from each scan. FFXIV's Character.AccountId can
-                        // briefly hold a stale value during early game-load before the real
-                        // id loads, and the first scan's value got cemented onto the row
-                        // forever — splitting alts that should have been grouped via
-                        // Player.AccountId match. Always trust the latest non-null scan.
-                        if (playerRequest.AccountId.HasValue && existingPlayer.AccountId != playerRequest.AccountId)
-                        {
-                            existingPlayer.AccountId = playerRequest.AccountId;
-                            hasChanges = true;
-                        }
-
                         if (existingPlayer.CurrentWorldId != (short?)playerRequest.CurrentWorldId)
                         {
                             existingPlayer.CurrentWorldId = (short?)playerRequest.CurrentWorldId;
