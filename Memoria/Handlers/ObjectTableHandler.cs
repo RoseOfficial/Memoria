@@ -64,15 +64,18 @@ internal sealed class ObjectTableHandler : IDisposable
         // Resolve TerritoryName once per scan — every player in the batch was
         // observed in the same zone, so the lookup is constant-cost. The server
         // upserts a TerritoryNames row on receive, which is what the Locations
-        // panel joins to render real zone names.
+        // panel joins to render real zone names. Use the same destructure pattern
+        // as Tools.GetTerritoryName so any breaking Lumina API change shows up
+        // there too instead of silently swallowing it through the catch block.
         var localTerritoryId = (short)PersistenceContext._clientState.TerritoryType;
         string? localTerritoryName = null;
         try
         {
             var sheet = Plugin.DataManager.GetExcelSheet<TerritoryType>();
-            if (sheet?.GetRowOrDefault((uint)localTerritoryId) is { } row)
+            if (sheet is not null
+                && sheet.GetRowOrDefault((uint)localTerritoryId) is { PlaceName.Value.Name: var nameSeString })
             {
-                var raw = row.PlaceName.ValueNullable?.Name.ExtractText();
+                var raw = nameSeString.ToString();
                 if (!string.IsNullOrWhiteSpace(raw)) localTerritoryName = raw;
             }
         }
@@ -80,6 +83,13 @@ internal sealed class ObjectTableHandler : IDisposable
         {
             // Lumina lookup failures are non-fatal — server falls back to "Territory N".
         }
+
+        // Local player's ContentId — only their AccountId is reliable. The Character
+        // struct's AccountId field is only populated meaningfully for the local user;
+        // for other players in the object table the slot leaks the local user's value
+        // (or stale memory). Stamping it indiscriminately produced thousands of fake
+        // alt links on the server (980+ players linked to one account id, etc.).
+        var localContentId = (ulong)PersistenceContext._playerState.ContentId;
 
         List<PlayerMapping> playerMappings = new();
         List<PostPlayerRequest> playerRequests = new();
@@ -91,10 +101,13 @@ internal sealed class ObjectTableHandler : IDisposable
                 if (bc->ContentId == 0 || bc->AccountId == 0)
                     continue;
 
+                var isLocalPlayer = localContentId != 0 && bc->ContentId == localContentId;
+                int? trustedAccountId = isLocalPlayer ? (int?)bc->AccountId : null;
+
                 playerMappings.Add(new PlayerMapping
                 {
                     ContentId = bc->ContentId,
-                    AccountId = bc->AccountId,
+                    AccountId = isLocalPlayer ? bc->AccountId : 0,
                     PlayerName = bc->NameString,
                     WorldId = bc->HomeWorld,
                     CurrentWorldId = bc->CurrentWorld,
@@ -110,7 +123,7 @@ internal sealed class ObjectTableHandler : IDisposable
                 {
                     LocalContentId = bc->ContentId,
                     Name = bc->NameString,
-                    AccountId = (int?)bc->AccountId,
+                    AccountId = trustedAccountId,
                     HomeWorldId = homeWorld,
                     CurrentWorldId = currentWorld,
                     TerritoryId = localTerritoryId,
