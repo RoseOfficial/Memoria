@@ -51,6 +51,13 @@ if (!builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddSingleton<MemoriaServer.Services.Lodestone.ILodestoneBioFetcher,
                                    MemoriaServer.Services.Lodestone.NetStoneLodestoneBioFetcher>();
     builder.Services.AddHostedService<MemoriaServer.Services.Maintenance.ClaimAttemptCleanupService>();
+
+    // Centralized Lodestone enrichment. Singleton + HostedService registration so the
+    // PlayersController upload path can resolve the service to enqueue freshly-uploaded
+    // players, while the same instance runs the background processing loop.
+    builder.Services.AddSingleton<MemoriaServer.Services.Lodestone.LodestoneEnrichmentService>();
+    builder.Services.AddHostedService(sp =>
+        sp.GetRequiredService<MemoriaServer.Services.Lodestone.LodestoneEnrichmentService>());
 }
 
 builder.Services.AddSingleton<MemoriaServer.Services.Takedowns.TakedownRateLimiter>();

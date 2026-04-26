@@ -10,11 +10,8 @@ using System.Text.Json;
 using MemoriaServer.Data;
 using MemoriaServer.Models.DTOs;
 using MemoriaServer.Models.Entities;
+using MemoriaServer.Services.Lodestone;
 using MemoriaServer.Services.World;
-
-// System dependencies for text processing and HTML parsing
-using System.Text.RegularExpressions;
-using HtmlAgilityPack;
 
 namespace MemoriaServer.Controllers
 {
@@ -566,8 +563,17 @@ namespace MemoriaServer.Controllers
             if (string.IsNullOrWhiteSpace(json)) return null;
             try
             {
-                var names = JsonSerializer.Deserialize<List<string>>(json);
-                if (names is null) return null;
+                // Wire format from both the plugin and the server-side enrichment service is an
+                // array of objects ([{Name,IconUrl,...}, ...]). We only need Name; icon URLs are
+                // reconstructed from the FFXIVCollect slug below so the preview keeps working
+                // even if NetStone returned a relative-path Lodestone icon we can't render.
+                var entries = JsonSerializer.Deserialize<List<CollectibleEntry>>(json);
+                if (entries is null) return null;
+                var names = entries
+                    .Where(e => !string.IsNullOrWhiteSpace(e.Name))
+                    .Select(e => e.Name!)
+                    .ToList();
+                if (names.Count == 0) return null;
                 // KnownTotal: ~400 for mounts, ~480 for minions per FFXIVCollect. Hard-coded estimates.
                 var total = kind == "mount" ? 400 : 480;
                 var preview = names.Take(16).Select((n, i) =>
@@ -580,6 +586,8 @@ namespace MemoriaServer.Controllers
                 return null;
             }
         }
+
+        private sealed record CollectibleEntry(string? Name);
 
         // Mapping of starter-class ClassJob id → the job(s) it upgrades into. If any
         // upgrade is present in the player's data we suppress the class entry, since
@@ -996,39 +1004,14 @@ namespace MemoriaServer.Controllers
                 // Save history entries
                 await _context.SaveChangesAsync();
 
-                // Schedule auto-linking for players without avatars (rate-limited background task)
-                var playersNeedingAvatars = players.Where(p => p.LocalContentId != 0).Take(5).ToList(); // Limit to 5 players per batch
-                if (playersNeedingAvatars.Any())
+                // Hand the uploaded ContentIds to the centralized enrichment service. It owns
+                // the Lodestone fetch loop (avatar + jobs + minions + mounts) and rate-limits
+                // globally, so this controller stops doing per-batch fetches.
+                var enrichmentService = HttpContext.RequestServices.GetService<LodestoneEnrichmentService>();
+                if (enrichmentService is not null)
                 {
-                    var serviceScope = HttpContext.RequestServices.CreateScope();
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            using var scope = serviceScope;
-                            var scopedContext = scope.ServiceProvider.GetRequiredService<MemoriaDbContext>();
-                            var scopedLogger = scope.ServiceProvider.GetRequiredService<ILogger<PlayersController>>();
-                            
-                            foreach (var playerRequest in playersNeedingAvatars)
-                            {
-                                var player = await scopedContext.Players
-                                    .FirstOrDefaultAsync(p => p.LocalContentId == (long)playerRequest.LocalContentId);
-                                
-                                if (player != null && string.IsNullOrEmpty(player.AvatarLink))
-                                {
-                                    await AutoLinkLodestoneForPlayer(player, scopedContext, scopedLogger);
-                                    await scopedContext.SaveChangesAsync();
-                                    
-                                    // Rate limiting: 5 seconds between requests
-                                    await Task.Delay(5000);
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error in background Lodestone auto-linking");
-                        }
-                    });
+                    foreach (var playerRequest in players)
+                        enrichmentService.Enqueue((long)playerRequest.LocalContentId);
                 }
 
                 return Ok(new { message = "Players uploaded successfully", count = players.Count });
@@ -1043,210 +1026,6 @@ namespace MemoriaServer.Controllers
                     detail = ex.Message,
                     inner = ex.InnerException?.Message,
                 });
-            }
-        }
-
-        private async Task<int?> SearchLodestoneCharacter(string characterName, string worldName, ILogger<PlayersController> logger)
-        {
-            try
-            {
-                using var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.Add("User-Agent", 
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-
-                // Lodestone character search URL
-                var searchUrl = $"https://na.finalfantasyxiv.com/lodestone/character/?q={Uri.EscapeDataString(characterName)}&worldname={Uri.EscapeDataString(worldName)}";
-                logger.LogInformation($"Searching Lodestone for character: {characterName} on {worldName}");
-
-                var response = await httpClient.GetStringAsync(searchUrl);
-                var doc = new HtmlDocument();
-                doc.LoadHtml(response);
-
-                // Find character entries in search results
-                var characterEntries = doc.DocumentNode.SelectNodes("//div[@class='entry']");
-                
-                if (characterEntries == null || !characterEntries.Any())
-                {
-                    logger.LogInformation($"No search results found for {characterName} on {worldName}");
-                    return null;
-                }
-
-                // Look for exact name match
-                foreach (var entry in characterEntries)
-                {
-                    var nameNode = entry.SelectSingleNode(".//p[@class='entry__name']");
-                    var worldNode = entry.SelectSingleNode(".//p[@class='entry__world']");
-                    var linkNode = entry.SelectSingleNode(".//a[@class='entry__link']");
-
-                    if (nameNode != null && worldNode != null && linkNode != null)
-                    {
-                        var foundName = nameNode.InnerText.Trim();
-                        var foundWorld = worldNode.InnerText.Trim();
-
-                        // Check for exact match (world name may include data center, e.g., "Famfrit [Primal]")
-                        var foundWorldName = foundWorld.Split('[')[0].Trim(); // Extract world name without data center
-                        if (string.Equals(foundName, characterName, StringComparison.OrdinalIgnoreCase) &&
-                            string.Equals(foundWorldName, worldName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            var href = linkNode.GetAttributeValue("href", "");
-                            var match = Regex.Match(href, @"/lodestone/character/(\d+)/");
-                            
-                            if (match.Success && int.TryParse(match.Groups[1].Value, out int lodestoneId))
-                            {
-                                logger.LogInformation($"Found exact match for {characterName}@{worldName}: Lodestone ID {lodestoneId}");
-                                return lodestoneId;
-                            }
-                        }
-                    }
-                }
-
-                logger.LogInformation($"No exact match found for {characterName}@{worldName}");
-                return null;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, $"Error searching Lodestone for character {characterName}@{worldName}");
-                return null;
-            }
-        }
-
-        private async Task<(string NameAndWorld, string AvatarLink)?> ScrapeLodestoneProfile(int lodestoneId, ILogger<PlayersController> logger)
-        {
-            try
-            {
-                using var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.Add("User-Agent", 
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-
-                var url = $"https://na.finalfantasyxiv.com/lodestone/character/{lodestoneId}/";
-                var response = await httpClient.GetStringAsync(url);
-
-                var doc = new HtmlDocument();
-                doc.LoadHtml(response);
-
-                // Extract character name and world
-                var nameElement = doc.DocumentNode.SelectSingleNode("//p[@class='frame__chara__name']");
-                var worldElement = doc.DocumentNode.SelectSingleNode("//p[@class='frame__chara__world']");
-                
-                if (nameElement == null || worldElement == null)
-                {
-                    logger.LogWarning($"Could not find name/world elements for Lodestone ID {lodestoneId}");
-                    return null;
-                }
-
-                var characterName = nameElement.InnerText.Trim();
-                var worldName = worldElement.InnerText.Trim();
-                var nameAndWorld = $"{characterName}@{worldName}";
-
-                // Extract avatar URL
-                var avatarElement = doc.DocumentNode.SelectSingleNode("//div[@class='frame__chara__face']//img");
-                var avatarUrl = string.Empty;
-
-                if (avatarElement != null)
-                {
-                    var src = avatarElement.GetAttributeValue("src", "");
-                    if (!string.IsNullOrEmpty(src))
-                    {
-                        // Convert to full URL if relative
-                        if (src.StartsWith("/"))
-                        {
-                            avatarUrl = $"https://img2.finalfantasyxiv.com{src}";
-                        }
-                        else
-                        {
-                            avatarUrl = src;
-                        }
-                    }
-                }
-
-                logger.LogInformation($"Scraped Lodestone profile {lodestoneId}: {nameAndWorld}, Avatar: {avatarUrl}");
-                
-                return (nameAndWorld, avatarUrl);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, $"Error scraping Lodestone profile {lodestoneId}");
-                return null;
-            }
-        }
-
-        private async Task<bool> AutoLinkLodestoneForPlayer(Player player, MemoriaDbContext context, ILogger<PlayersController> logger)
-        {
-            try
-            {
-                // Skip if player already has Lodestone data
-                if (!string.IsNullOrEmpty(player.AvatarLink))
-                {
-                    return false;
-                }
-
-                // Try searching with both home world and current world
-                int? lodestoneId = null;
-                
-                // First try with HomeWorldId if available
-                if (player.HomeWorldId.HasValue)
-                {
-                    var homeWorldName = WorldNames.Resolve(player.HomeWorldId);
-                    if (!string.IsNullOrEmpty(homeWorldName))
-                    {
-                        lodestoneId = await SearchLodestoneCharacter(player.Name, homeWorldName, logger);
-                    }
-                }
-                
-                // If not found and CurrentWorldId is different, try current world
-                if (!lodestoneId.HasValue && player.CurrentWorldId.HasValue && player.CurrentWorldId != player.HomeWorldId)
-                {
-                    var currentWorldName = WorldNames.Resolve(player.CurrentWorldId);
-                    if (!string.IsNullOrEmpty(currentWorldName))
-                    {
-                        lodestoneId = await SearchLodestoneCharacter(player.Name, currentWorldName, logger);
-                    }
-                }
-                
-                // If still not found, log the issue and return
-                if (!lodestoneId.HasValue)
-                {
-                    logger.LogInformation($"Could not find {player.Name} on Lodestone (tried Home: {WorldNames.Resolve(player.HomeWorldId)}, Current: {WorldNames.Resolve(player.CurrentWorldId)})");
-                    return false;
-                }
-
-                // Scrape the character profile
-                var profileData = await ScrapeLodestoneProfile(lodestoneId.Value, logger);
-                if (profileData == null)
-                {
-                    return false;
-                }
-
-                // Create or update PlayerLodestone record
-                var existingLodestone = await context.PlayerLodestones
-                    .FirstOrDefaultAsync(pl => pl.PlayerLocalContentId == player.LocalContentId);
-
-                if (existingLodestone == null)
-                {
-                    var newPlayerLodestone = new PlayerLodestone
-                    {
-                        PlayerLocalContentId = player.LocalContentId,
-                        LodestoneId = lodestoneId.Value,
-                        AvatarLink = profileData.Value.AvatarLink
-                    };
-                    context.PlayerLodestones.Add(newPlayerLodestone);
-                }
-                else
-                {
-                    existingLodestone.LodestoneId = lodestoneId.Value;
-                    existingLodestone.AvatarLink = profileData.Value.AvatarLink;
-                }
-
-                // Update player's direct avatar link
-                player.AvatarLink = profileData.Value.AvatarLink;
-
-                logger.LogInformation($"Auto-linked player {player.Name} to Lodestone ID {lodestoneId.Value} with avatar: {profileData.Value.AvatarLink}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, $"Error auto-linking Lodestone for player {player.Name}");
-                return false;
             }
         }
 

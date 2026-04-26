@@ -202,11 +202,15 @@ public class PlayersControllerBySlugTests
     [Fact]
     public async Task GetBySlug_WithMountsJson_PopulatesMountsSection()
     {
+        // The wire format produced by both the plugin's LodestoneRefreshService and the
+        // server's LodestoneEnrichmentService is an array of objects with Name/IconUrl/etc.,
+        // not a flat array of strings — the simple-string form was a speculative shape that
+        // never landed in production data. Test against the format we actually serialize.
         using var ctx = new MemoriaDbContext(DatabaseTestUtilities.CreateInMemoryDbOptions<MemoriaDbContext>());
         ctx.Players.Add(new Player
         {
             LocalContentId = 1, Name = "Tataru Taru", HomeWorldId = 91,
-            LodestoneMountsData = "[\"Company Chocobo\",\"Black Chocobo\",\"Magitek Armor\"]",
+            LodestoneMountsData = """[{"MountId":1,"Name":"Company Chocobo","IconUrl":null,"AcquiredDate":null},{"MountId":45,"Name":"Black Chocobo","IconUrl":null,"AcquiredDate":null},{"MountId":102,"Name":"Magitek Armor","IconUrl":null,"AcquiredDate":null}]""",
         });
         await ctx.SaveChangesAsync();
 
