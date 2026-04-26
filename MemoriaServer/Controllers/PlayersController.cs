@@ -512,6 +512,23 @@ namespace MemoriaServer.Controllers
             }
         }
 
+        // Mapping of starter-class ClassJob id → the job(s) it upgrades into. If any
+        // upgrade is present in the player's data we suppress the class entry, since
+        // Lodestone reports both at the same level and showing "Gladiator 82" next to
+        // "Paladin 82" doubles every line in the Jobs panel.
+        private static readonly Dictionary<byte, byte[]> ClassToJobUpgrades = new()
+        {
+            { 1, new byte[] { 19 } },     // Gladiator → Paladin
+            { 2, new byte[] { 20 } },     // Pugilist → Monk
+            { 3, new byte[] { 21 } },     // Marauder → Warrior
+            { 4, new byte[] { 22 } },     // Lancer → Dragoon
+            { 5, new byte[] { 23 } },     // Archer → Bard
+            { 6, new byte[] { 24 } },     // Conjurer → White Mage
+            { 7, new byte[] { 25 } },     // Thaumaturge → Black Mage
+            { 26, new byte[] { 27, 28 } }, // Arcanist → Summoner / Scholar
+            { 29, new byte[] { 30 } },    // Rogue → Ninja
+        };
+
         private static JobsData BuildJobs(Player player)
         {
             if (string.IsNullOrWhiteSpace(player.LodestoneJobData))
@@ -519,12 +536,34 @@ namespace MemoriaServer.Controllers
 
             try
             {
+                // The plugin's Lodestone scraper emits the dict with stringified ClassJob
+                // ids as keys (e.g. {"1":82,"19":82,...}). Parse → dedupe class/job pairs →
+                // resolve names → sort.
                 var parsed = JsonSerializer.Deserialize<Dictionary<string, short>>(player.LodestoneJobData);
                 if (parsed is null) return new JobsData(Array.Empty<JobEntry>());
-                return new JobsData(parsed
-                    .Where(kvp => kvp.Value > 0)
+
+                var byId = new Dictionary<byte, short>();
+                foreach (var kvp in parsed)
+                {
+                    if (kvp.Value <= 0) continue;
+                    if (byte.TryParse(kvp.Key, out var id))
+                        byId[id] = kvp.Value;
+                }
+
+                // Drop the starter-class entry whenever the upgraded job is also present,
+                // regardless of level — covers both "GLA 82, PLD 82" duplicates and the
+                // unusual case where the user is currently mid-quest with class > job.
+                foreach (var (classId, jobIds) in ClassToJobUpgrades)
+                {
+                    if (jobIds.Any(j => byId.ContainsKey(j)))
+                        byId.Remove(classId);
+                }
+
+                return new JobsData(byId
                     .OrderByDescending(kvp => kvp.Value)
-                    .Select(kvp => new JobEntry(kvp.Key, kvp.Value))
+                    .Select(kvp => new JobEntry(
+                        Name: MemoriaServer.Services.Jobs.JobNames.Resolve(kvp.Key) ?? $"Job {kvp.Key}",
+                        Level: kvp.Value))
                     .ToList());
             }
             catch (JsonException)
