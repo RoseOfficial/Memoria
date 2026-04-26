@@ -257,31 +257,50 @@ public class PlayersControllerUploadTests : IDisposable
     }
 
     [Fact]
-    public async Task UploadPlayers_LocksInFirstScanAccountId()
+    public async Task UploadPlayers_NeverOverwritesExistingAccountId()
     {
-        // bc->AccountId in the FFXIV Character struct is reliable for non-local
-        // players, BUT it can occasionally read a wrong value (game timing,
-        // struct-slot reuse). The earlier "refresh on every update" behavior
-        // let those rare bad reads permanently overwrite a previously-correct
-        // value, which compounded into thousands of fake alt links across the
-        // table. Insert-only AccountId behavior locks in the first observation
-        // and trusts that to be correct — matches how the original alt-linkage
-        // feature was designed and tested.
+        // Object-table reads can occasionally leak the local user's AccountId
+        // onto stranger rows. Once a real value is in place (typically from a
+        // spawn-packet capture), subsequent scans must not be able to clobber
+        // it — that's what the earlier "refresh on every update" did, and it
+        // compounded into thousands of fake alt links.
         var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var firstScan = new List<PostPlayerRequest>
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
         {
             new() { LocalContentId = 42, Name = "Stable", HomeWorldId = 34, AccountId = 696148207, CreatedAt = ts },
-        };
-        await _controller.UploadPlayers(firstScan);
-
-        var laterScan = new List<PostPlayerRequest>
+        });
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
         {
             new() { LocalContentId = 42, Name = "Stable", HomeWorldId = 34, AccountId = -441692532, CreatedAt = ts + 60 },
-        };
-        await _controller.UploadPlayers(laterScan);
+        });
 
         var player = await _context.Players.AsNoTracking().FirstAsync(p => p.LocalContentId == 42);
-        player.AccountId.Should().Be(696148207, "AccountId is set on insert and not overwritten by later scans");
+        player.AccountId.Should().Be(696148207);
+    }
+
+    [Fact]
+    public async Task UploadPlayers_PromotesNullAccountIdToFirstNonNullScan()
+    {
+        // A row whose AccountId is null (either the first scan never captured one,
+        // or it got cleared by a backfill) needs the path to be repopulated by a
+        // later scan that DOES carry an AccountId — typically the new spawn-packet
+        // hook landing verified data. Without this promotion path, nuked rows
+        // stay null forever and alt-linkage permanently can't surface them.
+        var ts = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
+        {
+            // First scan with no AccountId (e.g. plugin filter passed but server
+            // received null, or a backfill cleared the column).
+            new() { LocalContentId = 43, Name = "NeedsId", HomeWorldId = 34, AccountId = null, CreatedAt = ts },
+        });
+        // Spawn-packet capture lands real AccountId on a follow-up scan.
+        await _controller.UploadPlayers(new List<PostPlayerRequest>
+        {
+            new() { LocalContentId = 43, Name = "NeedsId", HomeWorldId = 34, AccountId = 12345678, CreatedAt = ts + 60 },
+        });
+
+        var player = await _context.Players.AsNoTracking().FirstAsync(p => p.LocalContentId == 43);
+        player.AccountId.Should().Be(12345678);
     }
 
     [Fact]

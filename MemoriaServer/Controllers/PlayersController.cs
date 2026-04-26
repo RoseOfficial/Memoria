@@ -727,6 +727,23 @@ namespace MemoriaServer.Controllers
                             _context.PlayerNameHistory.Add(nameHistory);
                         }
 
+                        // Promote AccountId from null to non-null, but never overwrite a
+                        // previously-set value. The earlier "refresh on every update"
+                        // amplified leaked bc->AccountId reads from the object-table path
+                        // into thousands of fake alt links; insert-only was the immediate
+                        // revert. But that left rows whose AccountId got nuked (or never
+                        // captured on first sight because the spawn packet fired but the
+                        // initial insert had a null value) permanently stuck at null and
+                        // unable to surface alts. Spawn-packet captures via GameHooks land
+                        // verified per-player AccountIds; allowing them to fill in nulls
+                        // (and only nulls) recovers those rows without reintroducing the
+                        // overwrite path that caused the corruption.
+                        if (existingPlayer.AccountId is null && playerRequest.AccountId.HasValue)
+                        {
+                            existingPlayer.AccountId = playerRequest.AccountId;
+                            hasChanges = true;
+                        }
+
                         if (existingPlayer.CurrentWorldId != (short?)playerRequest.CurrentWorldId)
                         {
                             existingPlayer.CurrentWorldId = (short?)playerRequest.CurrentWorldId;
