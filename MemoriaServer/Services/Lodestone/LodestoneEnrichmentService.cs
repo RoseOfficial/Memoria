@@ -482,11 +482,13 @@ namespace MemoriaServer.Services.Lodestone
         // the expected size-suffix pattern — the caller should treat null as "no
         // portrait available" rather than risking the unmodified small-avatar URL
         // being used in portrait position.
+        private static readonly System.Text.RegularExpressions.Regex AvatarSizeSuffixRegex =
+            new(@"^(.+)_\d+x\d+(\.\w+)$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
         public static string? DeriveFullPortraitFromAvatar(string? avatarUrl)
         {
             if (string.IsNullOrEmpty(avatarUrl)) return null;
-            var match = System.Text.RegularExpressions.Regex.Match(
-                avatarUrl, @"^(.+)_\d+x\d+(\.\w+)$");
+            var match = AvatarSizeSuffixRegex.Match(avatarUrl);
             return match.Success ? match.Groups[1].Value + match.Groups[2].Value : null;
         }
 
