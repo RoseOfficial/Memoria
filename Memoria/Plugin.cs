@@ -397,23 +397,23 @@ public sealed class Plugin : IDalamudPlugin
             // from the thread-pool throws "Not on main thread!". We marshal each poll and the
             // final field-grab through framework.RunOnFrameworkThread, then do the HTTP call
             // back on the thread pool so we don't stall the game.
-            (string? Name, int AccountId, long ContentId)? snapshot = null;
+            (string? Name, long AccountId, long ContentId)? snapshot = null;
             var deadline = DateTime.UtcNow.AddMinutes(30);
             while (DateTime.UtcNow < deadline)
             {
                 snapshot = await framework.RunOnFrameworkThread(() =>
                 {
                     if (!clientState.IsLoggedIn || objectTable.LocalPlayer is null)
-                        return ((string?)null, 0, 0L);
+                        return ((string?)null, 0L, 0L);
 
                     var lp = objectTable.LocalPlayer;
                     var name = lp.Name.TextValue;
-                    int accountId = 0;
+                    long accountId = 0;
                     unsafe
                     {
                         var chr = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)lp.Address;
                         if (chr != null && chr->AccountId != 0)
-                            accountId = unchecked((int)chr->AccountId);
+                            accountId = unchecked((long)chr->AccountId);
                     }
                     return (name, accountId, (long)playerState.ContentId);
                 });
@@ -572,6 +572,17 @@ public sealed class Plugin : IDalamudPlugin
             needsSave = true;
 
             Log.Information("Configuration migration to version 5 completed (WebBaseUrl → Netlify)");
+        }
+
+        // Migrate to version 6: Widen AccountId from int to long. Existing int values
+        // cast losslessly to long; future scans will populate the full ulong via
+        // unchecked cast.
+        if (Configuration.Version < 6)
+        {
+            Configuration.Version = 6;
+            needsSave = true;
+
+            Log.Information("Configuration migration to version 6 completed (AccountId int → long)");
         }
 
         // Save configuration if any changes were made

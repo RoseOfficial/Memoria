@@ -42,8 +42,11 @@ namespace Memoria
         /// Version 4: Added WebBaseUrl and OptOutInGamePopups.
         /// Version 5: Repointed WebBaseUrl from memoria.gg to memoriagg.netlify.app
         ///            (the memoria.gg domain isn't routed to the production deploy yet).
+        /// Version 6: Widened AccountId from int to long. The plugin reads
+        ///            FFXIV's 64-bit ulong AccountId via unchecked cast; the
+        ///            previous int truncation collided distinct accounts.
         /// </summary>
-        public int Version { get; set; } = 5;
+        public int Version { get; set; } = 6;
         
         /// <summary>
         /// Base URL for the MemoriaServer API endpoint. Default points at the production
@@ -64,7 +67,7 @@ namespace Memoria
         /// <summary>
         /// Current user's Account ID for API authentication
         /// </summary>
-        public int AccountId { get; set; } = 0;
+        public long AccountId { get; set; } = 0;
         
         /// <summary>
         /// Encrypted API key for server authentication (randomly generated during registration).
@@ -117,9 +120,8 @@ namespace Memoria
 
         /// <summary>
         /// True once the plugin has completed one-time registration with the central server and
-        /// received its API key. The middleware on the server requires keys of the form
-        /// {random}-{gameAccountId}; this flag tells us whether we've already gone through the
-        /// login exchange that produces such a key.
+        /// received its API key. Modern keys are opaque random strings (no hyphen, no GameAccountId
+        /// suffix); legacy keys had the form {random}-{gameAccountId} but those are no longer issued.
         /// </summary>
         public bool AutoRegistered { get; set; } = false;
         
