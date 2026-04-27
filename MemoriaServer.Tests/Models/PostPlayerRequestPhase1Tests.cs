@@ -56,6 +56,20 @@ public class PostPlayerRequestPhase1Tests
     }
 
     [Fact]
+    public void FreeCompanyTag_has_MaxLength_7_attribute()
+    {
+        // Mirrors Player.FreeCompanyTag's [MaxLength(7)]. Without this on the
+        // DTO, oversize tags skip ASP.NET model validation and throw
+        // DbUpdateException at SaveChanges (500), instead of returning 400.
+        var prop = typeof(MemoriaServer.Models.DTOs.PostPlayerRequest).GetProperty(nameof(MemoriaServer.Models.DTOs.PostPlayerRequest.FreeCompanyTag))!;
+        var attr = prop.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.MaxLengthAttribute), false)
+            .Cast<System.ComponentModel.DataAnnotations.MaxLengthAttribute>()
+            .FirstOrDefault();
+        attr.Should().NotBeNull();
+        attr!.Length.Should().Be(7);
+    }
+
+    [Fact]
     public void All_phase_1_fields_default_to_null_when_absent()
     {
         var json = "{\"1\":1,\"2\":\"X\"}";

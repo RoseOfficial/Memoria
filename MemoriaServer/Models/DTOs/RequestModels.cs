@@ -33,7 +33,7 @@ namespace MemoriaServer.Models.DTOs
         [JsonProperty("21")] public byte? OnlineStatusId { get; set; }
         [JsonProperty("22")] public int? TitleId { get; set; }
         [JsonProperty("23")] public byte? GrandCompanyId { get; set; }
-        [JsonProperty("24")] public string? FreeCompanyTag { get; set; }
+        [MaxLength(7), JsonProperty("24")] public string? FreeCompanyTag { get; set; }
         [JsonProperty("25")] public int? CurrentMountId { get; set; }
         [JsonProperty("26")] public int? CurrentMinionId { get; set; }
     }
