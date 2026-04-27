@@ -345,22 +345,10 @@ namespace MemoriaServer.Services.Lodestone
 
             int? lodestoneId = int.TryParse(match.Id, out var parsedId) ? parsedId : null;
             var avatarUrl = profile.Avatar?.ToString();
-
-            // Phase 1 — also pull the full-size Lodestone portrait. Prefer NetStone's
-            // Portrait property if it exists on this version of the library; otherwise
-            // derive from the avatar URL by stripping the size suffix.
-            string? portraitUrl;
-            try
-            {
-                // Use reflection to avoid hard-failing if NetStone's API drifts.
-                var portraitProp = profile.GetType().GetProperty("Portrait");
-                portraitUrl = portraitProp?.GetValue(profile)?.ToString();
-            }
-            catch
-            {
-                portraitUrl = null;
-            }
-            portraitUrl ??= DeriveFullPortraitFromAvatar(avatarUrl);
+            // profile.Portrait is a first-class Uri property on LodestoneCharacter (NetStone >= 1.x).
+            // Fall back to deriving from the avatar URL only if Portrait is null (Lodestone bug
+            // or NetStone parse failure).
+            var portraitUrl = profile.Portrait?.ToString() ?? DeriveFullPortraitFromAvatar(avatarUrl);
 
             var (jobLevels, mainJobId, mainJobLevel) = await TryFetchJobsAsync(profile, name);
             var minions = await TryFetchMinionsAsync(profile, name);
@@ -489,16 +477,17 @@ namespace MemoriaServer.Services.Lodestone
 
         // Lodestone serves the same character image at multiple sizes by appending
         // a "_NxN" suffix before the ".jpg" extension. The full unsuffixed URL is
-        // the 640x873 portrait. NetStone's Avatar property returns the small one;
-        // strip the suffix to get the full one. Return the input unchanged when the
-        // pattern doesn't match (defense against Lodestone URL drift).
+        // the 640×873 portrait. NetStone's Avatar property returns the small one;
+        // strip the suffix to get the full one. Return null if the URL doesn't match
+        // the expected size-suffix pattern — the caller should treat null as "no
+        // portrait available" rather than risking the unmodified small-avatar URL
+        // being used in portrait position.
         public static string? DeriveFullPortraitFromAvatar(string? avatarUrl)
         {
             if (string.IsNullOrEmpty(avatarUrl)) return null;
-            // Match "/<hash>_NNxNN.jpg" tail
             var match = System.Text.RegularExpressions.Regex.Match(
                 avatarUrl, @"^(.+)_\d+x\d+(\.\w+)$");
-            return match.Success ? match.Groups[1].Value + match.Groups[2].Value : avatarUrl;
+            return match.Success ? match.Groups[1].Value + match.Groups[2].Value : null;
         }
 
         private sealed record FetchOutcome(

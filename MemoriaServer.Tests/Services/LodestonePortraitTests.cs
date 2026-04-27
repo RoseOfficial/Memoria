@@ -27,12 +27,14 @@ public class LodestonePortraitTests
     }
 
     [Fact]
-    public void DeriveFullPortraitFromAvatar_returns_input_when_pattern_doesnt_match()
+    public void DeriveFullPortraitFromAvatar_returns_null_when_pattern_doesnt_match()
     {
-        // Defensive: if Lodestone changes URL format, return the input as-is
-        // rather than mangling it. Caller can decide to use it as portrait or skip.
+        // If the URL doesn't have a "_NxN" suffix, we have no way to derive the
+        // full portrait. Return null so the caller treats it as "no portrait
+        // available" rather than risking the unmodified URL being used in
+        // portrait position on the profile.
         var weird = "https://example.com/some_picture.png";
-        LodestoneEnrichmentService.DeriveFullPortraitFromAvatar(weird).Should().Be(weird);
+        LodestoneEnrichmentService.DeriveFullPortraitFromAvatar(weird).Should().BeNull();
     }
 
     [Fact]
