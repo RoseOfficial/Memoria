@@ -710,7 +710,14 @@ namespace MemoriaServer.Controllers
                             LodestoneMinionsData = playerRequest.LodestoneMinionsData,
                             LastMinionsDataUpdate = playerRequest.LastMinionsDataUpdate,
                             LodestoneMountsData = playerRequest.LodestoneMountsData,
-                            LastMountsDataUpdate = playerRequest.LastMountsDataUpdate
+                            LastMountsDataUpdate = playerRequest.LastMountsDataUpdate,
+                            // Phase 1 — latest-snapshot scalars
+                            OnlineStatusId = playerRequest.OnlineStatusId,
+                            TitleId = playerRequest.TitleId,
+                            GrandCompanyId = playerRequest.GrandCompanyId,
+                            FreeCompanyTag = playerRequest.FreeCompanyTag,
+                            CurrentMountId = playerRequest.CurrentMountId,
+                            CurrentMinionId = playerRequest.CurrentMinionId,
                         };
 
                         _context.Players.Add(newPlayer);
@@ -843,6 +850,41 @@ namespace MemoriaServer.Controllers
                         {
                             existingPlayer.LodestoneMountsData = playerRequest.LodestoneMountsData;
                             existingPlayer.LastMountsDataUpdate = playerRequest.LastMountsDataUpdate;
+                            hasChanges = true;
+                        }
+
+                        // Phase 1 — latest non-null wins. Null in the request means
+                        // "not observed this scan" (different capture paths see different
+                        // subsets), not "explicitly cleared". A field only updates when
+                        // the inbound value is non-null.
+                        if (playerRequest.OnlineStatusId.HasValue && existingPlayer.OnlineStatusId != playerRequest.OnlineStatusId)
+                        {
+                            existingPlayer.OnlineStatusId = playerRequest.OnlineStatusId;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.TitleId.HasValue && existingPlayer.TitleId != playerRequest.TitleId)
+                        {
+                            existingPlayer.TitleId = playerRequest.TitleId;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.GrandCompanyId.HasValue && existingPlayer.GrandCompanyId != playerRequest.GrandCompanyId)
+                        {
+                            existingPlayer.GrandCompanyId = playerRequest.GrandCompanyId;
+                            hasChanges = true;
+                        }
+                        if (!string.IsNullOrEmpty(playerRequest.FreeCompanyTag) && existingPlayer.FreeCompanyTag != playerRequest.FreeCompanyTag)
+                        {
+                            existingPlayer.FreeCompanyTag = playerRequest.FreeCompanyTag;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.CurrentMountId.HasValue && existingPlayer.CurrentMountId != playerRequest.CurrentMountId)
+                        {
+                            existingPlayer.CurrentMountId = playerRequest.CurrentMountId;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.CurrentMinionId.HasValue && existingPlayer.CurrentMinionId != playerRequest.CurrentMinionId)
+                        {
+                            existingPlayer.CurrentMinionId = playerRequest.CurrentMinionId;
                             hasChanges = true;
                         }
 
