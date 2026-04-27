@@ -172,6 +172,16 @@ internal sealed class ObjectTableHandler : IDisposable
                         TailShape = Customization.TailShape,
                         GenderRace = ((byte)Models.RaceEnumExtensions.CombinedRace((Gender)bc->DrawData.CustomizeData.Sex, (SubRace)bc->DrawData.CustomizeData.Tribe))
                     },
+                    // Phase 1 — Character struct + nested containers. All "0 means
+                    // not set" filters: TitleId 0 = no title, OnlineStatus 0 = no
+                    // explicit status, MountId 0 = not mounted, CompanionId 0 = no
+                    // minion summoned. FC tag is read from offset 0x2300; an empty
+                    // first byte means no FC.
+                    OnlineStatusId = bc->CharacterData.OnlineStatus != 0 ? bc->CharacterData.OnlineStatus : null,
+                    TitleId = bc->CharacterData.TitleId != 0 ? (int?)bc->CharacterData.TitleId : null,
+                    CurrentMountId = bc->Mount.MountId != 0 ? (int?)bc->Mount.MountId : null,
+                    CurrentMinionId = bc->CompanionData.CompanionId != 0 ? (int?)bc->CompanionData.CompanionId : null,
+                    FreeCompanyTag = ReadFreeCompanyTag(bc),
                     CreatedAt = Tools.UnixTime,
                 });
             }
@@ -199,6 +209,16 @@ internal sealed class ObjectTableHandler : IDisposable
     #if DEBUG
         _logger.LogTrace("ObjectTable handling for {Count} players took {TimeMs}", playerMappings.Count, TimeSpan.FromMilliseconds(Environment.TickCount64 - now));
     #endif
+    }
+
+    private static unsafe string? ReadFreeCompanyTag(Character* bc)
+    {
+        // _freeCompanyTag is FixedSizeArray7<byte> at offset 0x2300, declared with
+        // isString: true. The InteropGenerator's exposed accessor varies between
+        // versions, so we read directly via MemoryHelper for portability. Empty
+        // first byte means the player isn't in an FC.
+        var tag = MemoryHelper.ReadString((nint)bc + 0x2300, Encoding.UTF8, 7);
+        return string.IsNullOrEmpty(tag) ? null : tag;
     }
 
     public void Dispose()
