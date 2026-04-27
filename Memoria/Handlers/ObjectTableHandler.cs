@@ -83,26 +83,26 @@ internal sealed class ObjectTableHandler : IDisposable
                 var row = sheet.GetRowOrDefault((uint)localTerritoryId);
                 if (!row.HasValue)
                 {
-                    _logger.LogInformation("[Territory] row {Id} not found in sheet", localTerritoryId);
+                    _logger.LogDebug("[Territory] row {Id} not found in sheet", localTerritoryId);
                 }
                 else
                 {
                     var placeName = row.Value.PlaceName.ValueNullable;
                     if (!placeName.HasValue)
                     {
-                        _logger.LogInformation("[Territory] PlaceName.ValueNullable is null for territory {Id}", localTerritoryId);
+                        _logger.LogDebug("[Territory] PlaceName.ValueNullable is null for territory {Id}", localTerritoryId);
                     }
                     else
                     {
                         var name = placeName.Value.Name.ToString();
                         if (string.IsNullOrWhiteSpace(name))
                         {
-                            _logger.LogInformation("[Territory] PlaceName.Name resolved to empty for territory {Id}", localTerritoryId);
+                            _logger.LogDebug("[Territory] PlaceName.Name resolved to empty for territory {Id}", localTerritoryId);
                         }
                         else
                         {
                             localTerritoryName = name;
-                            _logger.LogInformation("[Territory] {Id} resolved to '{Name}'", localTerritoryId, name);
+                            _logger.LogDebug("[Territory] {Id} resolved to '{Name}'", localTerritoryId, name);
                         }
                     }
                 }
