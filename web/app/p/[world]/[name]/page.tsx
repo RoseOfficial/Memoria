@@ -11,6 +11,7 @@ import { TierGate } from '../../../../components/profile/TierGate'
 import { LocationsSection } from '../../../../components/profile/LocationsSection'
 import { HistorySection } from '../../../../components/profile/HistorySection'
 import { AltsSection } from '../../../../components/profile/AltsSection'
+import { PhaseOneChips } from '../../../../components/profile/PhaseOneChips'
 
 export default async function ProfilePage({ params }: { params: Promise<{ world: string; name: string }> }) {
   const { world, name } = await params
@@ -31,6 +32,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ world:
   return (
     <main className="max-w-5xl mx-auto px-8 py-12 space-y-6">
       <ProfileHeaderCard header={profile.header} />
+      <PhaseOneChips header={profile.header} />
       <div className="grid md:grid-cols-2 gap-1 bg-[var(--color-bg-elevated)]">
         <JobsSection data={profile.jobs} />
         {profile.customization ? <CustomizationSection data={profile.customization} /> : <WipSection title="Customization" phase="Phase 1" description="capture missing customization bytes (hair, eyes, lips, face paint)" />}
