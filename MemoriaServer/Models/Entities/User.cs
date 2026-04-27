@@ -11,7 +11,7 @@ namespace MemoriaServer.Models.Entities
         
         // Nullable: web-first users created via Discord OAuth have no GameAccountId until
         // they redeem an account-link code from the plugin.
-        public int? GameAccountId { get; set; }
+        public long? GameAccountId { get; set; }
 
         [Required]
         public long PrimaryCharacterLocalContentId { get; set; }
