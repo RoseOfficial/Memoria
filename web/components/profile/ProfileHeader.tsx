@@ -1,8 +1,21 @@
 import Image from 'next/image'
 import type { ProfileHeader } from '../../lib/types'
 import { SignatureFrame } from '../ornaments/SignatureFrame'
+import { resolveOnlineStatus, type OnlineStatusKey } from '../../lib/data/online-status'
+
+const STATUS_DOT_COLOR: Record<OnlineStatusKey, string> = {
+  online: "bg-emerald-500",
+  busy: "bg-rose-500",
+  afk: "bg-amber-500",
+  rp: "bg-violet-500",
+  lfp: "bg-sky-500",
+  sprout: "bg-lime-400",
+  returner: "bg-cyan-400",
+  mentor: "bg-yellow-400",
+}
 
 export function ProfileHeaderCard({ header }: { header: ProfileHeader }) {
+  const status = resolveOnlineStatus(header.onlineStatusId)
   const portraitSrc = header.portraitUrl ?? header.avatarUrl
   const isFullPortrait = !!header.portraitUrl
 
@@ -28,6 +41,12 @@ export function ProfileHeaderCard({ header }: { header: ProfileHeader }) {
         </div>
         <div className="flex-1 space-y-1">
           <h1 className="text-3xl tracking-wider">{header.name}</h1>
+          {status && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+              <span className={`inline-block w-2 h-2 rounded-full ${STATUS_DOT_COLOR[status.key]}`} />
+              {status.label}
+            </span>
+          )}
           <div className="text-sm text-[var(--color-text-muted)]">
             <span className="text-[var(--color-gold)] uppercase text-xs tracking-widest mr-2">World</span>
             {header.worldName}
