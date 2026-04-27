@@ -66,7 +66,7 @@ namespace MemoriaServer.Models.DTOs
 
     public class UserRegister
     {
-        public int GameAccountId { get; set; }
+        public long GameAccountId { get; set; }
         public long UserLocalContentId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string ClientId { get; set; } = string.Empty;

@@ -11,7 +11,7 @@ namespace Memoria.API.Models.Requests.User
 {
     public class UserRegister
     {
-        public int GameAccountId { get; set; }
+        public long GameAccountId { get; set; }
         public long UserLocalContentId { get; set; }
         public required string Name { get; set; }
         public required string ClientId { get; set; }

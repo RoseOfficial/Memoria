@@ -5,7 +5,7 @@ namespace MemoriaServer.Models.DTOs
     public class User
     {
         [JsonProperty("0")] public string BaseUrl { get; set; } = string.Empty;
-        [JsonProperty("1")] public int GameAccountId { get; set; }
+        [JsonProperty("1")] public long GameAccountId { get; set; }
         [JsonProperty("2")] public long LocalContentId { get; set; }
         [JsonProperty("3")] public string Name { get; set; } = string.Empty;
         [JsonProperty("4")] public int AppRoleId { get; set; }

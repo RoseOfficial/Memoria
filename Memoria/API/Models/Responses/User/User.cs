@@ -18,7 +18,7 @@ namespace Memoria.API.Models.Responses.User
         [JsonProperty("0")]
         public required string BaseUrl { get; set; }
         [JsonProperty("1")]
-        public int GameAccountId { get; set; }
+        public long GameAccountId { get; set; }
         [JsonProperty("2")]
         public long LocalContentId { get; set; }
         [JsonProperty("3")]
