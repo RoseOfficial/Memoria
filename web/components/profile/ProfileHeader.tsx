@@ -3,12 +3,27 @@ import type { ProfileHeader } from '../../lib/types'
 import { SignatureFrame } from '../ornaments/SignatureFrame'
 
 export function ProfileHeaderCard({ header }: { header: ProfileHeader }) {
+  const portraitSrc = header.portraitUrl ?? header.avatarUrl
+  const isFullPortrait = !!header.portraitUrl
+
   return (
     <SignatureFrame className="p-8 bg-gradient-to-b from-[var(--color-bg-raised)] to-[var(--color-bg)] border border-[var(--color-bg-elevated)]">
-      <div className="flex gap-6">
-        <div className="w-24 h-24 border-2 border-[var(--color-gold)] rounded bg-[var(--color-bg-elevated)] overflow-hidden flex-shrink-0">
-          {header.avatarUrl && (
-            <Image src={header.avatarUrl} alt={header.name} width={96} height={96} className="w-full h-full object-cover" />
+      <div className="flex gap-6 items-start">
+        <div className="flex-shrink-0">
+          {portraitSrc ? (
+            <Image
+              src={portraitSrc}
+              alt={`Portrait of ${header.name}`}
+              className={isFullPortrait
+                ? "rounded object-cover border-2 border-[var(--color-gold)]"
+                : "rounded-full object-cover border-2 border-[var(--color-gold)]"}
+              width={isFullPortrait ? 280 : 96}
+              height={isFullPortrait ? 383 : 96}
+            />
+          ) : (
+            <div className="rounded w-[280px] h-[383px] bg-[var(--color-bg-elevated)] border-2 border-[var(--color-gold)] flex items-center justify-center text-[var(--color-text-dim)] text-xs">
+              No portrait available
+            </div>
           )}
         </div>
         <div className="flex-1 space-y-1">
