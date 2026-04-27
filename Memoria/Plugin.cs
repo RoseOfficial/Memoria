@@ -385,7 +385,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         try
         {
-            if (Configuration.AutoRegistered && !string.IsNullOrWhiteSpace(Configuration.Key) && Configuration.Key.Contains('-'))
+            if (Configuration.AutoRegistered && !string.IsNullOrWhiteSpace(Configuration.Key))
                 return;
 
             var clientState = serviceProvider.GetRequiredService<Dalamud.Plugin.Services.IClientState>();
