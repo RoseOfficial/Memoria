@@ -320,7 +320,14 @@ internal sealed class PersistenceContext
                        (playerRequest.AccountId.HasValue && !cachedPlayer.AccountId.HasValue) ||
                        playerRequest.TerritoryId != cachedPlayer.TerritoryId ||
                        playerRequest.HomeWorldId != cachedPlayer.HomeWorldId ||
-                       playerRequest.CurrentWorldId != cachedPlayer.CurrentWorldId;
+                       playerRequest.CurrentWorldId != cachedPlayer.CurrentWorldId ||
+                       // Phase 1 — these change frequently and should not be deduped away
+                       playerRequest.OnlineStatusId != cachedPlayer.OnlineStatusId ||
+                       playerRequest.TitleId != cachedPlayer.TitleId ||
+                       playerRequest.GrandCompanyId != cachedPlayer.GrandCompanyId ||
+                       playerRequest.FreeCompanyTag != cachedPlayer.FreeCompanyTag ||
+                       playerRequest.CurrentMountId != cachedPlayer.CurrentMountId ||
+                       playerRequest.CurrentMinionId != cachedPlayer.CurrentMinionId;
 
             default:
                 throw new InvalidOperationException("Unsupported type for data change check");
