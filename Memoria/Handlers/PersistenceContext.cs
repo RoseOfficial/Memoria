@@ -591,7 +591,20 @@ internal sealed class PersistenceContext
 
             if (_playerCache.TryGetValue(mapping.ContentId, out var cachedPlayer))
             {
-                if (mapping.PlayerName == cachedPlayer.Name && mapping.AccountId == cachedPlayer.AccountId)
+                // Skip when nothing the mapping carries differs from cache. Null fields
+                // in the mapping mean "this capture path didn't observe it" — never treat
+                // them as differences (and the update step below also preserves existing
+                // values when the mapping is null). The earlier check only compared
+                // Name and AccountId, which meant world-id corrections (DC travel,
+                // server transfer) couldn't update the cache once seeded with a stale
+                // value: the dedupe skipped, and the wrong HomeWorldId was rendered
+                // forever. Comparing world ids closes that gap without re-introducing
+                // the partial-payload clobber that motivated the original guard.
+                var nameChanged = mapping.PlayerName != cachedPlayer.Name;
+                var accountChanged = mapping.AccountId.HasValue && mapping.AccountId != cachedPlayer.AccountId;
+                var homeWorldChanged = mapping.WorldId.HasValue && mapping.WorldId != cachedPlayer.HomeWorldId;
+                var currentWorldChanged = mapping.CurrentWorldId.HasValue && mapping.CurrentWorldId != cachedPlayer.CurrentWorldId;
+                if (!nameChanged && !accountChanged && !homeWorldChanged && !currentWorldChanged)
                     continue;
             }
 
@@ -612,11 +625,14 @@ internal sealed class PersistenceContext
 
                 var cachedPlayer = new CachedPlayer
                 {
-                    AccountId = player.AccountId,
+                    // Fall back to existing values when the mapping has nulls. CharacterNameResult
+                    // sends a mapping with no AccountId / WorldIds — those nulls must not clobber
+                    // values another capture path already established for this player.
+                    AccountId = player.AccountId ?? existing?.AccountId,
                     Name = player.PlayerName,
                     AvatarLink = existing?.AvatarLink,
-                    HomeWorldId = player.WorldId,
-                    CurrentWorldId = player.CurrentWorldId,
+                    HomeWorldId = player.WorldId ?? existing?.HomeWorldId,
+                    CurrentWorldId = player.CurrentWorldId ?? existing?.CurrentWorldId,
                     LastScannedAt = DateTime.UtcNow,
                     LodestoneJobData = existing?.LodestoneJobData,
                     MainJobId = existing?.MainJobId,
