@@ -154,6 +154,14 @@ internal sealed unsafe class GameHooks : IDisposable
                         TerritoryId = player.TerritoryId == 0 ? (short?)null : (short)player.TerritoryId,
                         CurrentJobId = player.CurrentJobId != 0 ? player.CurrentJobId : null,
                         CurrentJobLevel = player.CurrentJobLevel != 0 ? (short)player.CurrentJobLevel : null,
+                        // Phase 1 — SocialListPlayer-specific reads. GC and FC tag
+                        // are highly reliable from this path (party rosters, FC member
+                        // lists). OnlineStatus is encoded as a bitmask in the ulong;
+                        // grab the first byte as the primary status.
+                        GrandCompanyId = (byte)player.GrandCompanyId != 0 ? (byte)player.GrandCompanyId : null,
+                        OnlineStatusId = (byte)(player.OnlineStatusBytes & 0xFF) != 0
+                            ? (byte)(player.OnlineStatusBytes & 0xFF) : null,
+                        FreeCompanyTag = player.GetFreeCompanyTag(),
                         CreatedAt = Tools.UnixTime,
                     });
                 }
@@ -312,6 +320,17 @@ internal sealed unsafe class GameHooks : IDisposable
         /// This *can* be empty, e.g. if you're querying your friend list, the names are ONLY set for characters on the same world.
         /// </summary>
         [FieldOffset(0x44)] public fixed byte CharacterName[32];
-        [FieldOffset(0x64)] private fixed byte FcTagBytes[7];
+        // Public so the handler can read the bytes. Layout is 7 ASCII chars
+        // padded with 0x00; trim trailing nulls when converting.
+        [FieldOffset(0x64)] public fixed byte FcTagBytes[7];
+
+        public unsafe string? GetFreeCompanyTag()
+        {
+            fixed (byte* p = FcTagBytes)
+            {
+                var tag = System.Text.Encoding.UTF8.GetString(p, 7).TrimEnd('\0');
+                return string.IsNullOrEmpty(tag) ? null : tag;
+            }
+        }
     }
 }
