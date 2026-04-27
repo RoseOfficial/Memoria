@@ -543,25 +543,25 @@ namespace MemoriaServer.Controllers
 
             try
             {
-                using var doc = System.Text.Json.JsonDocument.Parse(lodestoneJson);
-                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                using var doc = JsonDocument.Parse(lodestoneJson);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array)
                     return (null, null);
 
                 foreach (var entry in doc.RootElement.EnumerateArray())
                 {
                     if (!entry.TryGetProperty(idKey, out var idElement)) continue;
-                    if (idElement.ValueKind == System.Text.Json.JsonValueKind.Null) continue;
+                    if (idElement.ValueKind == JsonValueKind.Null) continue;
                     if (!idElement.TryGetInt32(out var entryId)) continue;
                     if (entryId != collectibleId.Value) continue;
 
-                    string? name = entry.TryGetProperty("Name", out var n) && n.ValueKind == System.Text.Json.JsonValueKind.String
+                    string? name = entry.TryGetProperty("Name", out var n) && n.ValueKind == JsonValueKind.String
                         ? n.GetString() : null;
-                    string? icon = entry.TryGetProperty("IconUrl", out var i) && i.ValueKind == System.Text.Json.JsonValueKind.String
+                    string? icon = entry.TryGetProperty("IconUrl", out var i) && i.ValueKind == JsonValueKind.String
                         ? i.GetString() : null;
                     return (name, icon);
                 }
             }
-            catch (System.Text.Json.JsonException)
+            catch (JsonException)
             {
                 // Malformed JSON — silently fall through to null. Logging would
                 // spam the logs since the same row would re-fail every request.

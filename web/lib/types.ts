@@ -5,6 +5,7 @@ export type ProfileHeader = {
   worldSlug: string
   worldName: string
   avatarUrl: string | null
+  portraitUrl: string | null
   currentJobId: number | null
   currentJobName: string | null
   currentJobLevel: number | null
@@ -12,6 +13,14 @@ export type ProfileHeader = {
   lastSeenAt: string | null
   lastSeenTerritory: string | null
   firstScannedAt: string | null
+  // Phase 1 additions
+  onlineStatusId: number | null
+  titleId: number | null
+  grandCompanyId: number | null
+  currentMountName: string | null
+  currentMountIconUrl: string | null
+  currentMinionName: string | null
+  currentMinionIconUrl: string | null
 }
 
 export type JobsData = { jobs: { name: string; level: number }[] }
