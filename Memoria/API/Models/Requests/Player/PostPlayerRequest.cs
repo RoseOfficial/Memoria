@@ -51,5 +51,22 @@ namespace Memoria.API.Models.Requests.Player
         public DateTime? LastMountsDataUpdate { get; set; }
         [JsonProperty("20")]
         public string? TerritoryName { get; set; }
+
+        // Phase 1 — captured from Character struct (ObjectTableHandler) and
+        // SocialListPlayer (ProcessSocialListResult). All use Newtonsoft
+        // JsonProperty (NOT JsonPropertyName) — see PlayerCustomization for the
+        // post-mortem on that footgun.
+        [JsonProperty("21")]
+        public byte? OnlineStatusId { get; set; }
+        [JsonProperty("22")]
+        public int? TitleId { get; set; }
+        [JsonProperty("23")]
+        public byte? GrandCompanyId { get; set; }
+        [JsonProperty("24")]
+        public string? FreeCompanyTag { get; set; }
+        [JsonProperty("25")]
+        public int? CurrentMountId { get; set; }
+        [JsonProperty("26")]
+        public int? CurrentMinionId { get; set; }
     }
 }
