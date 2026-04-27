@@ -156,11 +156,15 @@ internal sealed unsafe class GameHooks : IDisposable
                         CurrentJobLevel = player.CurrentJobLevel != 0 ? (short)player.CurrentJobLevel : null,
                         // Phase 1 — SocialListPlayer-specific reads. GC and FC tag
                         // are highly reliable from this path (party rosters, FC member
-                        // lists). OnlineStatus is encoded as a bitmask in the ulong;
-                        // grab the first byte as the primary status.
+                        // lists). OnlineStatus is intentionally NOT read here:
+                        // SocialListPlayer.OnlineStatusBytes appears to be a ulong
+                        // bitmask (each status = 1<<N) where most real player statuses
+                        // (LookingForParty, Mentor, Sprout, etc.) live in bits 20-32.
+                        // Taking the low byte yields meaningless flags. ObjectTableHandler
+                        // captures OnlineStatus correctly via the single-byte CharacterData
+                        // field — for any visible player both paths fire, so we don't lose
+                        // coverage by deferring this here.
                         GrandCompanyId = (byte)player.GrandCompanyId != 0 ? (byte)player.GrandCompanyId : null,
-                        OnlineStatusId = (byte)(player.OnlineStatusBytes & 0xFF) != 0
-                            ? (byte)(player.OnlineStatusBytes & 0xFF) : null,
                         FreeCompanyTag = player.GetFreeCompanyTag(),
                         CreatedAt = Tools.UnixTime,
                     });
@@ -320,7 +324,7 @@ internal sealed unsafe class GameHooks : IDisposable
         /// This *can* be empty, e.g. if you're querying your friend list, the names are ONLY set for characters on the same world.
         /// </summary>
         [FieldOffset(0x44)] public fixed byte CharacterName[32];
-        // Public so the handler can read the bytes. Layout is 7 ASCII chars
+        // Public so the handler can read the bytes. Layout is 7 UTF-8 bytes
         // padded with 0x00; trim trailing nulls when converting.
         [FieldOffset(0x64)] public fixed byte FcTagBytes[7];
 
