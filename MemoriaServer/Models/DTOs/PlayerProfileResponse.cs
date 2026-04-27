@@ -19,13 +19,22 @@ public record ProfileHeader(
     string WorldSlug,
     string WorldName,
     string? AvatarUrl,
+    string? PortraitUrl,
     byte? CurrentJobId,
     string? CurrentJobName,
     short? CurrentJobLevel,
     string? FreeCompanyTag,
     DateTime? LastSeenAt,
     string? LastSeenTerritory,
-    DateTime? FirstScannedAt);
+    DateTime? FirstScannedAt,
+    // Phase 1 additions
+    byte? OnlineStatusId,
+    int? TitleId,
+    byte? GrandCompanyId,
+    string? CurrentMountName,
+    string? CurrentMountIconUrl,
+    string? CurrentMinionName,
+    string? CurrentMinionIconUrl);
 
 public record JobsData(IReadOnlyList<JobEntry> Jobs);
 public record JobEntry(string Name, short Level);

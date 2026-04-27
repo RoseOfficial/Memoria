@@ -420,19 +420,32 @@ namespace MemoriaServer.Controllers
             var worldName = WorldNames.Resolve(player.HomeWorldId) ?? "Unknown";
             var worldSlug = WorldNames.ToSlug(worldName);
 
+            var (currentMountName, currentMountIconUrl) = ResolvePhase1Collectible(
+                player.LodestoneMountsData, player.CurrentMountId, "MountId");
+            var (currentMinionName, currentMinionIconUrl) = ResolvePhase1Collectible(
+                player.LodestoneMinionsData, player.CurrentMinionId, "MinionId");
+
             var header = new ProfileHeader(
                 LocalContentId: player.LocalContentId,
                 Name: player.Name,
                 WorldSlug: worldSlug,
                 WorldName: worldName,
                 AvatarUrl: player.AvatarLink,
+                PortraitUrl: player.LodestonePortraitUrl,
                 CurrentJobId: player.CurrentJobId,
                 CurrentJobName: MemoriaServer.Services.Jobs.JobNames.Resolve(player.CurrentJobId),
                 CurrentJobLevel: player.CurrentJobLevel,
-                FreeCompanyTag: null,  // not tracked at base Player level yet
+                FreeCompanyTag: player.FreeCompanyTag,
                 LastSeenAt: player.LastScannedAt,
                 LastSeenTerritory: null,
-                FirstScannedAt: player.CreatedAt);
+                FirstScannedAt: player.CreatedAt,
+                OnlineStatusId: player.OnlineStatusId,
+                TitleId: player.TitleId,
+                GrandCompanyId: player.GrandCompanyId,
+                CurrentMountName: currentMountName,
+                CurrentMountIconUrl: currentMountIconUrl,
+                CurrentMinionName: currentMinionName,
+                CurrentMinionIconUrl: currentMinionIconUrl);
 
             // Tier 1 sections — always filled if data exists
             var jobs = BuildJobs(player);
@@ -513,6 +526,47 @@ namespace MemoriaServer.Controllers
 
             return new PlayerProfileResponse(header, jobs, customization, mounts, minions,
                 locations, nameHistory, worldHistory, alts, isOwner);
+        }
+
+        // Look up the currently-summoned mount/minion in the player's own
+        // Lodestone collection JSON. Returns (Name, IconUrl) when the id matches
+        // an entry, or (null, null) when the id isn't owned (e.g., quest mounts,
+        // event minions, or characters whose Lodestone enrichment hasn't run yet).
+        // The JSON shape is array of objects with keys "Name", "IconUrl", and
+        // either "MountId" or "MinionId" — see CLAUDE.md "Wire format for the
+        // JSON columns" section.
+        private static (string? Name, string? IconUrl) ResolvePhase1Collectible(
+            string? lodestoneJson, int? collectibleId, string idKey)
+        {
+            if (string.IsNullOrEmpty(lodestoneJson) || !collectibleId.HasValue)
+                return (null, null);
+
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(lodestoneJson);
+                if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                    return (null, null);
+
+                foreach (var entry in doc.RootElement.EnumerateArray())
+                {
+                    if (!entry.TryGetProperty(idKey, out var idElement)) continue;
+                    if (idElement.ValueKind == System.Text.Json.JsonValueKind.Null) continue;
+                    if (!idElement.TryGetInt32(out var entryId)) continue;
+                    if (entryId != collectibleId.Value) continue;
+
+                    string? name = entry.TryGetProperty("Name", out var n) && n.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? n.GetString() : null;
+                    string? icon = entry.TryGetProperty("IconUrl", out var i) && i.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? i.GetString() : null;
+                    return (name, icon);
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Malformed JSON — silently fall through to null. Logging would
+                // spam the logs since the same row would re-fail every request.
+            }
+            return (null, null);
         }
 
         private static bool HasCustomizationChanged(PlayerCustomizationHistory latest, PlayerCustomization current)
