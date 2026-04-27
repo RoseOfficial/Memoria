@@ -53,7 +53,29 @@ namespace MemoriaServer.Models.Entities
         [Column(TypeName = "text")]
         public string? LodestoneMountsData { get; set; }
         public DateTime? LastMountsDataUpdate { get; set; }
-        
+
+        // Phase 1 — latest-snapshot scalars captured per scan. Unlike AccountId
+        // (which is immutable per-character and uses "first non-null wins"), these
+        // represent transient state and update on every observation. Mount/Minion
+        // also accept null (player dismounted / desummoned), unlike CurrentJobId
+        // which only updates when the value changes.
+        public byte? OnlineStatusId { get; set; }
+        public int? TitleId { get; set; }
+        public byte? GrandCompanyId { get; set; }
+
+        [MaxLength(7)]
+        public string? FreeCompanyTag { get; set; }
+
+        public int? CurrentMountId { get; set; }
+        public int? CurrentMinionId { get; set; }
+
+        // Set only by LodestoneEnrichmentService — never sent by the plugin upload.
+        // The full-resolution Lodestone portrait (640×873) replaces the small avatar
+        // (116×116) on the web profile header. AvatarLink stays as the thumbnail
+        // fallback for situations where we want a small icon (search results, alts).
+        [MaxLength(500)]
+        public string? LodestonePortraitUrl { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         
