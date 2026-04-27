@@ -11,9 +11,13 @@ export function MinionsSection({ data }: { data: MinionsData }) {
         {data.preview.slice(0, 16).map((m) => (
           <div
             key={m.id}
-            className="aspect-square bg-[var(--color-bg-raised)] border border-[var(--color-bg-elevated)] rounded-sm"
+            className="aspect-square bg-[var(--color-bg-raised)] border border-[var(--color-bg-elevated)] rounded-sm overflow-hidden"
             title={m.name}
-          />
+          >
+            {m.iconUrl ? (
+              <img src={m.iconUrl} alt={m.name} className="w-full h-full object-cover" loading="lazy" />
+            ) : null}
+          </div>
         ))}
       </div>
     </SectionCard>
