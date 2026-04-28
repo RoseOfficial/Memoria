@@ -830,7 +830,19 @@ namespace MemoriaServer.Controllers
                             }
                         }
 
-                        if (existingPlayer.CurrentJobId != playerRequest.CurrentJobId || 
+                        // HomeWorldId latest-non-null wins. Was previously set on insert
+                        // and never updated, which locked in any wrong-initial-read forever
+                        // (e.g. a transient bc->HomeWorld read during DC travel that landed
+                        // on the visited world instead of the actual home). Rare paid server
+                        // transfers also need this update path. We don't write a history row
+                        // here — PlayerWorldHistory is for "worlds seen on" via CurrentWorldId.
+                        if (playerRequest.HomeWorldId.HasValue && existingPlayer.HomeWorldId != (short?)playerRequest.HomeWorldId)
+                        {
+                            existingPlayer.HomeWorldId = (short?)playerRequest.HomeWorldId;
+                            hasChanges = true;
+                        }
+
+                        if (existingPlayer.CurrentJobId != playerRequest.CurrentJobId ||
                             existingPlayer.CurrentJobLevel != playerRequest.CurrentJobLevel)
                         {
                             existingPlayer.CurrentJobId = playerRequest.CurrentJobId;
