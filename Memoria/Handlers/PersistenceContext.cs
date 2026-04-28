@@ -195,6 +195,15 @@ internal sealed class PersistenceContext
         _cancellationTokenSource = new CancellationTokenSource();
         _ = Task.Run(() => PostPlayerData(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
         _logger.LogInformation("PersistenceContext: Background server upload task started");
+
+        // Start avatar backfill loop. Players freshly scanned after startup land in
+        // the cache with AvatarLink=null because the scan payload doesn't carry it.
+        // The server-side LodestoneEnrichmentService has the avatar (eventually); this
+        // loop pulls it into the local cache so the in-game UI stops showing blank
+        // avatar boxes. The legacy plugin-side LodestoneRefreshService still runs but
+        // it goes through NetStone directly and is slow; this is the fast path.
+        _ = Task.Run(() => BackfillAvatarsLoop(_cancellationTokenSource.Token), _cancellationTokenSource.Token);
+        _logger.LogInformation("PersistenceContext: Background avatar backfill task started");
     }
     /// <summary>
     /// Clears all in-memory caches. Useful when database is reset or when fresh start is needed.
@@ -419,6 +428,73 @@ internal sealed class PersistenceContext
         {
             _cancellationTokenSource.Cancel();
             _logger.LogDebug("Upload tasks have been canceled");
+        }
+    }
+
+    /// <summary>
+    /// Periodically pulls AvatarLink from the server for cached players that don't have one
+    /// yet. Players freshly scanned after plugin start enter the cache with AvatarLink=null
+    /// (the scan payload doesn't carry it); the server-side LodestoneEnrichmentService
+    /// populates the avatar within seconds of the upload landing. Without this loop the
+    /// plugin's UI would render blank avatar boxes until either ReloadCache is manually
+    /// triggered or the legacy plugin-side LodestoneRefreshService gets around to fetching
+    /// from NetStone (which is rate-limited and slow). 30s cadence + 20-player cap +
+    /// 500ms inter-request delay = back-pressure that finishes a typical session-worth of
+    /// new players in a few minutes without hammering the server.
+    /// </summary>
+    private static async Task BackfillAvatarsLoop(CancellationToken cancellationToken)
+    {
+        var initialDelay = TimeSpan.FromSeconds(15);
+        var loopDelay = TimeSpan.FromSeconds(30);
+        var perRequestDelay = TimeSpan.FromMilliseconds(500);
+        const int MaxPerCycle = 20;
+
+        try { await Task.Delay(initialDelay, cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return; }
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var snapshot = _playerCache
+                    .Where(kvp => kvp.Value != null && string.IsNullOrEmpty(kvp.Value.AvatarLink))
+                    .Select(kvp => kvp.Key)
+                    .Take(MaxPerCycle)
+                    .ToList();
+
+                if (snapshot.Count > 0)
+                {
+                    var apiClient = _serviceProvider.GetRequiredService<ApiClient>();
+                    foreach (var contentId in snapshot)
+                    {
+                        if (cancellationToken.IsCancellationRequested) return;
+                        try
+                        {
+                            var result = await apiClient.GetPlayerByIdAsync((long)contentId).ConfigureAwait(false);
+                            if (result.IsSuccess)
+                            {
+                                var avatar = result.Value.Player?.PlayerLodestone?.AvatarLink;
+                                if (!string.IsNullOrEmpty(avatar))
+                                    UpdateCachedPlayerAvatar(contentId, avatar);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogDebug(ex, "BackfillAvatarsLoop: server fetch failed for {ContentId}", contentId);
+                        }
+                        try { await Task.Delay(perRequestDelay, cancellationToken).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { return; }
+                    }
+                }
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "BackfillAvatarsLoop: cycle failed; will retry next iteration");
+            }
+
+            try { await Task.Delay(loopDelay, cancellationToken).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return; }
         }
     }
     private static async Task ProcessPlayerUploadBatch(CancellationToken cancellationToken,
