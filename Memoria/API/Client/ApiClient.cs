@@ -71,7 +71,10 @@ namespace Memoria.API
                 // Create RestClient with proper configuration
                 _restClient = HttpClientConfiguration.CreateRestClient(_options);
 
-                // Initialize specialized services with dependency injection
+                // Initialize specialized services. Cache wiring deliberately omitted: the
+                // BackfillAvatarsLoop polls per-ContentId for changing data and would be
+                // actively hurt by a stale-but-cached null response — see PersistenceContext
+                // for the per-player cooldown that handles re-ask gating instead.
                 _serverStatusService = new ServerStatusService(_restClient, _config, _logger);
                 _playerDataService = new PlayerDataService(_restClient, _config, _logger);
                 _userAuthService = new UserAuthService(_restClient, _config, _logger);

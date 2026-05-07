@@ -7,11 +7,9 @@ using System.Net.NetworkInformation;
 using System.Threading;
 using System.Threading.Tasks;
 using Memoria.API.Abstractions.Services;
-using Memoria.API.Abstractions.Cache;
 using Memoria.API.Models.Responses.Server;
 using Memoria.API.Models.Shared;
 using Memoria.API.Constants;
-using Memoria.API.Services.Cache;
 using Memoria.Properties;
 
 namespace Memoria.API.Services
@@ -21,32 +19,29 @@ namespace Memoria.API.Services
     /// </summary>
     public class ServerStatusService : BaseApiService, IServerStatusService
     {
-        private readonly IApiCacheService? _cacheService;
-
         /// <summary>
         /// Current server status message
         /// </summary>
         public string ServerStatus { get; private set; } = string.Empty;
-        
+
         /// <summary>
         /// Flag indicating if a server status check is in progress
         /// </summary>
         public bool IsCheckingServerStatus { get; private set; } = false;
-        
+
         /// <summary>
         /// Last ping response time in milliseconds
         /// </summary>
         public long LastPingValue { get; private set; } = -1;
-        
+
         /// <summary>
         /// Cached server statistics
         /// </summary>
         public (ServerStatsDto? ServerStats, string Message) LastServerStats { get; private set; } = new();
 
-        public ServerStatusService(IRestClient restClient, Configuration config, ILogger logger, IApiCacheService? cacheService = null)
+        public ServerStatusService(IRestClient restClient, Configuration config, ILogger logger)
             : base(restClient, config, logger)
         {
-            _cacheService = cacheService;
         }
 
         /// <summary>
@@ -141,25 +136,10 @@ namespace Memoria.API.Services
         {
             try
             {
-                // Try to get from cache first if caching is available
-                if (_cacheService != null)
-                {
-                    var cacheKey = ApiCacheService.GenerateServerStatsCacheKey();
-                    var cachedResult = await _cacheService.GetAsync<ServerStatsDto>(cacheKey, cancellationToken);
-                    
-                    if (cachedResult.Success && cachedResult.Data != null)
-                    {
-                        Logger.LogDebug("Server stats retrieved from cache");
-                        var message = Loc.ApiStatsRefreshed;
-                        LastServerStats = (cachedResult.Data, message);
-                        return ApiResponse<ServerStatsDto>.Ok(cachedResult.Data, 200);
-                    }
-                }
-
                 var request = new RestRequest(ApiEndpoints.SERVER_STATS)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
-                    
+
                 var response = await RestClient.ExecuteGetAsync(request, cancellationToken).ConfigureAwait(false);
 
                 if (response.IsSuccessful)
@@ -167,15 +147,6 @@ namespace Memoria.API.Services
                     var serverStats = JsonConvert.DeserializeObject<ServerStatsDto>(response.Content!);
                     if (serverStats != null)
                     {
-                        // Cache the result if caching is available
-                        if (_cacheService != null)
-                        {
-                            var cacheKey = ApiCacheService.GenerateServerStatsCacheKey();
-                            var cacheExpiry = DateTime.UtcNow.AddMinutes(5); // Cache server stats for 5 minutes
-                            await _cacheService.SetAsync(cacheKey, serverStats, cacheExpiry, TimeSpan.FromMinutes(2), cancellationToken);
-                            Logger.LogDebug("Server stats cached for 5 minutes");
-                        }
-
                         var message = Loc.ApiStatsRefreshed;
                         LastServerStats = (serverStats, message);
                         return ApiResponse<ServerStatsDto>.Ok(serverStats, (int)response.StatusCode);

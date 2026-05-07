@@ -8,14 +8,12 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Memoria.API.Abstractions.Services;
-using Memoria.API.Abstractions.Cache;
 using Memoria.API.Models.Responses.Common;
 using Memoria.API.Models.Responses.Player;
 using Memoria.API.Models.Requests.Player;
 using Memoria.API.Models.Shared;
 using Memoria.API.Query.Player;
 using Memoria.API.Constants;
-using Memoria.API.Services.Cache;
 using Memoria.Properties;
 
 namespace Memoria.API.Services
@@ -25,12 +23,9 @@ namespace Memoria.API.Services
     /// </summary>
     public class PlayerDataService : BaseApiService, IPlayerDataService
     {
-        private readonly IApiCacheService? _cacheService;
-
-        public PlayerDataService(IRestClient restClient, Configuration config, ILogger logger, IApiCacheService? cacheService = null)
+        public PlayerDataService(IRestClient restClient, Configuration config, ILogger logger)
             : base(restClient, config, logger)
         {
-            _cacheService = cacheService;
         }
 
         /// <summary>
@@ -54,24 +49,6 @@ namespace Memoria.API.Services
         {
             try
             {
-                // Generate cache key for player search
-                var worldIds = query.F_WorldIds != null && query.F_WorldIds.Any() 
-                    ? string.Join(",", query.F_WorldIds) 
-                    : string.Empty;
-                var cacheKey = ApiCacheService.GeneratePlayerSearchCacheKey(query.Name ?? string.Empty, query.Cursor, worldIds);
-                
-                // Try to get from cache first if caching is available
-                if (_cacheService != null)
-                {
-                    var cachedResult = await _cacheService.GetAsync<PaginationBase<T>>(cacheKey, cancellationToken);
-                    
-                    if (cachedResult.Success && cachedResult.Data != null)
-                    {
-                        Logger.LogDebug("Player search results retrieved from cache for key: {CacheKey}", cacheKey);
-                        return ApiResponse<PaginationBase<T>>.Ok(cachedResult.Data, 200);
-                    }
-                }
-
                 var request = new RestRequest(ApiEndpoints.PLAYERS)
                     .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
@@ -85,17 +62,7 @@ namespace Memoria.API.Services
                 {
                     var jsonResponse = JsonConvert.DeserializeObject<PaginationBase<T>>(response.Content!);
                     if (jsonResponse != null)
-                    {
-                        // Cache the search results if caching is available
-                        if (_cacheService != null)
-                        {
-                            var cacheExpiry = DateTime.UtcNow.AddMinutes(10); // Cache search results for 10 minutes
-                            await _cacheService.SetAsync(cacheKey, jsonResponse, cacheExpiry, TimeSpan.FromMinutes(5), cancellationToken);
-                            Logger.LogDebug("Player search results cached for key: {CacheKey}", cacheKey);
-                        }
-                        
                         return ApiResponse<PaginationBase<T>>.Ok(jsonResponse, (int)response.StatusCode);
-                    }
                 }
 
                 var errorMessage = GetErrorMessage(response);
@@ -127,42 +94,18 @@ namespace Memoria.API.Services
         {
             try
             {
-                // Try to get from cache first if caching is available
-                if (_cacheService != null)
-                {
-                    var cacheKey = ApiCacheService.GeneratePlayerCacheKey(contentId);
-                    var cachedResult = await _cacheService.GetAsync<PlayerDetailed>(cacheKey, cancellationToken);
-                    
-                    if (cachedResult.Success && cachedResult.Data != null)
-                    {
-                        Logger.LogDebug("Player details retrieved from cache for ID: {ContentId}", contentId);
-                        return ApiResponse<PlayerDetailed>.Ok(cachedResult.Data, 200);
-                    }
-                }
-
                 var request = new RestRequest(ApiEndpoints.GetPlayerById(contentId))
                     .AddHeader(ApiHeaders.API_KEY, Config.Key ?? string.Empty)
                     .AddHeader(ApiHeaders.VERSION, Utils.clientVer)
                     .AddHeader(ApiHeaders.LANGUAGE, Config.Language);
-                    
+
                 var response = await RestClient.ExecuteGetAsync(request, cancellationToken).ConfigureAwait(false);
 
                 if (response.IsSuccessful)
                 {
                     var player = JsonConvert.DeserializeObject<PlayerDetailed>(response.Content!);
                     if (player != null)
-                    {
-                        // Cache the player details if caching is available
-                        if (_cacheService != null)
-                        {
-                            var cacheKey = ApiCacheService.GeneratePlayerCacheKey(contentId);
-                            var cacheExpiry = DateTime.UtcNow.AddMinutes(30); // Cache player details for 30 minutes
-                            await _cacheService.SetAsync(cacheKey, player, cacheExpiry, TimeSpan.FromMinutes(15), cancellationToken);
-                            Logger.LogDebug("Player details cached for ID: {ContentId}", contentId);
-                        }
-                        
                         return ApiResponse<PlayerDetailed>.Ok(player, (int)response.StatusCode);
-                    }
                 }
 
                 var errorMessage = GetErrorMessage(response);

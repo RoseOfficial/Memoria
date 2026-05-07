@@ -1,15 +1,12 @@
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RestSharp;
 using System;
 using Memoria.API.Abstractions.Services;
-using Memoria.API.Abstractions.Cache;
 using Memoria.API.Client;
 using Memoria.API.Client.Configuration;
 using Memoria.API.Services;
-using Memoria.API.Services.Cache;
 
 namespace Memoria.API.Extensions
 {
@@ -69,12 +66,6 @@ namespace Memoria.API.Extensions
                 });
             }
 
-            // Register memory cache for caching service
-            services.AddMemoryCache();
-            
-            // Register caching service
-            services.AddSingleton<IApiCacheService, ApiCacheService>();
-
             // Register HTTP client factory for RestSharp
             services.AddSingleton<IRestClient>(serviceProvider =>
             {
@@ -89,8 +80,7 @@ namespace Memoria.API.Extensions
                 var config = serviceProvider.GetRequiredService<Configuration>();
                 var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
                 var logger = loggerFactory.CreateLogger<PlayerDataService>();
-                var cacheService = serviceProvider.GetService<IApiCacheService>();
-                return new PlayerDataService(restClient, config, logger, cacheService);
+                return new PlayerDataService(restClient, config, logger);
             });
 
             services.AddSingleton<IServerStatusService>(serviceProvider =>
@@ -99,8 +89,7 @@ namespace Memoria.API.Extensions
                 var config = serviceProvider.GetRequiredService<Configuration>();
                 var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
                 var logger = loggerFactory.CreateLogger<ServerStatusService>();
-                var cacheService = serviceProvider.GetService<IApiCacheService>();
-                return new ServerStatusService(restClient, config, logger, cacheService);
+                return new ServerStatusService(restClient, config, logger);
             });
 
             services.AddSingleton<IUserAuthService>(serviceProvider =>
@@ -212,18 +201,14 @@ namespace Memoria.API.Extensions
                 var userService = serviceProvider.GetRequiredService<IUserAuthService>();
                 var apiClient = serviceProvider.GetRequiredService<ApiClient>();
                 var options = serviceProvider.GetRequiredService<IOptions<ApiClientOptions>>();
-                var cacheService = serviceProvider.GetService<IApiCacheService>();
-                var memoryCache = serviceProvider.GetService<IMemoryCache>();
 
                 // Verify all services are not null
-                return restClient != null && 
-                       playerService != null && 
-                       serverService != null && 
-                       userService != null && 
-                       apiClient != null && 
-                       options?.Value != null &&
-                       cacheService != null &&
-                       memoryCache != null;
+                return restClient != null &&
+                       playerService != null &&
+                       serverService != null &&
+                       userService != null &&
+                       apiClient != null &&
+                       options?.Value != null;
             }
             catch (Exception)
             {
@@ -264,10 +249,6 @@ namespace Memoria.API.Extensions
             // Register custom RestSharp client
             services.AddSingleton(clientFactory);
 
-            // Register memory cache and caching service for custom client setup
-            services.AddMemoryCache();
-            services.AddSingleton<IApiCacheService, ApiCacheService>();
-
             // Register API services without the default HTTP client registration
             services.AddSingleton<IPlayerDataService>(serviceProvider =>
             {
@@ -275,8 +256,7 @@ namespace Memoria.API.Extensions
                 var config = serviceProvider.GetService<Configuration>() ?? new Configuration();
                 var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
                 var logger = loggerFactory.CreateLogger<PlayerDataService>();
-                var cacheService = serviceProvider.GetService<IApiCacheService>();
-                return new PlayerDataService(restClient, config, logger, cacheService);
+                return new PlayerDataService(restClient, config, logger);
             });
 
             services.AddSingleton<IServerStatusService>(serviceProvider =>
@@ -285,8 +265,7 @@ namespace Memoria.API.Extensions
                 var config = serviceProvider.GetService<Configuration>() ?? new Configuration();
                 var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
                 var logger = loggerFactory.CreateLogger<ServerStatusService>();
-                var cacheService = serviceProvider.GetService<IApiCacheService>();
-                return new ServerStatusService(restClient, config, logger, cacheService);
+                return new ServerStatusService(restClient, config, logger);
             });
 
             services.AddSingleton<IUserAuthService>(serviceProvider =>
