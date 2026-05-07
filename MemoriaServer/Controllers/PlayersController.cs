@@ -215,13 +215,20 @@ namespace MemoriaServer.Controllers
                             FirstSeenAt = (int)new DateTimeOffset(t.FirstSeenAt, TimeSpan.Zero).ToUnixTimeSeconds(),
                             LastSeenAt = (int)new DateTimeOffset(t.LastSeenAt, TimeSpan.Zero).ToUnixTimeSeconds()
                         }).ToList(),
-                    PlayerLodestone = player.Lodestone != null ? new PlayerLodestoneDto
+                    // Surface the avatar even when the PlayerLodestone navigation row is missing
+                    // (the enrichment service only creates that row when match.Id parses to an
+                    // int, which is conditional). The Player.AvatarLink direct column is the
+                    // primary write target for enrichment, so coalesce against it as a fallback
+                    // so the plugin's BackfillAvatarsLoop can still pick it up via this DTO path.
+                    // Synthesize the DTO when only Player.AvatarLink is set, so consumers reading
+                    // PlayerLodestone?.AvatarLink don't see an unnecessary null.
+                    PlayerLodestone = (player.Lodestone != null || !string.IsNullOrEmpty(player.AvatarLink)) ? new PlayerLodestoneDto
                     {
-                        LodestoneId = player.Lodestone.LodestoneId,
-                        CharacterCreationDate = player.Lodestone.CharacterCreationDate.HasValue 
-                            ? (int)new DateTimeOffset(player.Lodestone.CharacterCreationDate.Value, TimeSpan.Zero).ToUnixTimeSeconds() 
+                        LodestoneId = player.Lodestone?.LodestoneId,
+                        CharacterCreationDate = player.Lodestone?.CharacterCreationDate.HasValue == true
+                            ? (int)new DateTimeOffset(player.Lodestone.CharacterCreationDate.Value, TimeSpan.Zero).ToUnixTimeSeconds()
                             : null,
-                        AvatarLink = player.Lodestone.AvatarLink
+                        AvatarLink = player.Lodestone?.AvatarLink ?? player.AvatarLink
                     } : null,
                     PlayerNameHistories = player.NameHistory
                         .OrderByDescending(n => n.CreatedAt)
