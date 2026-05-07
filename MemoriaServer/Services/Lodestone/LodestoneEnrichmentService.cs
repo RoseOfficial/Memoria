@@ -32,11 +32,13 @@ namespace MemoriaServer.Services.Lodestone
         private LodestoneClient? _client;
         private readonly SemaphoreSlim _clientInit = new(1, 1);
 
-        // 2 seconds between Lodestone fetches keeps the request rate low enough to coexist
-        // with other scrapers and avoids tripping rate limits even during a backlog drain.
-        // Each player produces ~4 HTTP requests via NetStone (search, profile, jobs, minions,
-        // mounts), so the actual outbound rate is ~2 req/s averaged over the cycle.
-        private static readonly TimeSpan PerPlayerDelay = TimeSpan.FromSeconds(2);
+        // 1 second between Lodestone fetches doubles throughput from 30/min to 60/min, which
+        // matters more than the rate-limit headroom did. Each player produces ~4 HTTP requests
+        // via NetStone (search, profile, jobs, minions, mounts), so this works out to ~4 req/s
+        // averaged. Lodestone tolerates this comfortably, and during a backlog drain the queue
+        // empties in half the time. Bump back to 2s only if rate-limit warnings start appearing
+        // in NetStone logs.
+        private static readonly TimeSpan PerPlayerDelay = TimeSpan.FromSeconds(1);
 
         // When the queue empties we wait a bit longer before re-checking. New uploads keep
         // pushing players in via Enqueue, so this idle delay only matters if the queue truly
@@ -131,10 +133,19 @@ namespace MemoriaServer.Services.Lodestone
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<MemoriaDbContext>();
 
+            // Seed predicate uses LastJobDataUpdate as the single source of truth for "is this
+            // player due for a Lodestone fetch?" The earlier predicate also OR'd on
+            // `LodestoneJobData == null`, which sounded reasonable but had a hidden failure
+            // mode: NotFound players (free-trial chars, deleted, very-new) only stamp
+            // LastJobDataUpdate — they never write LodestoneJobData. With the old predicate
+            // they matched the null clause every hour and got re-enqueued forever, eating
+            // queue budget and starving freshly-uploaded players that landed behind the
+            // backlog. Stamping LastJobDataUpdate on every terminal outcome (success,
+            // partial-success, NotFound) means the new predicate suppresses those re-seeds for
+            // a full StaleAfter window and lets the queue actually drain.
             var staleCutoff = DateTime.UtcNow - StaleAfter;
             var ids = await db.Players
-                .Where(p => p.LodestoneJobData == null
-                            || p.LastJobDataUpdate == null
+                .Where(p => p.LastJobDataUpdate == null
                             || p.LastJobDataUpdate < staleCutoff)
                 .OrderBy(p => p.LastJobDataUpdate ?? DateTime.MinValue)
                 .Select(p => p.LocalContentId)
