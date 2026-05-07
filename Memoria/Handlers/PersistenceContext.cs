@@ -432,15 +432,38 @@ internal sealed class PersistenceContext
     }
 
     /// <summary>
+    /// Per-player cooldown gate for BackfillAvatarsLoop. Records the last time we asked the
+    /// server for a player's avatar so we don't waste budget re-asking every 40s for players
+    /// the server's enrichment queue hasn't reached yet. 1 minute is the sweet spot: long
+    /// enough that we don't thrash on the same null-avatar player every cycle (server enriches
+    /// at 1s/player, so 60 fresh enrichments happen between our re-asks), short enough that
+    /// any single missed poll only delays the avatar by ~1 minute total. Earlier 5-minute
+    /// version was punishing: a single poll-before-enrichment locked the player out for far
+    /// longer than the actual enrichment latency.
+    /// </summary>
+    private static readonly ConcurrentDictionary<ulong, DateTime> _backfillCooldown = new();
+
+    private static readonly TimeSpan BackfillCooldown = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     /// Periodically pulls AvatarLink from the server for cached players that don't have one
-    /// yet. Players freshly scanned after plugin start enter the cache with AvatarLink=null
-    /// (the scan payload doesn't carry it); the server-side LodestoneEnrichmentService
-    /// populates the avatar within seconds of the upload landing. Without this loop the
-    /// plugin's UI would render blank avatar boxes until either ReloadCache is manually
-    /// triggered or the legacy plugin-side LodestoneRefreshService gets around to fetching
-    /// from NetStone (which is rate-limited and slow). 30s cadence + 20-player cap +
-    /// 500ms inter-request delay = back-pressure that finishes a typical session-worth of
-    /// new players in a few minutes without hammering the server.
+    /// yet. Two design decisions matter here:
+    ///
+    /// 1) Recency-ordered: the loop sorts cache slices by LastScannedAt DESC before taking
+    ///    its per-cycle batch. ConcurrentDictionary enumeration is hash-bucket order which is
+    ///    effectively random relative to which players the user is looking at, so without
+    ///    sorting the loop spent its budget on arbitrary stale entries while the freshly-
+    ///    scanned players the user just opened the UI to see sat blank.
+    ///
+    /// 2) Per-player cooldown: when the server returns null (enrichment hasn't reached this
+    ///    player yet), we record the attempt timestamp and skip the same player on subsequent
+    ///    cycles for BackfillCooldown. Without this gate, every cycle would re-ask the server
+    ///    for the same null-avatar players over and over, burning request budget while the
+    ///    server's queue churns at its own rate.
+    ///
+    /// Together these mean the budget actually goes to the players the user is looking at,
+    /// each player only gets re-asked once enrichment plausibly had time to run, and a
+    /// session-worth of new players resolves within a few minutes.
     /// </summary>
     private static async Task BackfillAvatarsLoop(CancellationToken cancellationToken)
     {
@@ -456,8 +479,12 @@ internal sealed class PersistenceContext
         {
             try
             {
+                var now = DateTime.UtcNow;
                 var snapshot = _playerCache
                     .Where(kvp => kvp.Value != null && string.IsNullOrEmpty(kvp.Value.AvatarLink))
+                    .Where(kvp => !_backfillCooldown.TryGetValue(kvp.Key, out var lastTry)
+                                  || now - lastTry >= BackfillCooldown)
+                    .OrderByDescending(kvp => kvp.Value.LastScannedAt ?? DateTime.MinValue)
                     .Select(kvp => kvp.Key)
                     .Take(MaxPerCycle)
                     .ToList();
@@ -468,6 +495,12 @@ internal sealed class PersistenceContext
                     foreach (var contentId in snapshot)
                     {
                         if (cancellationToken.IsCancellationRequested) return;
+                        // Stamp the cooldown unconditionally — the goal is to gate re-asks
+                        // when the server has nothing new yet, not just when the request
+                        // succeeded. A succeeded-but-still-null response is the same signal
+                        // as a failed request from the loop's perspective: don't ask again
+                        // for BackfillCooldown.
+                        _backfillCooldown[contentId] = DateTime.UtcNow;
                         try
                         {
                             var result = await apiClient.GetPlayerByIdAsync((long)contentId).ConfigureAwait(false);
@@ -475,7 +508,12 @@ internal sealed class PersistenceContext
                             {
                                 var avatar = result.Value.Player?.PlayerLodestone?.AvatarLink;
                                 if (!string.IsNullOrEmpty(avatar))
+                                {
                                     UpdateCachedPlayerAvatar(contentId, avatar);
+                                    // We have what we wanted; clear the cooldown so any future
+                                    // null-avatar return (cache eviction, etc.) starts fresh.
+                                    _backfillCooldown.TryRemove(contentId, out _);
+                                }
                             }
                         }
                         catch (Exception ex)
