@@ -153,14 +153,23 @@ namespace MemoriaServer.Services.Lodestone
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<MemoriaDbContext>();
 
-            var player = await db.Players.FirstOrDefaultAsync(p => p.LocalContentId == localContentId, ct);
-            if (player is null)
+            // Project to just the search-input fields. The previous code loaded the full
+            // Player entity (multi-KB JSON columns included) just to read Name and worlds,
+            // even though the only writes go straight back to those JSON columns and
+            // overwriting them never depended on the prior value. ~80x egress reduction
+            // per Lodestone enrichment cycle.
+            var meta = await db.Players
+                .Where(p => p.LocalContentId == localContentId)
+                .Select(p => new { p.LocalContentId, p.Name, p.HomeWorldId, p.CurrentWorldId })
+                .FirstOrDefaultAsync(ct);
+
+            if (meta is null)
             {
                 _logger.LogDebug("LodestoneEnrichment: player {Id} no longer exists; skipping", localContentId);
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(player.Name))
+            if (string.IsNullOrWhiteSpace(meta.Name))
             {
                 _logger.LogDebug("LodestoneEnrichment: player {Id} has no name; skipping", localContentId);
                 return;
@@ -169,7 +178,7 @@ namespace MemoriaServer.Services.Lodestone
             FetchOutcome? outcome;
             try
             {
-                outcome = await FetchAsync(player.Name, player.HomeWorldId, player.CurrentWorldId, ct);
+                outcome = await FetchAsync(meta.Name, meta.HomeWorldId, meta.CurrentWorldId, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -181,7 +190,7 @@ namespace MemoriaServer.Services.Lodestone
                 // and skip stamping LastJobDataUpdate so the next startup-seed (or the 7-day
                 // stale window) re-queues this player. We deliberately don't re-enqueue
                 // immediately — a poisoned profile would block the queue on retry forever.
-                _logger.LogWarning(ex, "LodestoneEnrichment: transient fetch failure for {Name} ({Id}); will retry on next seed", player.Name, localContentId);
+                _logger.LogWarning(ex, "LodestoneEnrichment: transient fetch failure for {Name} ({Id}); will retry on next seed", meta.Name, localContentId);
                 return;
             }
 
@@ -192,7 +201,7 @@ namespace MemoriaServer.Services.Lodestone
             // next seed cycle pick it up.
             if (outcome is null)
             {
-                _logger.LogInformation("LodestoneEnrichment: inconclusive fetch for {Name} ({Id}); will retry on next seed", player.Name, localContentId);
+                _logger.LogInformation("LodestoneEnrichment: inconclusive fetch for {Name} ({Id}); will retry on next seed", meta.Name, localContentId);
                 return;
             }
 
@@ -201,73 +210,96 @@ namespace MemoriaServer.Services.Lodestone
             // re-enrichment from SeedFromDatabase will pick them up if they ever get indexed.
             if (outcome.NotFound)
             {
-                player.LastJobDataUpdate = DateTime.UtcNow;
-                await db.SaveChangesAsync(ct);
-                _logger.LogInformation("LodestoneEnrichment: {Name}@{World} not found on Lodestone", player.Name, WorldNames.Resolve(player.HomeWorldId) ?? WorldNames.Resolve(player.CurrentWorldId) ?? "?");
+                var notFoundStamp = DateTime.UtcNow;
+                await db.Players
+                    .Where(p => p.LocalContentId == localContentId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(p => p.LastJobDataUpdate, notFoundStamp)
+                        .SetProperty(p => p.UpdatedAt, notFoundStamp), ct);
+                _logger.LogInformation("LodestoneEnrichment: {Name}@{World} not found on Lodestone", meta.Name, WorldNames.Resolve(meta.HomeWorldId) ?? WorldNames.Resolve(meta.CurrentWorldId) ?? "?");
                 return;
             }
 
             // Apply whatever we got. Partial successes (e.g. avatar+jobs but minions failed)
-            // still update the fields we have.
+            // still update the fields we have. Use ExecuteUpdate with COALESCE-style
+            // null-protection (?? p.X) so partial failures don't null out previously-good
+            // data — important for "doesn't collect less data" invariant.
             var now = DateTime.UtcNow;
-
-            if (!string.IsNullOrEmpty(outcome.AvatarUrl))
-                player.AvatarLink = outcome.AvatarUrl;
-
-            if (!string.IsNullOrEmpty(outcome.PortraitUrl))
-                player.LodestonePortraitUrl = outcome.PortraitUrl;
-
+            var avatarUrl = string.IsNullOrEmpty(outcome.AvatarUrl) ? null : outcome.AvatarUrl;
+            var portraitUrl = string.IsNullOrEmpty(outcome.PortraitUrl) ? null : outcome.PortraitUrl;
+            string? jobJson = null;
+            byte? mainJobId = null;
+            short? mainJobLevel = null;
             if (outcome.JobLevels is { Count: > 0 })
             {
-                player.LodestoneJobData = SerializeJobs(outcome.JobLevels);
-                player.MainJobId = outcome.MainJobId;
-                player.MainJobLevel = outcome.MainJobLevel;
+                jobJson = SerializeJobs(outcome.JobLevels);
+                mainJobId = outcome.MainJobId;
+                mainJobLevel = outcome.MainJobLevel;
             }
-            // Always stamp LastJobDataUpdate even on a profile-found-but-jobs-missing pass, so
-            // we don't busy-loop on the same player.
-            player.LastJobDataUpdate = now;
-
+            string? minionsJson = null;
+            DateTime? minionsStamp = null;
             if (outcome.Minions is { Count: > 0 })
             {
-                player.LodestoneMinionsData = JsonSerializer.Serialize(outcome.Minions);
-                player.LastMinionsDataUpdate = now;
+                minionsJson = JsonSerializer.Serialize(outcome.Minions);
+                minionsStamp = now;
             }
-
+            string? mountsJson = null;
+            DateTime? mountsStamp = null;
             if (outcome.Mounts is { Count: > 0 })
             {
-                player.LodestoneMountsData = JsonSerializer.Serialize(outcome.Mounts);
-                player.LastMountsDataUpdate = now;
+                mountsJson = JsonSerializer.Serialize(outcome.Mounts);
+                mountsStamp = now;
             }
 
+            await db.Players
+                .Where(p => p.LocalContentId == localContentId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.AvatarLink, p => avatarUrl ?? p.AvatarLink)
+                    .SetProperty(p => p.LodestonePortraitUrl, p => portraitUrl ?? p.LodestonePortraitUrl)
+                    .SetProperty(p => p.LodestoneJobData, p => jobJson ?? p.LodestoneJobData)
+                    .SetProperty(p => p.MainJobId, p => mainJobId ?? p.MainJobId)
+                    .SetProperty(p => p.MainJobLevel, p => mainJobLevel ?? p.MainJobLevel)
+                    // Always stamp LastJobDataUpdate even on a profile-found-but-jobs-missing
+                    // pass so we don't busy-loop on the same player.
+                    .SetProperty(p => p.LastJobDataUpdate, now)
+                    .SetProperty(p => p.LodestoneMinionsData, p => minionsJson ?? p.LodestoneMinionsData)
+                    .SetProperty(p => p.LastMinionsDataUpdate, p => minionsStamp ?? p.LastMinionsDataUpdate)
+                    .SetProperty(p => p.LodestoneMountsData, p => mountsJson ?? p.LodestoneMountsData)
+                    .SetProperty(p => p.LastMountsDataUpdate, p => mountsStamp ?? p.LastMountsDataUpdate)
+                    // ExecuteUpdate bypasses MemoriaDbContext.SaveChangesAsync's auto-stamp
+                    // override, so write UpdatedAt explicitly to keep the column meaningful.
+                    .SetProperty(p => p.UpdatedAt, now), ct);
+
             // Mirror avatar + LodestoneId into the PlayerLodestone row so existing readers
-            // (PlayerLodestoneDto in profile responses) keep working.
+            // (PlayerLodestoneDto in profile responses) keep working. PlayerLodestone has no
+            // JSON columns so loading it via FirstOrDefaultAsync is cheap.
             if (outcome.LodestoneId is int lodestoneId)
             {
                 var existing = await db.PlayerLodestones
-                    .FirstOrDefaultAsync(pl => pl.PlayerLocalContentId == player.LocalContentId, ct);
+                    .FirstOrDefaultAsync(pl => pl.PlayerLocalContentId == localContentId, ct);
 
                 if (existing is null)
                 {
                     db.PlayerLodestones.Add(new PlayerLodestone
                     {
-                        PlayerLocalContentId = player.LocalContentId,
+                        PlayerLocalContentId = localContentId,
                         LodestoneId = lodestoneId,
                         AvatarLink = outcome.AvatarUrl,
                     });
+                    await db.SaveChangesAsync(ct);
                 }
                 else
                 {
                     existing.LodestoneId = lodestoneId;
                     if (!string.IsNullOrEmpty(outcome.AvatarUrl))
                         existing.AvatarLink = outcome.AvatarUrl;
+                    await db.SaveChangesAsync(ct);
                 }
             }
 
-            await db.SaveChangesAsync(ct);
-
             _logger.LogInformation(
                 "LodestoneEnrichment: refreshed {Name} (jobs={Jobs}, minions={Minions}, mounts={Mounts})",
-                player.Name,
+                meta.Name,
                 outcome.JobLevels?.Count ?? 0,
                 outcome.Minions?.Count ?? 0,
                 outcome.Mounts?.Count ?? 0);

@@ -362,36 +362,46 @@ namespace MemoriaServer.Controllers
 
             var nameLower = name.ToLowerInvariant();
 
-            // Filter by worldId in SQL (uses index), slug-match on Name in memory
-            var candidates = await _context.Players
+            // Slug-resolution candidate fetch — project to (LocalContentId, Name) only so we
+            // don't drag the multi-KB Lodestone JSON columns over the wire for every player on
+            // the world. Once the slug match is found, load the full row by primary key. On a
+            // popular DC this drops the candidate query from ~4 KB/row to ~30 bytes/row.
+            var slugCandidates = await _context.Players
                 .Where(p => p.HomeWorldId == worldId)
+                .Select(p => new { p.LocalContentId, p.Name })
                 .ToListAsync();
-            var player = candidates.FirstOrDefault(p => WorldNames.ToSlug(p.Name) == nameLower);
+            var matchedId = slugCandidates
+                .FirstOrDefault(c => WorldNames.ToSlug(c.Name) == nameLower)?.LocalContentId;
+
+            Player? player = matchedId is null
+                ? null
+                : await _context.Players.FirstOrDefaultAsync(p => p.LocalContentId == matchedId.Value);
 
             if (player is null)
             {
                 // History fallback: search NameHistory and WorldHistory for any match.
                 // NameHistory entries are keyed to a Player whose CURRENT name may differ.
-                // Use the same worldId-filter + client-side slug match approach as the primary lookup.
-                var nameHistoryCandidates = await _context.Set<PlayerNameHistory>()
-                    .Include(h => h.Player)
+                // Same projection trick — pull only the slug-matchable fields plus the Player
+                // FK so we can redirect by id, never the full Player entity.
+                var nameHistorySlugMatch = await _context.Set<PlayerNameHistory>()
                     .Where(h => h.Player != null && h.Player.HomeWorldId == worldId)
+                    .Select(h => new { h.Name, PlayerId = h.Player!.LocalContentId, PlayerName = h.Player.Name, PlayerHomeWorldId = h.Player.HomeWorldId })
                     .ToListAsync();
-                var historicByName = nameHistoryCandidates
-                    .FirstOrDefault(h => WorldNames.ToSlug(h.Name) == nameLower)?.Player;
+                var historicByName = nameHistorySlugMatch
+                    .FirstOrDefault(h => WorldNames.ToSlug(h.Name) == nameLower);
 
                 if (historicByName != null)
-                    return RedirectToCanonical(historicByName);
+                    return RedirectToCanonical(historicByName.PlayerName, historicByName.PlayerHomeWorldId);
 
-                var worldHistoryCandidates = await _context.Set<PlayerWorldHistory>()
-                    .Include(h => h.Player)
-                    .Where(h => h.WorldId == worldId)
+                var worldHistorySlugMatch = await _context.Set<PlayerWorldHistory>()
+                    .Where(h => h.WorldId == worldId && h.Player != null)
+                    .Select(h => new { PlayerName = h.Player!.Name, PlayerHomeWorldId = h.Player.HomeWorldId })
                     .ToListAsync();
-                var historicByWorld = worldHistoryCandidates
-                    .FirstOrDefault(h => h.Player != null && WorldNames.ToSlug(h.Player.Name) == nameLower)?.Player;
+                var historicByWorld = worldHistorySlugMatch
+                    .FirstOrDefault(h => WorldNames.ToSlug(h.PlayerName) == nameLower);
 
                 if (historicByWorld != null)
-                    return RedirectToCanonical(historicByWorld);
+                    return RedirectToCanonical(historicByWorld.PlayerName, historicByWorld.PlayerHomeWorldId);
 
                 return NotFound();
             }
@@ -408,10 +418,10 @@ namespace MemoriaServer.Controllers
             return Ok(dto);
         }
 
-        private IActionResult RedirectToCanonical(Player player)
+        private IActionResult RedirectToCanonical(string playerName, short? homeWorldId)
         {
-            var worldSlug = WorldNames.ToSlug(WorldNames.Resolve(player.HomeWorldId) ?? "unknown");
-            var nameSlug = WorldNames.ToSlug(player.Name);
+            var worldSlug = WorldNames.ToSlug(WorldNames.Resolve(homeWorldId) ?? "unknown");
+            var nameSlug = WorldNames.ToSlug(playerName);
             return RedirectPermanent($"/p/{worldSlug}/{nameSlug}");
         }
 
@@ -736,17 +746,52 @@ namespace MemoriaServer.Controllers
                     .Select(g => g.OrderByDescending(p => p.CreatedAt).First())
                     .ToList();
 
+                // Bulk-fetch lightweight slices of existing rows in a single query, projected to
+                // skip the multi-KB Lodestone JSON columns. Loading the full Player entity per
+                // upload was the dominant Neon egress source: a 50-player batch dragged ~200 KB
+                // of JSON over the wire per upload just to evaluate change-detection ifs that
+                // could be made on lighter fields. Anonymous-type projection drops that to ~5 KB
+                // per batch; the JSON columns are written via stub-entity + selective IsModified.
+                var contentIds = players.Select(p => (long)p.LocalContentId).ToList();
+                var existingMap = (await _context.Players
+                    .Where(p => contentIds.Contains(p.LocalContentId))
+                    .Select(p => new
+                    {
+                        p.LocalContentId,
+                        p.Name,
+                        p.AccountId,
+                        p.HomeWorldId,
+                        p.CurrentWorldId,
+                        p.TerritoryId,
+                        p.PlayerPos,
+                        p.CurrentJobId,
+                        p.CurrentJobLevel,
+                        p.MainJobId,
+                        p.MainJobLevel,
+                        p.LastJobDataUpdate,
+                        p.LastMinionsDataUpdate,
+                        p.LastMountsDataUpdate,
+                        p.OnlineStatusId,
+                        p.TitleId,
+                        p.GrandCompanyId,
+                        p.FreeCompanyTag,
+                        p.CurrentMountId,
+                        p.CurrentMinionId,
+                    })
+                    .ToListAsync())
+                    .ToDictionary(p => p.LocalContentId);
+
                 foreach (var playerRequest in players)
                 {
-                    var existingPlayer = await _context.Players
-                        .FirstOrDefaultAsync(p => p.LocalContentId == (long)playerRequest.LocalContentId);
+                    var lcId = (long)playerRequest.LocalContentId;
+                    var requestCreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime;
 
-                    if (existingPlayer == null)
+                    if (!existingMap.TryGetValue(lcId, out var existing))
                     {
-                        // Create new player
+                        // Create new player — full entity insert keeps every column we just received.
                         var newPlayer = new Player
                         {
-                            LocalContentId = (long)playerRequest.LocalContentId,
+                            LocalContentId = lcId,
                             Name = playerRequest.Name,
                             AccountId = playerRequest.AccountId,
                             HomeWorldId = (short?)playerRequest.HomeWorldId,
@@ -755,7 +800,7 @@ namespace MemoriaServer.Controllers
                             CurrentJobId = playerRequest.CurrentJobId,
                             CurrentJobLevel = playerRequest.CurrentJobLevel,
                             PlayerPos = playerRequest.PlayerPos,
-                            CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime,
+                            CreatedAt = requestCreatedAt,
                             LastScannedAt = DateTime.UtcNow,
                             LodestoneJobData = playerRequest.LodestoneJobData,
                             MainJobId = playerRequest.MainJobId,
@@ -778,22 +823,29 @@ namespace MemoriaServer.Controllers
                     }
                     else
                     {
-                        // Update existing player
+                        // Update existing player via stub-entity + selective IsModified. The stub
+                        // carries only the primary key; properties default to null/zero. Setting
+                        // IsModified per touched property tells EF to emit a partial UPDATE that
+                        // touches only the columns we changed — JSON columns stay un-read and
+                        // un-written unless the request supplies new data for them.
+                        var stub = new Player { LocalContentId = lcId };
+                        _context.Players.Attach(stub);
+                        var entry = _context.Entry(stub);
                         var hasChanges = false;
 
-                        if (existingPlayer.Name != playerRequest.Name)
+                        if (existing.Name != playerRequest.Name)
                         {
-                            existingPlayer.Name = playerRequest.Name;
+                            stub.Name = playerRequest.Name;
+                            entry.Property(p => p.Name).IsModified = true;
                             hasChanges = true;
 
                             // Add name history entry
-                            var nameHistory = new PlayerNameHistory
+                            _context.PlayerNameHistory.Add(new PlayerNameHistory
                             {
-                                PlayerLocalContentId = existingPlayer.LocalContentId,
+                                PlayerLocalContentId = lcId,
                                 Name = playerRequest.Name,
-                                CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
-                            };
-                            _context.PlayerNameHistory.Add(nameHistory);
+                                CreatedAt = requestCreatedAt,
+                            });
                         }
 
                         // Promote AccountId from null to non-null, but never overwrite a
@@ -807,26 +859,27 @@ namespace MemoriaServer.Controllers
                         // verified per-player AccountIds; allowing them to fill in nulls
                         // (and only nulls) recovers those rows without reintroducing the
                         // overwrite path that caused the corruption.
-                        if (existingPlayer.AccountId is null && playerRequest.AccountId.HasValue)
+                        if (existing.AccountId is null && playerRequest.AccountId.HasValue)
                         {
-                            existingPlayer.AccountId = playerRequest.AccountId;
+                            stub.AccountId = playerRequest.AccountId;
+                            entry.Property(p => p.AccountId).IsModified = true;
                             hasChanges = true;
                         }
 
-                        if (existingPlayer.CurrentWorldId != (short?)playerRequest.CurrentWorldId)
+                        if (existing.CurrentWorldId != (short?)playerRequest.CurrentWorldId)
                         {
-                            existingPlayer.CurrentWorldId = (short?)playerRequest.CurrentWorldId;
+                            stub.CurrentWorldId = (short?)playerRequest.CurrentWorldId;
+                            entry.Property(p => p.CurrentWorldId).IsModified = true;
                             hasChanges = true;
 
                             if (playerRequest.CurrentWorldId.HasValue)
                             {
-                                var worldHistory = new PlayerWorldHistory
+                                _context.PlayerWorldHistory.Add(new PlayerWorldHistory
                                 {
-                                    PlayerLocalContentId = existingPlayer.LocalContentId,
+                                    PlayerLocalContentId = lcId,
                                     WorldId = (short)playerRequest.CurrentWorldId.Value,
-                                    CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
-                                };
-                                _context.PlayerWorldHistory.Add(worldHistory);
+                                    CreatedAt = requestCreatedAt,
+                                });
                             }
                         }
 
@@ -836,25 +889,30 @@ namespace MemoriaServer.Controllers
                         // on the visited world instead of the actual home). Rare paid server
                         // transfers also need this update path. We don't write a history row
                         // here — PlayerWorldHistory is for "worlds seen on" via CurrentWorldId.
-                        if (playerRequest.HomeWorldId.HasValue && existingPlayer.HomeWorldId != (short?)playerRequest.HomeWorldId)
+                        if (playerRequest.HomeWorldId.HasValue && existing.HomeWorldId != (short?)playerRequest.HomeWorldId)
                         {
-                            existingPlayer.HomeWorldId = (short?)playerRequest.HomeWorldId;
+                            stub.HomeWorldId = (short?)playerRequest.HomeWorldId;
+                            entry.Property(p => p.HomeWorldId).IsModified = true;
                             hasChanges = true;
                         }
 
-                        if (existingPlayer.CurrentJobId != playerRequest.CurrentJobId ||
-                            existingPlayer.CurrentJobLevel != playerRequest.CurrentJobLevel)
+                        if (existing.CurrentJobId != playerRequest.CurrentJobId ||
+                            existing.CurrentJobLevel != playerRequest.CurrentJobLevel)
                         {
-                            existingPlayer.CurrentJobId = playerRequest.CurrentJobId;
-                            existingPlayer.CurrentJobLevel = playerRequest.CurrentJobLevel;
+                            stub.CurrentJobId = playerRequest.CurrentJobId;
+                            stub.CurrentJobLevel = playerRequest.CurrentJobLevel;
+                            entry.Property(p => p.CurrentJobId).IsModified = true;
+                            entry.Property(p => p.CurrentJobLevel).IsModified = true;
                             hasChanges = true;
                         }
 
-                        if (existingPlayer.TerritoryId != playerRequest.TerritoryId || 
-                            existingPlayer.PlayerPos != playerRequest.PlayerPos)
+                        if (existing.TerritoryId != playerRequest.TerritoryId ||
+                            existing.PlayerPos != playerRequest.PlayerPos)
                         {
-                            existingPlayer.TerritoryId = playerRequest.TerritoryId;
-                            existingPlayer.PlayerPos = playerRequest.PlayerPos;
+                            stub.TerritoryId = playerRequest.TerritoryId;
+                            stub.PlayerPos = playerRequest.PlayerPos;
+                            entry.Property(p => p.TerritoryId).IsModified = true;
+                            entry.Property(p => p.PlayerPos).IsModified = true;
                             hasChanges = true;
 
                             // Update or create territory history
@@ -862,7 +920,7 @@ namespace MemoriaServer.Controllers
                             // CurrentWorldId is ushort?, and Npgsql refuses to bind a UInt16
                             // parameter as smallint.
                             var territoryHistory = await _context.PlayerTerritoryHistory
-                                .FirstOrDefaultAsync(t => t.PlayerLocalContentId == existingPlayer.LocalContentId &&
+                                .FirstOrDefaultAsync(t => t.PlayerLocalContentId == lcId &&
                                                         t.TerritoryId == playerRequest.TerritoryId &&
                                                         t.WorldId == (short?)playerRequest.CurrentWorldId);
 
@@ -870,52 +928,78 @@ namespace MemoriaServer.Controllers
                             {
                                 // Only record territory history if we actually have a world id;
                                 // otherwise the (short) cast on CurrentWorldId!.Value would NRE.
-                                territoryHistory = new PlayerTerritoryHistory
+                                _context.PlayerTerritoryHistory.Add(new PlayerTerritoryHistory
                                 {
-                                    PlayerLocalContentId = existingPlayer.LocalContentId,
+                                    PlayerLocalContentId = lcId,
                                     TerritoryId = playerRequest.TerritoryId,
                                     PlayerPos = playerRequest.PlayerPos,
                                     WorldId = (short)playerRequest.CurrentWorldId.Value,
-                                    FirstSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime,
-                                    LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
-                                };
-                                _context.PlayerTerritoryHistory.Add(territoryHistory);
+                                    FirstSeenAt = requestCreatedAt,
+                                    LastSeenAt = requestCreatedAt,
+                                });
                             }
-                            else
+                            else if (territoryHistory != null)
                             {
-                                territoryHistory.LastSeenAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime;
+                                territoryHistory.LastSeenAt = requestCreatedAt;
                                 territoryHistory.PlayerPos = playerRequest.PlayerPos;
                             }
                         }
 
-                        // Handle Lodestone job data updates
-                        if (existingPlayer.LodestoneJobData != playerRequest.LodestoneJobData ||
-                            existingPlayer.MainJobId != playerRequest.MainJobId ||
-                            existingPlayer.MainJobLevel != playerRequest.MainJobLevel ||
-                            existingPlayer.LastJobDataUpdate != playerRequest.LastJobDataUpdate)
+                        // Lodestone job data: only update when the request actually carries data.
+                        // The previous logic compared LodestoneJobData strings — which forced the
+                        // ~4 KB JSON column to be loaded every upload — and would write the
+                        // request value verbatim, including null. That meant a plugin upload that
+                        // didn't carry Lodestone data would null out server-enriched data on the
+                        // row. Guarding on `request != null` preserves the server's data while
+                        // letting the plugin's best-effort enrichment ride through when present.
+                        if (playerRequest.LodestoneJobData != null)
                         {
-                            existingPlayer.LodestoneJobData = playerRequest.LodestoneJobData;
-                            existingPlayer.MainJobId = playerRequest.MainJobId;
-                            existingPlayer.MainJobLevel = playerRequest.MainJobLevel;
-                            existingPlayer.LastJobDataUpdate = playerRequest.LastJobDataUpdate;
+                            stub.LodestoneJobData = playerRequest.LodestoneJobData;
+                            entry.Property(p => p.LodestoneJobData).IsModified = true;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.MainJobId.HasValue && existing.MainJobId != playerRequest.MainJobId)
+                        {
+                            stub.MainJobId = playerRequest.MainJobId;
+                            entry.Property(p => p.MainJobId).IsModified = true;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.MainJobLevel.HasValue && existing.MainJobLevel != playerRequest.MainJobLevel)
+                        {
+                            stub.MainJobLevel = playerRequest.MainJobLevel;
+                            entry.Property(p => p.MainJobLevel).IsModified = true;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.LastJobDataUpdate.HasValue && existing.LastJobDataUpdate != playerRequest.LastJobDataUpdate)
+                        {
+                            stub.LastJobDataUpdate = playerRequest.LastJobDataUpdate;
+                            entry.Property(p => p.LastJobDataUpdate).IsModified = true;
                             hasChanges = true;
                         }
 
-                        // Handle Lodestone minions data updates
-                        if (existingPlayer.LodestoneMinionsData != playerRequest.LodestoneMinionsData ||
-                            existingPlayer.LastMinionsDataUpdate != playerRequest.LastMinionsDataUpdate)
+                        if (playerRequest.LodestoneMinionsData != null)
                         {
-                            existingPlayer.LodestoneMinionsData = playerRequest.LodestoneMinionsData;
-                            existingPlayer.LastMinionsDataUpdate = playerRequest.LastMinionsDataUpdate;
+                            stub.LodestoneMinionsData = playerRequest.LodestoneMinionsData;
+                            entry.Property(p => p.LodestoneMinionsData).IsModified = true;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.LastMinionsDataUpdate.HasValue && existing.LastMinionsDataUpdate != playerRequest.LastMinionsDataUpdate)
+                        {
+                            stub.LastMinionsDataUpdate = playerRequest.LastMinionsDataUpdate;
+                            entry.Property(p => p.LastMinionsDataUpdate).IsModified = true;
                             hasChanges = true;
                         }
 
-                        // Handle Lodestone mounts data updates
-                        if (existingPlayer.LodestoneMountsData != playerRequest.LodestoneMountsData ||
-                            existingPlayer.LastMountsDataUpdate != playerRequest.LastMountsDataUpdate)
+                        if (playerRequest.LodestoneMountsData != null)
                         {
-                            existingPlayer.LodestoneMountsData = playerRequest.LodestoneMountsData;
-                            existingPlayer.LastMountsDataUpdate = playerRequest.LastMountsDataUpdate;
+                            stub.LodestoneMountsData = playerRequest.LodestoneMountsData;
+                            entry.Property(p => p.LodestoneMountsData).IsModified = true;
+                            hasChanges = true;
+                        }
+                        if (playerRequest.LastMountsDataUpdate.HasValue && existing.LastMountsDataUpdate != playerRequest.LastMountsDataUpdate)
+                        {
+                            stub.LastMountsDataUpdate = playerRequest.LastMountsDataUpdate;
+                            entry.Property(p => p.LastMountsDataUpdate).IsModified = true;
                             hasChanges = true;
                         }
 
@@ -923,111 +1007,131 @@ namespace MemoriaServer.Controllers
                         // "not observed this scan" (different capture paths see different
                         // subsets), not "explicitly cleared". A field only updates when
                         // the inbound value is non-null.
-                        if (playerRequest.OnlineStatusId.HasValue && existingPlayer.OnlineStatusId != playerRequest.OnlineStatusId)
+                        if (playerRequest.OnlineStatusId.HasValue && existing.OnlineStatusId != playerRequest.OnlineStatusId)
                         {
-                            existingPlayer.OnlineStatusId = playerRequest.OnlineStatusId;
+                            stub.OnlineStatusId = playerRequest.OnlineStatusId;
+                            entry.Property(p => p.OnlineStatusId).IsModified = true;
                             hasChanges = true;
                         }
-                        if (playerRequest.TitleId.HasValue && existingPlayer.TitleId != playerRequest.TitleId)
+                        if (playerRequest.TitleId.HasValue && existing.TitleId != playerRequest.TitleId)
                         {
-                            existingPlayer.TitleId = playerRequest.TitleId;
+                            stub.TitleId = playerRequest.TitleId;
+                            entry.Property(p => p.TitleId).IsModified = true;
                             hasChanges = true;
                         }
-                        if (playerRequest.GrandCompanyId.HasValue && existingPlayer.GrandCompanyId != playerRequest.GrandCompanyId)
+                        if (playerRequest.GrandCompanyId.HasValue && existing.GrandCompanyId != playerRequest.GrandCompanyId)
                         {
-                            existingPlayer.GrandCompanyId = playerRequest.GrandCompanyId;
+                            stub.GrandCompanyId = playerRequest.GrandCompanyId;
+                            entry.Property(p => p.GrandCompanyId).IsModified = true;
                             hasChanges = true;
                         }
-                        if (!string.IsNullOrEmpty(playerRequest.FreeCompanyTag) && existingPlayer.FreeCompanyTag != playerRequest.FreeCompanyTag)
+                        if (!string.IsNullOrEmpty(playerRequest.FreeCompanyTag) && existing.FreeCompanyTag != playerRequest.FreeCompanyTag)
                         {
-                            existingPlayer.FreeCompanyTag = playerRequest.FreeCompanyTag;
+                            stub.FreeCompanyTag = playerRequest.FreeCompanyTag;
+                            entry.Property(p => p.FreeCompanyTag).IsModified = true;
                             hasChanges = true;
                         }
-                        if (playerRequest.CurrentMountId.HasValue && existingPlayer.CurrentMountId != playerRequest.CurrentMountId)
+                        if (playerRequest.CurrentMountId.HasValue && existing.CurrentMountId != playerRequest.CurrentMountId)
                         {
-                            existingPlayer.CurrentMountId = playerRequest.CurrentMountId;
+                            stub.CurrentMountId = playerRequest.CurrentMountId;
+                            entry.Property(p => p.CurrentMountId).IsModified = true;
                             hasChanges = true;
                         }
-                        if (playerRequest.CurrentMinionId.HasValue && existingPlayer.CurrentMinionId != playerRequest.CurrentMinionId)
+                        if (playerRequest.CurrentMinionId.HasValue && existing.CurrentMinionId != playerRequest.CurrentMinionId)
                         {
-                            existingPlayer.CurrentMinionId = playerRequest.CurrentMinionId;
+                            stub.CurrentMinionId = playerRequest.CurrentMinionId;
+                            entry.Property(p => p.CurrentMinionId).IsModified = true;
                             hasChanges = true;
                         }
 
                         if (hasChanges)
                         {
-                            existingPlayer.UpdatedAt = DateTime.UtcNow;
+                            stub.UpdatedAt = DateTime.UtcNow;
+                            entry.Property(p => p.UpdatedAt).IsModified = true;
                         }
 
                         // Stamp every upload as a scan event regardless of whether other fields
                         // changed — a player who's standing still is still being observed, and the
                         // home page's "recent scans" feed depends on this column being populated.
-                        existingPlayer.LastScannedAt = DateTime.UtcNow;
+                        stub.LastScannedAt = DateTime.UtcNow;
+                        entry.Property(p => p.LastScannedAt).IsModified = true;
                     }
                 }
 
                 await _context.SaveChangesAsync();
 
-                // Add history entries for new players
+                // History backfill — pulls only (LocalContentId, Name, CreatedAt) per player and
+                // pre-fetches the existing name-history (player_id, name) pairs in one round-trip.
+                // The previous code re-loaded the full Player entity per row (multi-KB JSON
+                // columns included) just to read Name + CreatedAt for the backfill, which made
+                // this loop another major egress source on every upload.
+                var playerMetaMap = (await _context.Players
+                    .Where(p => contentIds.Contains(p.LocalContentId))
+                    .Select(p => new { p.LocalContentId, p.Name, p.CreatedAt })
+                    .ToListAsync())
+                    .ToDictionary(p => p.LocalContentId);
+
+                var nameHistoryKeys = await _context.PlayerNameHistory
+                    .Where(h => contentIds.Contains(h.PlayerLocalContentId))
+                    .Select(h => new { h.PlayerLocalContentId, h.Name })
+                    .ToListAsync();
+                var existingNameHistory = new HashSet<(long Id, string Name)>(
+                    nameHistoryKeys.Select(k => (k.PlayerLocalContentId, k.Name)));
+
                 foreach (var playerRequest in players)
                 {
-                    var player = await _context.Players
-                        .FirstOrDefaultAsync(p => p.LocalContentId == (long)playerRequest.LocalContentId);
-                    
-                    if (player != null)
+                    var lcId = (long)playerRequest.LocalContentId;
+                    if (!playerMetaMap.TryGetValue(lcId, out var meta)) continue;
+
+                    // Check if name history already exists
+                    if (!existingNameHistory.Contains((lcId, meta.Name)))
                     {
-                        // Check if name history already exists
-                        var hasNameHistory = await _context.PlayerNameHistory
-                            .AnyAsync(h => h.PlayerLocalContentId == player.LocalContentId && h.Name == player.Name);
-                        
-                        if (!hasNameHistory)
+                        _context.PlayerNameHistory.Add(new PlayerNameHistory
                         {
-                            var nameHistory = new PlayerNameHistory
+                            PlayerLocalContentId = lcId,
+                            Name = meta.Name,
+                            CreatedAt = meta.CreatedAt,
+                        });
+                        // Mirror the in-memory set so a duplicate within the same batch is filtered.
+                        existingNameHistory.Add((lcId, meta.Name));
+                    }
+
+                    // Append a customization history row whenever the upload's values
+                    // differ from the latest stored row (or when no row exists). The
+                    // previous "first scan only" branch meant haircuts, fantasias,
+                    // and any post-first-scan customization changes were silently
+                    // dropped — and a stale all-null row from an early upload (e.g.,
+                    // the JsonPropertyName / JsonProperty mismatch we just fixed)
+                    // permanently blocked any real data from being recorded.
+                    if (playerRequest.Customization != null)
+                    {
+                        var latestCustomization = await _context.PlayerCustomizationHistory
+                            .Where(h => h.PlayerLocalContentId == lcId)
+                            .OrderByDescending(h => h.CreatedAt)
+                            .FirstOrDefaultAsync();
+
+                        if (latestCustomization is null
+                            || HasCustomizationChanged(latestCustomization, playerRequest.Customization))
+                        {
+                            var customization = new PlayerCustomizationHistory
                             {
-                                PlayerLocalContentId = player.LocalContentId,
-                                Name = player.Name,
-                                CreatedAt = player.CreatedAt
+                                PlayerLocalContentId = lcId,
+                                BodyType = playerRequest.Customization.BodyType,
+                                GenderRace = playerRequest.Customization.GenderRace,
+                                Height = playerRequest.Customization.Height,
+                                Face = playerRequest.Customization.Face,
+                                SkinColor = playerRequest.Customization.SkinColor,
+                                Nose = playerRequest.Customization.Nose,
+                                Jaw = playerRequest.Customization.Jaw,
+                                MuscleMass = playerRequest.Customization.MuscleMass,
+                                BustSize = playerRequest.Customization.BustSize,
+                                TailShape = playerRequest.Customization.TailShape,
+                                Mouth = playerRequest.Customization.Mouth,
+                                EyeShape = playerRequest.Customization.EyeShape,
+                                SmallIris = playerRequest.Customization.SmallIris,
+                                CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
                             };
-                            _context.PlayerNameHistory.Add(nameHistory);
-                        }
-
-                        // Append a customization history row whenever the upload's values
-                        // differ from the latest stored row (or when no row exists). The
-                        // previous "first scan only" branch meant haircuts, fantasias,
-                        // and any post-first-scan customization changes were silently
-                        // dropped — and a stale all-null row from an early upload (e.g.,
-                        // the JsonPropertyName / JsonProperty mismatch we just fixed)
-                        // permanently blocked any real data from being recorded.
-                        if (playerRequest.Customization != null)
-                        {
-                            var latestCustomization = await _context.PlayerCustomizationHistory
-                                .Where(h => h.PlayerLocalContentId == player.LocalContentId)
-                                .OrderByDescending(h => h.CreatedAt)
-                                .FirstOrDefaultAsync();
-
-                            if (latestCustomization is null
-                                || HasCustomizationChanged(latestCustomization, playerRequest.Customization))
-                            {
-                                var customization = new PlayerCustomizationHistory
-                                {
-                                    PlayerLocalContentId = player.LocalContentId,
-                                    BodyType = playerRequest.Customization.BodyType,
-                                    GenderRace = playerRequest.Customization.GenderRace,
-                                    Height = playerRequest.Customization.Height,
-                                    Face = playerRequest.Customization.Face,
-                                    SkinColor = playerRequest.Customization.SkinColor,
-                                    Nose = playerRequest.Customization.Nose,
-                                    Jaw = playerRequest.Customization.Jaw,
-                                    MuscleMass = playerRequest.Customization.MuscleMass,
-                                    BustSize = playerRequest.Customization.BustSize,
-                                    TailShape = playerRequest.Customization.TailShape,
-                                    Mouth = playerRequest.Customization.Mouth,
-                                    EyeShape = playerRequest.Customization.EyeShape,
-                                    SmallIris = playerRequest.Customization.SmallIris,
-                                    CreatedAt = DateTimeOffset.FromUnixTimeSeconds(playerRequest.CreatedAt).UtcDateTime
-                                };
-                                _context.PlayerCustomizationHistory.Add(customization);
-                            }
+                            _context.PlayerCustomizationHistory.Add(customization);
                         }
                     }
                 }
@@ -1084,7 +1188,7 @@ namespace MemoriaServer.Controllers
                 {
                     uploader.TotalContributions += players.Count;
 
-                    var contentIds = players.Select(p => (long)p.LocalContentId).ToList();
+                    // contentIds is already declared at the top of UploadPlayers — reuse it.
                     var existingScans = await _context.UserScannedPlayers
                         .Where(s => s.UserId == uploader.Id && contentIds.Contains(s.PlayerLocalContentId))
                         .ToListAsync();
