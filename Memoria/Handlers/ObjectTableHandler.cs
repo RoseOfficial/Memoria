@@ -123,7 +123,7 @@ internal sealed class ObjectTableHandler : IDisposable
         List<PostPlayerRequest> playerRequests = new();
         foreach (var obj in _objectTable)
         {
-            if (obj.ObjectKind == ObjectKind.Player)
+            if (obj.ObjectKind == ObjectKind.Pc)
             {
                 var bc = (Character*)obj.Address;
                 if (bc->ContentId == 0 || bc->AccountId == 0)

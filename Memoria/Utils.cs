@@ -66,12 +66,12 @@ namespace Memoria
                 return string.Empty;
             }
 
-            return world.Value.DataCenter.ValueNullable?.Region switch
+            return world.Value.DataCenter.ValueNullable?.Region.RowId switch
             {
-                1 => "JP",
-                2 => "NA",
-                3 => "EU",
-                4 => "OC",
+                1u => "JP",
+                2u => "NA",
+                3u => "EU",
+                4u => "OC",
                 _ => string.Empty,
             };
         }
@@ -82,12 +82,12 @@ namespace Memoria
                 return string.Empty;
             }
 
-            return world.Value.DataCenter.ValueNullable?.Region switch
+            return world.Value.DataCenter.ValueNullable?.Region.RowId switch
             {
-                1 => Loc.UtilsJP,
-                2 => Loc.UtilsNA,
-                3 => Loc.UtilsEU,
-                4 => Loc.UtilsOCE,
+                1u => Loc.UtilsJP,
+                2u => Loc.UtilsNA,
+                3u => Loc.UtilsEU,
+                4u => Loc.UtilsOCE,
                 _ => string.Empty,
             };
         }

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Dalamud.NET.Sdk/14.0.1">
+﻿<Project Sdk="Dalamud.NET.Sdk/15.0.0">
     <PropertyGroup>
         <Version>1.0.0</Version>
         <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -6,6 +6,7 @@
         <OutputPath Condition="'$(Configuration)' != 'EF'">dist</OutputPath>
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
         <TargetFramework>net10.0-windows</TargetFramework>
+        <DalamudLibPath Condition="'$(DalamudLibPath)' == ''">$(AppData)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
     </PropertyGroup>
 
     <ItemGroup>
@@ -31,14 +32,6 @@
     
     
     <ItemGroup>
-        <Reference Include="InteropGenerator.Runtime">
-            <HintPath>C:\Users\neoga\AppData\Roaming\XIVLauncher\addon\Hooks\dev\InteropGenerator.Runtime.dll</HintPath>
-            <Private>false</Private>
-        </Reference>
-    </ItemGroup>
-    
-    
-    <ItemGroup>
       <EmbeddedResource Update="Properties\Loc.resx">
         <Generator>ResXFileCodeGenerator</Generator>
         <LastGenOutput>Loc.Designer.cs</LastGenOutput>
@@ -47,7 +40,7 @@
 	
     
     <ItemGroup>
-      <PackageReference Update="DalamudPackager" Version="14.0.1" />
+      <PackageReference Update="DalamudPackager" Version="15.0.0" />
       <PackageReference Update="DotNet.ReproducibleBuilds" Version="1.2.25" />
     </ItemGroup>
 </Project>
