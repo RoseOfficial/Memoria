@@ -9,10 +9,12 @@ using Dalamud.Memory;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
 using Dalamud.Utility.Signatures;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Network;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
+using InteropGenerator.Runtime;
 using Microsoft.Extensions.Logging;
 using Memoria.API.Models.Responses.Player;
 using Memoria.API.Models.Responses.User;
@@ -29,12 +31,23 @@ internal sealed unsafe class GameHooks : IDisposable
     private readonly PersistenceContext _persistenceContext;
 
     /// <summary>
-    /// Processes the content id to character name packet, seen e.g. when you hover an item to retrieve the
-    /// crafter's signature.
+    /// Hook signature for Client::Game::NameCache.SetNameForContentId. The game stamps the
+    /// content-id-to-name mapping when something requests a name lookup (item hover for
+    /// crafter signature, /tell autocomplete, party/FC roster refresh, etc.). Signature
+    /// matches FFXIVClientStructs exactly — returns void, takes the NameCache* instance,
+    /// the content id, and a CStringPointer wrapping the UTF-8 name buffer. Anything other
+    /// than this will fail Dalamud's hook verification and corrupt RAX (the game treats this
+    /// as a void function, so the wrapper's "return value" leaks through to the caller).
     /// </summary>
-    private delegate int CharacterNameResultDelegate(nint a1, ulong contentId, char* playerName);
+    private delegate void CharacterNameResultDelegate(NameCache* self, ulong contentId, CStringPointer name);
 
-    private delegate nint SocialListResultDelegate(nint a1, nint dataPtr);
+    /// <summary>
+    /// Hook signature for Client::Network::PacketDispatcher.HandleSocialPacket. The first
+    /// param is the source actor id (uint, NOT a pointer), the second is the packet payload
+    /// pointer. Same verification rule as above — wrong return type or wrong first-param
+    /// width leaks garbage into RAX/RCX and trips Dalamud's verifier.
+    /// </summary>
+    private delegate void SocialListResultDelegate(uint sourceActorId, nint dataPtr);
 
     /// <summary>
     /// Hooks PacketDispatcher.HandleSpawnPlayerPacket — fires every time another player
@@ -75,15 +88,24 @@ internal sealed unsafe class GameHooks : IDisposable
         SpawnPlayerPacketHook.Enable();
     }
 
-    private int ProcessCharacterNameResult(nint a1, ulong contentId, char* playerName)
+    private void ProcessCharacterNameResult(NameCache* self, ulong contentId, CStringPointer name)
     {
         try
         {
+            // CStringPointer wraps a UTF-8 byte*; ASCII range covers all FFXIV character
+            // names so Encoding.ASCII over the same 32-byte cap matches the previous read
+            // semantics exactly. Going via the byte* (implicit cast) and MemoryHelper avoids
+            // CStringPointer.ToString()'s pessimistic full-buffer scan.
+            byte* namePtr = name;
+            var playerName = namePtr == null
+                ? string.Empty
+                : MemoryHelper.ReadString((nint)namePtr, Encoding.ASCII, 32);
+
             var mapping = new PlayerMapping
             {
                 ContentId = contentId,
                 AccountId = null,
-                PlayerName = MemoryHelper.ReadString(new nint(playerName), Encoding.ASCII, 32),
+                PlayerName = playerName,
             };
 
             if (!string.IsNullOrEmpty(mapping.PlayerName))
@@ -107,19 +129,16 @@ internal sealed unsafe class GameHooks : IDisposable
                     PersistenceContext.AddPlayerUploadData(new List<PostPlayerRequest> { playerRequest });
                 }
             }
-            else
-            {
-            }
         }
         catch (Exception e)
         {
             _logger.LogError(e, "Could not process character name result");
         }
 
-        return CharacterNameResultHook.Original(a1, contentId, playerName);
+        CharacterNameResultHook.Original(self, contentId, name);
     }
 
-    private nint ProcessSocialListResult(nint a1, nint dataPtr)
+    private void ProcessSocialListResult(uint sourceActorId, nint dataPtr)
     {
         try
         {
@@ -189,7 +208,7 @@ internal sealed unsafe class GameHooks : IDisposable
             _logger.LogError(e, "Could not process social list result");
         }
 
-        return SocialListResultHook.Original(a1, dataPtr);
+        SocialListResultHook.Original(sourceActorId, dataPtr);
     }
 
     private void ProcessSpawnPlayerPacket(uint targetId, SpawnPlayerPacket* packet)
