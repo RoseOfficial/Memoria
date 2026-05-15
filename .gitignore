@@ -514,3 +514,23 @@ coverage.xml
 # Test runner temporary files
 .testcoverage
 .coverage/
+
+# AI / agent assistant artifacts (keep local, never commit)
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+docs/superpowers/
+.superpowers/
+.claude/
+.cursor/
+.cursorrules
+.cursorignore
+.aider*
+.copilot/
+copilot-instructions.md
+.github/copilot-instructions.md
+.continue/
+.windsurfrules
+.mcp.json
+claude.json
+claude_desktop_config.json
