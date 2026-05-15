@@ -6,7 +6,10 @@
     "Punchline": "Player tracker with full history, alt detection, and Lodestone integration.",
     "Description": "Tracks every player you encounter, with full history of name changes, world transfers, and appearance changes. Links alt characters on the same account via Account ID. Pulls jobs, minions, and mounts from the Lodestone. Stored locally in SQLite, with optional server sync for shared data.",
     "ApplicableVersion": "any",
-    "CategoryTags": ["utility", "social"],
+    "CategoryTags": [
+      "utility",
+      "social"
+    ],
     "RepoUrl": "https://github.com/RoseOfficial/Memoria",
     "AssemblyVersion": "1.0.0.0",
     "DalamudApiLevel": 15,
