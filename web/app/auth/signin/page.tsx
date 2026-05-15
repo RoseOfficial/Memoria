@@ -27,6 +27,11 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
         >
           Continue with Discord →
         </a>
+        <p className="text-xs text-[var(--color-text-muted)] italic">
+          If Discord asks you to confirm in your Discord app, approve it there or click
+          <span className="not-italic"> Continue to Discord </span>
+          on the page that appears.
+        </p>
       </SignatureFrame>
     </main>
   )

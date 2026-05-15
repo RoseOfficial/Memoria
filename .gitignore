@@ -500,6 +500,9 @@ coverage.xml
 .testcoverage
 .coverage/
 
+# Local browser-automation snapshots from ad-hoc debugging
+.playwright-mcp/
+
 # Local developer notes and tooling configs (never commit)
 CLAUDE.md
 AGENTS.md
