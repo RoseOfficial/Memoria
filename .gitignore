@@ -441,21 +441,6 @@ DalamudPackager.targets
 config.json
 settings.json
 
-# Local tool settings and notes
-.claude/settings.local.json
-CLAUDE.md
-.superpowers/
-.cursor/
-.windsurf/
-.aider*
-.gpteng/
-.continue/
-.copilot/
-ai-instructions.md
-AI_INSTRUCTIONS.md
-prompt.md
-PROMPT.md
-
 # Temporary backup files
 *.bak
 *.backup
@@ -525,12 +510,18 @@ docs/superpowers/
 .cursor/
 .cursorrules
 .cursorignore
+.windsurf/
+.windsurfrules
 .aider*
+.gpteng/
 .copilot/
 copilot-instructions.md
 .github/copilot-instructions.md
 .continue/
-.windsurfrules
 .mcp.json
 claude.json
 claude_desktop_config.json
+ai-instructions.md
+AI_INSTRUCTIONS.md
+prompt.md
+PROMPT.md
