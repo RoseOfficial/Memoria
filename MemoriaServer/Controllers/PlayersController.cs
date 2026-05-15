@@ -550,8 +550,7 @@ namespace MemoriaServer.Controllers
         // an entry, or (null, null) when the id isn't owned (e.g., quest mounts,
         // event minions, or characters whose Lodestone enrichment hasn't run yet).
         // The JSON shape is array of objects with keys "Name", "IconUrl", and
-        // either "MountId" or "MinionId" — see CLAUDE.md "Wire format for the
-        // JSON columns" section.
+        // either "MountId" or "MinionId".
         private static (string? Name, string? IconUrl) ResolvePhase1Collectible(
             string? lodestoneJson, int? collectibleId, string idKey)
         {

@@ -1001,9 +1001,8 @@ internal sealed class PersistenceContext
                 PlayerPos = originalRequest.PlayerPos,
                 Customization = originalRequest.Customization,
                 // Phase 1 — must be forwarded explicitly. The field-by-field rebuild
-                // pattern silently drops anything not listed (see TerritoryName
-                // post-mortem in CLAUDE.md), so adding a new PostPlayerRequest
-                // field always requires also adding the line here.
+                // pattern silently drops anything not listed, so adding a new
+                // PostPlayerRequest field always requires also adding the line here.
                 OnlineStatusId = originalRequest.OnlineStatusId,
                 TitleId = originalRequest.TitleId,
                 GrandCompanyId = originalRequest.GrandCompanyId,
