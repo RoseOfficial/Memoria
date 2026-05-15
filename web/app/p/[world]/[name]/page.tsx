@@ -28,6 +28,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ world:
   if (!res.ok) throw new Error(`profile fetch failed: ${res.status}`)
 
   const profile = (await res.json()) as PlayerProfileResponse
+  // Pass the current path through TierGate so the sign-in flow returns the
+  // viewer to this profile rather than dumping them on /me.
+  const returnTo = `/p/${world}/${name}`
 
   return (
     <main className="max-w-5xl mx-auto px-8 py-12 space-y-6">
@@ -42,9 +45,9 @@ export default async function ProfilePage({ params }: { params: Promise<{ world:
         <WipSection title="Lodestone Bio" phase="Phase 3" description="add bio, guardian, nameday, city-state, GC + rank" />
         <WipSection title="Free Company" phase="Phase 3" description="fetch FC profile + member roster" />
         <WipSection title="Achievements / Collectibles" phase="Phase 4" description="add orchestrions, emotes, hairstyles, bardings, and more" />
-        {profile.locations ? <LocationsSection data={profile.locations} /> : <TierGate title="Recent Locations" tier={2} sectionName="recent locations" />}
-        {(profile.nameHistory !== null || profile.worldHistory !== null) ? <HistorySection names={profile.nameHistory} worlds={profile.worldHistory} /> : <TierGate title="Name / World History" tier={2} sectionName="name + world history" />}
-        {profile.alts ? <AltsSection alts={profile.alts} /> : <TierGate title="Alt Characters" tier={2} sectionName="alt characters" />}
+        {profile.locations ? <LocationsSection data={profile.locations} /> : <TierGate title="Recent Locations" tier={2} sectionName="recent locations" returnTo={returnTo} />}
+        {(profile.nameHistory !== null || profile.worldHistory !== null) ? <HistorySection names={profile.nameHistory} worlds={profile.worldHistory} /> : <TierGate title="Name / World History" tier={2} sectionName="name + world history" returnTo={returnTo} />}
+        {profile.alts ? <AltsSection alts={profile.alts} /> : <TierGate title="Alt Characters" tier={2} sectionName="alt characters" returnTo={returnTo} />}
         <WipSection title="Encounter Network" phase="Phase 5" description="build social graph from co-territory observations + CWLS membership" />
       </div>
     </main>

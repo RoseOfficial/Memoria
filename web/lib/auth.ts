@@ -1,6 +1,7 @@
 // Mirrors MemoriaServer/Models/DTOs/UserDto.cs
 // The server serializes with Newtonsoft.Json [JsonProperty("N")] numeric-string keys.
 // Wire parsing is confined to this file; all callers see clean-named types.
+import { cache } from 'react'
 import { apiFetch } from './api'
 
 // ---------------------------------------------------------------------------
@@ -106,13 +107,17 @@ type WireNetworkStats = {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function getMe(): Promise<MeResponse | null> {
+// React.cache memoizes per render pass so multiple server components in the
+// same request (e.g. Nav + several TierGates on a profile page) only trigger
+// one /v1/users/me round trip. apiFetch sets cache:'no-store' which disables
+// Next's built-in fetch dedup, so we wrap explicitly here.
+export const getMe = cache(async (): Promise<MeResponse | null> => {
   const res = await apiFetch('/v1/users/me')
   if (res.status === 401 || res.status === 404) return null
   if (!res.ok) throw new Error(`/v1/users/me returned ${res.status}`)
   const wire = (await res.json()) as WireUser
   return adaptMe(wire)
-}
+})
 
 // ---------------------------------------------------------------------------
 // Adapters — wire → clean
