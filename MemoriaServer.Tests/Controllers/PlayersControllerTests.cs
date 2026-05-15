@@ -210,8 +210,10 @@ public class PlayersControllerTests : IDisposable
         _context.Players.AddRange(players);
         await _context.SaveChangesAsync();
 
-        // Setup HttpContext with GameAccountId matching the private player's owner
-        _controller.ControllerContext.HttpContext.Items["GameAccountId"] = 456;
+        // Setup HttpContext with GameAccountId matching the private player's owner.
+        // Boxed as long? so it matches the production type produced by the auth
+        // middleware (ApplicationUser.GameAccountId is long?).
+        _controller.ControllerContext.HttpContext.Items["GameAccountId"] = (long?)456L;
 
         // Act
         var result = await _controller.SearchPlayers();

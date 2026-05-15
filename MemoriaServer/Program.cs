@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using MemoriaServer;
 using MemoriaServer.Data;
 using MemoriaServer.Middleware;
 using Newtonsoft.Json;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +63,47 @@ if (!builder.Environment.IsEnvironment("Testing"))
 }
 
 builder.Services.AddSingleton<MemoriaServer.Services.Takedowns.TakedownRateLimiter>();
+
+// HTTP-level rate limiting. Two layers:
+//   - Global per-IP fixed window: 600 req/min. Throttles brute-force probing of the
+//     auth path before any DB lookup happens. Wide enough that real plugin bursts
+//     (a scan + a few profile loads in the same minute) never hit it.
+//   - Named "upload" policy: 60 uploads/min, partitioned by api-key (falls back to IP
+//     when the header is missing). Caps the per-key write pressure on Neon and the
+//     Lodestone enrichment queue.
+// Rate limiting is skipped in the Testing environment so the test harness doesn't
+// false-positive on rapid-fire test runs.
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = 429;
+
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 600,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
+
+        options.AddPolicy("upload", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Request.Headers.TryGetValue("api-key", out var k)
+                    ? k.ToString()
+                    : (httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous"),
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 60,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0,
+                }));
+    });
+}
 
 // Configure CORS. No wildcard origins — the Dalamud plugin calls via RestSharp (not a browser),
 // so CORS does not apply to it. Browser-based clients must be explicitly allowlisted via
@@ -190,6 +233,13 @@ if (app.Environment.IsDevelopment())
 
 // Add CORS before authentication
 app.UseCors("MemoriaPolicy");
+
+// Rate limiter runs BEFORE auth so brute-force probing is throttled at the IP layer
+// before the auth middleware does a DB lookup per request.
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    app.UseRateLimiter();
+}
 
 // API key authentication — required for all endpoints except the paths the middleware
 // explicitly skips (GET /server, /users/login, /users/create-test-user, /auth/*,

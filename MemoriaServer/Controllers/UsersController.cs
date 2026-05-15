@@ -129,16 +129,7 @@ namespace MemoriaServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during user login");
-                // Include the exception type + message in the response so plugin logs are
-                // self-diagnostic. The login endpoint is exempt from auth and doesn't take any
-                // sensitive input, so echoing the server exception is safe.
-                return StatusCode(500, new
-                {
-                    error = "Error during login",
-                    type = ex.GetType().Name,
-                    detail = ex.Message,
-                    inner = ex.InnerException?.Message,
-                });
+                return StatusCode(500, new { error = "Error during login" });
             }
         }
 
@@ -276,27 +267,41 @@ namespace MemoriaServer.Controllers
         }
 
 #if DEBUG
+        // Local-dev convenience endpoint. Compiled out of Release builds. All four
+        // values below come from environment variables so each developer's local
+        // setup is private. Set DEV_TEST_GAME_ACCOUNT_ID, DEV_TEST_LOCAL_CONTENT_ID,
+        // DEV_TEST_NAME, and DEV_TEST_API_KEY before calling this in dev.
         [HttpPost("create-test-user")]
         public async Task<ActionResult> CreateTestUser()
         {
             try
             {
-                // Check if user already exists
+                if (!long.TryParse(Environment.GetEnvironmentVariable("DEV_TEST_GAME_ACCOUNT_ID"), out var gameAccountId)
+                    || !long.TryParse(Environment.GetEnvironmentVariable("DEV_TEST_LOCAL_CONTENT_ID"), out var localContentId))
+                {
+                    return BadRequest(new { error = "Set DEV_TEST_GAME_ACCOUNT_ID and DEV_TEST_LOCAL_CONTENT_ID env vars before using this endpoint." });
+                }
+                var name = Environment.GetEnvironmentVariable("DEV_TEST_NAME");
+                var apiKey = Environment.GetEnvironmentVariable("DEV_TEST_API_KEY");
+                if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(apiKey))
+                {
+                    return BadRequest(new { error = "Set DEV_TEST_NAME and DEV_TEST_API_KEY env vars before using this endpoint." });
+                }
+
                 var existingUser = await _context.Users
-                    .FirstOrDefaultAsync(u => u.GameAccountId == 1387972975);
+                    .FirstOrDefaultAsync(u => u.GameAccountId == gameAccountId);
 
                 if (existingUser != null)
                 {
                     return Ok(new { message = "Test user already exists", apiKey = existingUser.ApiKey });
                 }
 
-                // Create user with Memoria's exact API key format
                 var user = new ApplicationUser
                 {
-                    GameAccountId = 1387972975,
-                    PrimaryCharacterLocalContentId = 18014498559422700,
-                    Name = "Rose Ultima",
-                    ApiKey = "PrkdCR9gOCSYZYOlGruL-1387972975", // Exact match from Memoria config
+                    GameAccountId = gameAccountId,
+                    PrimaryCharacterLocalContentId = localContentId,
+                    Name = name,
+                    ApiKey = apiKey,
                     AppRoleId = (int)UserRole.Member,
                     BaseUrl = "https://localhost:5001/v1/",
                     CreatedAt = DateTime.UtcNow,
@@ -311,7 +316,7 @@ namespace MemoriaServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating test user");
-                return StatusCode(500, $"Error creating test user: {ex.Message}");
+                return StatusCode(500, new { error = "Error creating test user" });
             }
         }
 #endif
@@ -403,9 +408,9 @@ namespace MemoriaServer.Controllers
         private static string GenerateApiKey()
         {
             using var rng = RandomNumberGenerator.Create();
-            var bytes = new byte[32];
+            var bytes = new byte[16];
             rng.GetBytes(bytes);
-            return Convert.ToHexString(bytes).ToLower()[..16]; // Take first 16 chars
+            return Convert.ToHexString(bytes).ToLower(); // 32 hex chars = 128-bit key
         }
     }
 }

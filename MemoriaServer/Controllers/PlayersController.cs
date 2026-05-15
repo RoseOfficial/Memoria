@@ -39,6 +39,7 @@ namespace MemoriaServer.Controllers
         /// Number of results to return per page in paginated responses
         /// </summary>
         private const int PageSize = 25;
+        private const int MaxBatchSize = 200;
 
         /// <summary>
         /// Initializes the PlayersController with required dependencies.
@@ -107,7 +108,23 @@ namespace MemoriaServer.Controllers
                     }
                 }
 
-                // Privacy filter removed - public API shows all players
+                // Privacy filter. Admins see everything. Everyone else (including
+                // authenticated plugin callers) cannot enumerate HideEntirely or
+                // IsPrivate players UNLESS the row's owner matches the caller — either
+                // via Discord-claim (ClaimedByUserId) or via the implicit "this caller's
+                // FFXIV account owns this character" check (Player.AccountId equals the
+                // caller's GameAccountId). The latter is the pre-claim model and still
+                // applies for plugin callers that haven't gone through OAuth.
+                var isAdminList = (bool)(HttpContext.Items["IsAdmin"] ?? false);
+                var viewerUserIdList = HttpContext.Items["ViewerUserId"] as int?;
+                var viewerGameAccountIdList = HttpContext.Items["GameAccountId"] as long?;
+                if (!isAdminList)
+                {
+                    query = query.Where(p =>
+                        (!p.HideEntirely && !p.IsPrivate)
+                        || (viewerUserIdList.HasValue && p.ClaimedByUserId == viewerUserIdList.Value)
+                        || (viewerGameAccountIdList.HasValue && p.AccountId == viewerGameAccountIdList.Value));
+                }
 
                 // Apply cursor-based pagination
                 query = query.Where(p => p.LocalContentId >= Cursor)
@@ -178,7 +195,16 @@ namespace MemoriaServer.Controllers
                     return NotFound("Player not found");
                 }
 
-                // Privacy check removed - public API allows viewing all players
+                // Privacy gate — owners and admins always see their own/any record;
+                // anyone else gets 404 for HideEntirely or IsPrivate players. Mirrors
+                // the gate at the by-slug profile endpoint so the two surfaces agree.
+                var viewerUserIdById = HttpContext.Items["ViewerUserId"] as int?;
+                var isOwnerById = viewerUserIdById.HasValue && player.ClaimedByUserId == viewerUserIdById.Value;
+                var isAdminById = (bool)(HttpContext.Items["IsAdmin"] ?? false);
+                if ((player.HideEntirely || player.IsPrivate) && !isOwnerById && !isAdminById)
+                {
+                    return NotFound("Player not found");
+                }
 
                 // Map to detailed DTO
                 var detailed = new PlayerDetailed
@@ -738,10 +764,21 @@ namespace MemoriaServer.Controllers
         }
 
         [HttpPost]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("upload")]
         public async Task<IActionResult> UploadPlayers([FromBody] List<PostPlayerRequest> players)
         {
             try
             {
+                // Cap the inbound batch size before any work happens. Without a cap, a malicious
+                // (or buggy) client can ship a single-request payload of tens of thousands of
+                // players and force the controller to run the full dedup+upsert+enrichment-enqueue
+                // loop at unbounded cost. 200 covers legitimate plugin scans (a busy zone is rarely
+                // more than ~50 visible players).
+                if (players is null || players.Count > MaxBatchSize)
+                {
+                    return BadRequest(new { error = $"Batch size exceeds the {MaxBatchSize}-player cap." });
+                }
+
                 // Dedupe by LocalContentId before the loop. The plugin's outbox can replay hundreds
                 // of pending snapshots and they frequently include multiple entries for the same
                 // player; processing them naively double-Adds the entity and EF's change tracker
@@ -1237,13 +1274,7 @@ namespace MemoriaServer.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error uploading players");
-                return StatusCode(500, new
-                {
-                    error = "Error uploading players",
-                    type = ex.GetType().Name,
-                    detail = ex.Message,
-                    inner = ex.InnerException?.Message,
-                });
+                return StatusCode(500, new { error = "Error uploading players" });
             }
         }
 
